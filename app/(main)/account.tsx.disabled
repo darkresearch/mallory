@@ -1,0 +1,345 @@
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useState } from 'react';
+
+interface Holding {
+  id: string;
+  symbol: string;
+  name: string;
+  value: number;
+  change24h: number;
+  logo?: string;
+  volume?: string;
+}
+
+const mockHoldings: Holding[] = [
+  {
+    id: '1',
+    symbol: '911Dog',
+    name: 'Crime11',
+    value: 100.82,
+    change24h: 0.5,
+    logo: '🦴',
+    volume: '35.27M',
+  },
+];
+
+export default function AccountScreen() {
+  const router = useRouter();
+  const [totalBalance] = useState(3476.43);
+  const walletAddress = 'De7mKgKdIb...263';
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Status Bar */}
+      <View style={styles.statusBar}>
+        <Text style={styles.time}>9:41</Text>
+        <View style={styles.statusIcons}>
+          <Ionicons name="cellular" size={16} color="#fff" />
+          <Ionicons name="wifi" size={16} color="#fff" />
+          <Ionicons name="battery-full" size={16} color="#fff" />
+        </View>
+      </View>
+
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>AccountWallet_01</Text>
+          <View style={styles.codeIcon}>
+            <Text style={styles.codeIconText}>{'</>'}</Text>
+          </View>
+        </View>
+        <TouchableOpacity 
+          style={styles.closeButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="close" size={24} color="#666" />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Profile Section */}
+        <View style={styles.profileSection}>
+          <View style={styles.profileImage}>
+            <Text style={styles.profileEmoji}>🦁</Text>
+          </View>
+          <Text style={styles.profileName}>Edgar</Text>
+          <TouchableOpacity style={styles.walletAddress}>
+            <Text style={styles.walletAddressText}>{walletAddress}</Text>
+            <Ionicons name="copy-outline" size={16} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Balance Section */}
+        <View style={styles.balanceSection}>
+          <Text style={styles.balanceAmount}>${totalBalance.toFixed(2)}</Text>
+          <TouchableOpacity style={styles.depositButton}>
+            <Ionicons name="wallet-outline" size={20} color="#fff" />
+            <Text style={styles.depositButtonText}>Deposit money</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Holdings Section */}
+        <View style={styles.holdingsSection}>
+          <Text style={styles.sectionTitle}>Current holdings</Text>
+          
+          {mockHoldings.map((holding) => (
+            <View key={holding.id} style={styles.holdingItem}>
+              <View style={styles.holdingLeft}>
+                <View style={styles.tokenLogo}>
+                  <Text style={styles.tokenEmoji}>{holding.logo}</Text>
+                </View>
+                <View style={styles.tokenInfo}>
+                  <View style={styles.tokenHeader}>
+                    <Text style={styles.tokenSymbol}>{holding.symbol}</Text>
+                    <View style={[
+                      styles.changeContainer,
+                      { backgroundColor: holding.change24h >= 0 ? '#00D63211' : '#FF3B3B11' }
+                    ]}>
+                      <Text style={[
+                        styles.changeText,
+                        { color: holding.change24h >= 0 ? '#00D632' : '#FF3B3B' }
+                      ]}>
+                        {holding.change24h >= 0 ? '+' : ''}{holding.change24h}%
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.tokenName}>{holding.name}</Text>
+                  <Text style={styles.tokenVolume}>Vol ${holding.volume}</Text>
+                </View>
+              </View>
+              <View style={styles.holdingRight}>
+                <Text style={styles.holdingValue}>${holding.value.toFixed(2)}</Text>
+                <TouchableOpacity style={styles.sellButton}>
+                  <Text style={styles.sellButtonText}>Sell</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+
+      {/* Bottom Navigation Bar */}
+      <View style={styles.bottomNav}>
+        <View style={styles.navIndicator} />
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  statusBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  time: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  statusIcons: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerTitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  codeIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#4E9DFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  codeIconText: {
+    color: '#000',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  content: {
+    flex: 1,
+  },
+  profileSection: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  profileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 3,
+    borderColor: '#4E9DFF',
+  },
+  profileEmoji: {
+    fontSize: 40,
+  },
+  profileName: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#DCE9FF',
+    marginBottom: 8,
+  },
+  walletAddress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  walletAddressText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  balanceSection: {
+    alignItems: 'center',
+    paddingBottom: 32,
+  },
+  balanceAmount: {
+    fontSize: 56,
+    fontWeight: 'bold',
+    color: '#DCE9FF',
+    marginBottom: 24,
+  },
+  depositButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4E9DFF',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 28,
+    gap: 12,
+  },
+  depositButtonText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  holdingsSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#DCE9FF',
+    marginBottom: 16,
+  },
+  holdingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#05080C',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  holdingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  tokenLogo: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  tokenEmoji: {
+    fontSize: 28,
+  },
+  tokenInfo: {
+    flex: 1,
+  },
+  tokenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  tokenSymbol: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#DCE9FF',
+  },
+  changeContainer: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  changeText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  tokenName: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  tokenVolume: {
+    fontSize: 12,
+    color: '#666',
+  },
+  holdingRight: {
+    alignItems: 'flex-end',
+  },
+  holdingValue: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#DCE9FF',
+    marginBottom: 8,
+  },
+  sellButton: {
+    backgroundColor: '#FF3B3B',
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    borderRadius: 18,
+  },
+  sellButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  bottomNav: {
+    height: 34,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navIndicator: {
+    width: 134,
+    height: 5,
+    backgroundColor: '#fff',
+    borderRadius: 3,
+  },
+});

@@ -1,0 +1,458 @@
+@font-face {
+    font-family: 'Neurial Grotesk';
+    src: url('NeurialGrotesk-BoldItalic.eot');
+    src: local('Neurial Grotesk Bold Italic'), local('NeurialGrotesk-BoldItalic'),
+        url('NeurialGrotesk-BoldItalic.eot?#iefix') format('embedded-opentype'),
+        url('NeurialGrotesk-BoldItalic.woff2') format('woff2'),
+        url('NeurialGrotesk-BoldItalic.woff') format('woff'),
+        url('NeurialGrotesk-BoldItalic.ttf') format('truetype');
+    font-weight: bold;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Neurial Grotesk';
+    src: url('NeurialGrotesk-Medium.eot');
+    src: local('Neurial Grotesk Medium'), local('NeurialGrotesk-Medium'),
+        url('NeurialGrotesk-Medium.eot?#iefix') format('embedded-opentype'),
+        url('NeurialGrotesk-Medium.woff2') format('woff2'),
+        url('NeurialGrotesk-Medium.woff') format('woff'),
+        url('NeurialGrotesk-Medium.ttf') format('truetype');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Neurial Grotesk';
+    src: url('NeurialGrotesk-MediumItalic.eot');
+    src: local('Neurial Grotesk Medium Italic'), local('NeurialGrotesk-MediumItalic'),
+        url('NeurialGrotesk-MediumItalic.eot?#iefix') format('embedded-opentype'),
+        url('NeurialGrotesk-MediumItalic.woff2') format('woff2'),
+        url('NeurialGrotesk-MediumItalic.woff') format('woff'),
+        url('NeurialGrotesk-MediumItalic.ttf') format('truetype');
+    font-weight: 500;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Neurial Grotesk';
+    src: url('NeurialGrotesk-LightItalic.eot');
+    src: local('Neurial Grotesk Light Italic'), local('NeurialGrotesk-LightItalic'),
+        url('NeurialGrotesk-LightItalic.eot?#iefix') format('embedded-opentype'),
+        url('NeurialGrotesk-LightItalic.woff2') format('woff2'),
+        url('NeurialGrotesk-LightItalic.woff') format('woff'),
+        url('NeurialGrotesk-LightItalic.ttf') format('truetype');
+    font-weight: 300;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Neurial Grotesk';
+    src: url('NeurialGrotesk-Bold.eot');
+    src: local('Neurial Grotesk Bold'), local('NeurialGrotesk-Bold'),
+        url('NeurialGrotesk-Bold.eot?#iefix') format('embedded-opentype'),
+        url('NeurialGrotesk-Bold.woff2') format('woff2'),
+        url('NeurialGrotesk-Bold.woff') format('woff'),
+        url('NeurialGrotesk-Bold.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Neurial Grotesk';
+    src: url('NeurialGrotesk-Regular.eot');
+    src: local('Neurial Grotesk Regular'), local('NeurialGrotesk-Regular'),
+        url('NeurialGrotesk-Regular.eot?#iefix') format('embedded-opentype'),
+        url('NeurialGrotesk-Regular.woff2') format('woff2'),
+        url('NeurialGrotesk-Regular.woff') format('woff'),
+        url('NeurialGrotesk-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Neurial Grotesk';
+    src: url('NeurialGrotesk-Extrabold.eot');
+    src: local('Neurial Grotesk Extrabold'), local('NeurialGrotesk-Extrabold'),
+        url('NeurialGrotesk-Extrabold.eot?#iefix') format('embedded-opentype'),
+        url('NeurialGrotesk-Extrabold.woff2') format('woff2'),
+        url('NeurialGrotesk-Extrabold.woff') format('woff'),
+        url('NeurialGrotesk-Extrabold.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Neurial Grotesk Exbold';
+    src: url('NeurialGrotesk-ExtraboldItalic.eot');
+    src: local('Neurial Grotesk Extrabold Italic'), local('NeurialGrotesk-ExtraboldItalic'),
+        url('NeurialGrotesk-ExtraboldItalic.eot?#iefix') format('embedded-opentype'),
+        url('NeurialGrotesk-ExtraboldItalic.woff2') format('woff2'),
+        url('NeurialGrotesk-ExtraboldItalic.woff') format('woff'),
+        url('NeurialGrotesk-ExtraboldItalic.ttf') format('truetype');
+    font-weight: bold;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Neurial Grotesk';
+    src: url('NeurialGrotesk-RegularItalic.eot');
+    src: local('Neurial Grotesk Regular Italic'), local('NeurialGrotesk-RegularItalic'),
+        url('NeurialGrotesk-RegularItalic.eot?#iefix') format('embedded-opentype'),
+        url('NeurialGrotesk-RegularItalic.woff2') format('woff2'),
+        url('NeurialGrotesk-RegularItalic.woff') format('woff'),
+        url('NeurialGrotesk-RegularItalic.ttf') format('truetype');
+    font-weight: normal;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Neurial Grotesk';
+    src: url('NeurialGrotesk-Light.eot');
+    src: local('Neurial Grotesk Light'), local('NeurialGrotesk-Light'),
+        url('NeurialGrotesk-Light.eot?#iefix') format('embedded-opentype'),
+        url('NeurialGrotesk-Light.woff2') format('woff2'),
+        url('NeurialGrotesk-Light.woff') format('woff'),
+        url('NeurialGrotesk-Light.ttf') format('truetype');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Spectral Font Family */
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-Light.eot');
+    src: local('Spectral Light'), local('Spectral-Light'),
+        url('Spectral-Light.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-Light.woff2') format('woff2'),
+        url('Spectral-Light.woff') format('woff'),
+        url('Spectral-Light.ttf') format('truetype');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-LightItalic.eot');
+    src: local('Spectral Light Italic'), local('Spectral-LightItalic'),
+        url('Spectral-LightItalic.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-LightItalic.woff2') format('woff2'),
+        url('Spectral-LightItalic.woff') format('woff'),
+        url('Spectral-LightItalic.ttf') format('truetype');
+    font-weight: 300;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-Regular.eot');
+    src: local('Spectral Regular'), local('Spectral-Regular'),
+        url('Spectral-Regular.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-Regular.woff2') format('woff2'),
+        url('Spectral-Regular.woff') format('woff'),
+        url('Spectral-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-Italic.eot');
+    src: local('Spectral Italic'), local('Spectral-Italic'),
+        url('Spectral-Italic.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-Italic.woff2') format('woff2'),
+        url('Spectral-Italic.woff') format('woff'),
+        url('Spectral-Italic.ttf') format('truetype');
+    font-weight: normal;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-Medium.eot');
+    src: local('Spectral Medium'), local('Spectral-Medium'),
+        url('Spectral-Medium.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-Medium.woff2') format('woff2'),
+        url('Spectral-Medium.woff') format('woff'),
+        url('Spectral-Medium.ttf') format('truetype');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-MediumItalic.eot');
+    src: local('Spectral Medium Italic'), local('Spectral-MediumItalic'),
+        url('Spectral-MediumItalic.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-MediumItalic.woff2') format('woff2'),
+        url('Spectral-MediumItalic.woff') format('woff'),
+        url('Spectral-MediumItalic.ttf') format('truetype');
+    font-weight: 500;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-SemiBold.eot');
+    src: local('Spectral SemiBold'), local('Spectral-SemiBold'),
+        url('Spectral-SemiBold.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-SemiBold.woff2') format('woff2'),
+        url('Spectral-SemiBold.woff') format('woff'),
+        url('Spectral-SemiBold.ttf') format('truetype');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-SemiBoldItalic.eot');
+    src: local('Spectral SemiBold Italic'), local('Spectral-SemiBoldItalic'),
+        url('Spectral-SemiBoldItalic.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-SemiBoldItalic.woff2') format('woff2'),
+        url('Spectral-SemiBoldItalic.woff') format('woff'),
+        url('Spectral-SemiBoldItalic.ttf') format('truetype');
+    font-weight: 600;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-Bold.eot');
+    src: local('Spectral Bold'), local('Spectral-Bold'),
+        url('Spectral-Bold.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-Bold.woff2') format('woff2'),
+        url('Spectral-Bold.woff') format('woff'),
+        url('Spectral-Bold.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-BoldItalic.eot');
+    src: local('Spectral Bold Italic'), local('Spectral-BoldItalic'),
+        url('Spectral-BoldItalic.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-BoldItalic.woff2') format('woff2'),
+        url('Spectral-BoldItalic.woff') format('woff'),
+        url('Spectral-BoldItalic.ttf') format('truetype');
+    font-weight: bold;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-ExtraBold.eot');
+    src: local('Spectral ExtraBold'), local('Spectral-ExtraBold'),
+        url('Spectral-ExtraBold.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-ExtraBold.woff2') format('woff2'),
+        url('Spectral-ExtraBold.woff') format('woff'),
+        url('Spectral-ExtraBold.ttf') format('truetype');
+    font-weight: 800;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-ExtraBoldItalic.eot');
+    src: local('Spectral ExtraBold Italic'), local('Spectral-ExtraBoldItalic'),
+        url('Spectral-ExtraBoldItalic.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-ExtraBoldItalic.woff2') format('woff2'),
+        url('Spectral-ExtraBoldItalic.woff') format('woff'),
+        url('Spectral-ExtraBoldItalic.ttf') format('truetype');
+    font-weight: 800;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-ExtraLight.eot');
+    src: local('Spectral ExtraLight'), local('Spectral-ExtraLight'),
+        url('Spectral-ExtraLight.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-ExtraLight.woff2') format('woff2'),
+        url('Spectral-ExtraLight.woff') format('woff'),
+        url('Spectral-ExtraLight.ttf') format('truetype');
+    font-weight: 200;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Spectral';
+    src: url('Spectral-ExtraLightItalic.eot');
+    src: local('Spectral ExtraLight Italic'), local('Spectral-ExtraLightItalic'),
+        url('Spectral-ExtraLightItalic.eot?#iefix') format('embedded-opentype'),
+        url('Spectral-ExtraLightItalic.woff2') format('woff2'),
+        url('Spectral-ExtraLightItalic.woff') format('woff'),
+        url('Spectral-ExtraLightItalic.ttf') format('truetype');
+    font-weight: 200;
+    font-style: italic;
+    font-display: swap;
+}
+
+/* Poppins Font Family */
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-Thin.ttf') format('truetype');
+    font-weight: 100;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-ThinItalic.ttf') format('truetype');
+    font-weight: 100;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-ExtraLight.ttf') format('truetype');
+    font-weight: 200;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-ExtraLightItalic.ttf') format('truetype');
+    font-weight: 200;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-Light.ttf') format('truetype');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-LightItalic.ttf') format('truetype');
+    font-weight: 300;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-Italic.ttf') format('truetype');
+    font-weight: 400;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-Medium.ttf') format('truetype');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-MediumItalic.ttf') format('truetype');
+    font-weight: 500;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-SemiBold.ttf') format('truetype');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-SemiBoldItalic.ttf') format('truetype');
+    font-weight: 600;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-BoldItalic.ttf') format('truetype');
+    font-weight: 700;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-ExtraBold.ttf') format('truetype');
+    font-weight: 800;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-ExtraBoldItalic.ttf') format('truetype');
+    font-weight: 800;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-Black.ttf') format('truetype');
+    font-weight: 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('Poppins-BlackItalic.ttf') format('truetype');
+    font-weight: 900;
+    font-style: italic;
+    font-display: swap;
+}
+
