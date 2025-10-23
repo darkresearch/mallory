@@ -1,0 +1,47 @@
+/* Satoshi Font - Main font family for Scout */
+
+@font-face {
+    font-family: 'Satoshi';
+    src: url('./Satoshi-Regular.woff2') format('woff2'),
+         url('./Satoshi-Regular.woff') format('woff'),
+         url('./Satoshi-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Satoshi';
+    src: url('./Satoshi-Medium.woff2') format('woff2'),
+         url('./Satoshi-Medium.woff') format('woff'),
+         url('./Satoshi-Medium.ttf') format('truetype');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Satoshi';
+    src: url('./Satoshi-Bold.woff2') format('woff2'),
+         url('./Satoshi-Bold.woff') format('woff'),
+         url('./Satoshi-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Font classes for easy usage */
+.satoshi-regular { 
+    font-family: 'Satoshi', system-ui, -apple-system, sans-serif; 
+    font-weight: 400; 
+}
+
+.satoshi-medium { 
+    font-family: 'Satoshi', system-ui, -apple-system, sans-serif; 
+    font-weight: 500; 
+}
+
+.satoshi-bold { 
+    font-family: 'Satoshi', system-ui, -apple-system, sans-serif; 
+    font-weight: 700; 
+}

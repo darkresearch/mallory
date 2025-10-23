@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, shrink-to-fit=no" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="Scout - AI-powered crypto research assistant" />
+  <title>Scout</title>
+  <style>
+    /* Dark theme by default */
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background-color: #05080C;
+      color: #DCE9FF;
+      /* Prevent body from scrolling - only inner containers scroll */
+      overflow: hidden;
+      height: 100%;
+    }
+    
+    /* Prevent overscroll bounce on iOS */
+    html {
+      position: fixed;
+      /* Modern approach: Use dynamic viewport height (tracks URL bar changes) */
+      height: 100vh; /* Fallback for older browsers */
+      height: 100dvh; /* Dynamic viewport height - adapts to browser UI */
+      width: 100%;
+      overflow: hidden;
+      background-color: #05080C;
+      /* Add safe area support for mobile web */
+      padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0px env(safe-area-inset-left, 0px);
+      /* Prevent elastic scrolling on iOS */
+      overscroll-behavior: none;
+    }
+    
+    /* Fallback for browsers that don't support dvh */
+    @supports not (height: 100dvh) {
+      html {
+        height: calc(var(--vh, 1vh) * 100);
+      }
+    }
+    
+    #root {
+      height: 100%;
+      /* No scrolling on root - messages area handles all scrolling */
+      overflow: hidden;
+      /* Prevent elastic scrolling */
+      overscroll-behavior: none;
+    }
+    
+    /* Standard chat app approach: Fixed input at bottom */
+    .chat-input-fixed {
+      position: fixed !important;
+      /* Fixed at bottom - no page scrolling means this never moves */
+      bottom: 0 !important;
+      left: 0;
+      right: 0;
+      /* Don't use safe-area-inset-bottom - causes extra padding on iOS web */
+      /* The fixed positioning already keeps it above browser UI */
+      background-color: #05080C;
+      z-index: 1000;
+      /* Remove any extra padding - keep it matching original layout */
+      box-sizing: border-box;
+      /* Ensure it doesn't scroll with content */
+      transform: translateZ(0);
+      -webkit-transform: translateZ(0);
+    }
+  </style>
+  <script>
+    // Set viewport height CSS variables for safe area handling
+    (function() {
+      function updateViewport() {
+        const vv = window.visualViewport;
+        if (vv) {
+          // Set actual viewport height for containers
+          document.documentElement.style.setProperty('--actual-viewport-height', vv.height + 'px');
+        } else {
+          // Fallback to window dimensions
+          document.documentElement.style.setProperty('--actual-viewport-height', window.innerHeight + 'px');
+        }
+      }
+      
+      // Initialize on load
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', updateViewport);
+      } else {
+        updateViewport();
+      }
+      
+      // Update on viewport changes
+      window.addEventListener('resize', updateViewport);
+      
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', updateViewport);
+        window.visualViewport.addEventListener('scroll', updateViewport);
+      }
+    })();
+    
+    // Fallback for browsers that don't support dvh viewport units
+    (function() {
+      // Check if browser supports dvh units
+      const supportsDvh = CSS.supports('height', '100dvh');
+      
+      if (supportsDvh) {
+        return; // No need for JavaScript fallback
+      }
+      
+      // Fallback: Set CSS custom property for viewport height
+      function setViewportHeight() {
+        const visualViewport = window.visualViewport;
+        const actualHeight = visualViewport ? visualViewport.height : window.innerHeight;
+        
+        // Set custom property for @supports not (height: 100dvh) fallback
+        const vh = actualHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+      }
+      
+      setViewportHeight();
+      window.addEventListener('resize', setViewportHeight);
+      
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', setViewportHeight);
+      }
+      
+      window.addEventListener('orientationchange', () => {
+        setTimeout(setViewportHeight, 100);
+      });
+    })();
+  </script>
+</head>
+<body>
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  <div id="root"></div>
+</body>
+</html>
