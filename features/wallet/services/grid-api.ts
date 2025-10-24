@@ -53,7 +53,7 @@ class WalletService {
 
   constructor() {
     // Point to Express API server - now using clean wallet API
-    const baseApiUrl = config.apiUrl || 'http://localhost:3001';
+    const baseApiUrl = config.backendApiUrl || 'http://localhost:3001';
     this.baseUrl = `${baseApiUrl}/api/wallet`;
   }
 

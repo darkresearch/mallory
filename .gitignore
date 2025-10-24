@@ -34,6 +34,9 @@ yarn-error.*
 .env
 .env*.local
 
+# Allow .env.example to be committed
+!.env.example
+
 # typescript
 *.tsbuildinfo
 

@@ -1,6 +1,6 @@
 import '@/polyfills';
 import { Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { View, StatusBar, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -10,7 +10,6 @@ import { AuthProvider } from '../contexts/AuthContext';
 import { ConversationsProvider } from '../contexts/ConversationsContext';
 import { WalletProvider } from '../contexts/WalletContext';
 import AuthGate from '../components/auth/AuthGate';
-import { initI18n } from '../lib/i18n';
 import 'react-native-url-polyfill/auto';
 
 // Keep the splash screen visible while we fetch resources
@@ -27,8 +26,6 @@ export default function RootLayout() {
     'Satoshi-Bold': require('../assets/fonts/Satoshi-Bold.ttf'),
     'Satoshi': require('../assets/fonts/Satoshi-Regular.ttf'), // Default weight
   });
-  
-  const [i18nInitialized, setI18nInitialized] = useState(false);
 
   useEffect(() => {
     // Set up status bar for dark theme
@@ -39,27 +36,13 @@ export default function RootLayout() {
     }
   }, []);
 
-  // Initialize i18n
   useEffect(() => {
-    initI18n()
-      .then(() => {
-        console.log('✅ i18n initialized');
-        setI18nInitialized(true);
-      })
-      .catch((error) => {
-        console.error('Failed to initialize i18n:', error);
-        // Continue anyway with fallback
-        setI18nInitialized(true);
-      });
-  }, []);
-
-  useEffect(() => {
-    if (fontsLoaded && i18nInitialized) {
+    if (fontsLoaded) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, i18nInitialized]);
+  }, [fontsLoaded]);
 
-  if (!fontsLoaded || !i18nInitialized) {
+  if (!fontsLoaded) {
     return null;
   }
 

@@ -24,7 +24,7 @@ Implement your own backend following the specifications below. You'll need to:
 
 ## Base Configuration
 
-The API base URL is configured via the `EXPO_PUBLIC_API_URL` environment variable.
+The API base URL is configured via the `EXPO_PUBLIC_BACKEND_API_URL` environment variable.
 
 All API requests should include standard headers:
 ```
@@ -278,7 +278,7 @@ For development, you can create a minimal mock backend that:
 
 When running locally:
 
-1. Set `EXPO_PUBLIC_API_URL=http://localhost:3000`
+1. Set `EXPO_PUBLIC_BACKEND_API_URL=http://localhost:3000` (Note: In dev mode, the app automatically uses localhost:3001)
 2. Ensure CORS headers allow your development origin
 3. Use Supabase local development or cloud project
 

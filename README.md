@@ -11,7 +11,6 @@ Mallory is a production-ready mobile application boilerplate built with React Na
 - **Authentication**: Google OAuth integration with Supabase
 - **Wallet Integration**: Solana wallet with Grid API support
 - **Cross-Platform**: iOS, Android, and Web support via Expo
-- **Internationalization**: Built-in i18n support with multiple languages
 - **Modern Stack**: React Native, TypeScript, Supabase, Expo Router
 
 ## Tech Stack
@@ -77,16 +76,16 @@ Mallory requires the following environment variables:
 
 ### Required
 
-- `EXPO_PUBLIC_API_URL` - Your backend API endpoint
 - `EXPO_PUBLIC_SUPABASE_URL` - Your Supabase project URL
-- `EXPO_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous key
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous key (client-side key)
+- `EXPO_PUBLIC_BACKEND_API_URL` - Your backend API endpoint (production only; dev uses localhost:3001)
 
 ### Optional (for full features)
 
-- `EXPO_PUBLIC_SOLANA_RPC_URL` - Solana RPC endpoint for wallet features
-- `EXPO_PUBLIC_AUTH_REDIRECT_URL` - OAuth redirect URL for authentication
-- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` - Google OAuth Web Client ID
-- `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` - Google OAuth iOS Client ID
+- `EXPO_PUBLIC_WEB_OAUTH_REDIRECT_URL` - OAuth redirect URL for web-based Google login (defaults to http://localhost:8081)
+- `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` - Google OAuth iOS Client ID (required for iOS native auth)
+- `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` - Google OAuth Android Client ID (required for Android native auth)
+- `EXPO_PUBLIC_SOLANA_RPC_URL` - Solana RPC endpoint for wallet features (defaults to mainnet-beta)
 
 See [.env.example](.env.example) for detailed configuration documentation.
 
@@ -121,8 +120,7 @@ mallory/
 │   ├── grid/              # Grid API integration
 │   └── wallet/            # Wallet operations
 ├── hooks/                 # Custom React hooks
-├── lib/                   # Utility libraries
-└── locales/              # i18n translations
+└── lib/                   # Utility libraries
 ```
 
 ### Key Design Patterns
