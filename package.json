@@ -1,7 +1,7 @@
 {
   "name": "mallory",
   "version": "0.1.0",
-  "description": "Full-featured AI chat app boilerplate with auth, wallet, and dynamic UI",
+  "description": "Opinionated react native crypto x AI chat app boilerplate with wallet support, conversational AI, dynamic UI, and x402 support",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
