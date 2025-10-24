@@ -62,7 +62,7 @@ class GridService {
   private baseUrl: string;
 
   constructor() {
-    const baseApiUrl = config.apiUrl || 'http://localhost:3001';
+    const baseApiUrl = config.backendApiUrl || 'http://localhost:3001';
     this.baseUrl = `${baseApiUrl}/api/grid`;
   }
 

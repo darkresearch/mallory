@@ -311,7 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🔐 Step 1: Auth token retrieved');
 
       console.log('🔐 Step 2: Making API call to wallet status...');
-      const baseApiUrl = config.apiUrl || 'http://localhost:3001';
+      const baseApiUrl = config.backendApiUrl || 'http://localhost:3001';
       const apiUrl = `${baseApiUrl}/api/wallet/status`;
       console.log('🔐 Step 2: Calling URL:', apiUrl);
       
@@ -421,9 +421,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (Platform.OS === 'web') {
         // Use Supabase OAuth for web
-        const redirectUrl = config.authRedirectUrl || 'http://localhost:8081';
+        const redirectUrl = config.webOAuthRedirectUrl || 'http://localhost:8081';
         console.log('🔐 Auth Redirect URL:', redirectUrl);
-        console.log('🔐 Full config.authRedirectUrl:', config.authRedirectUrl);
+        console.log('🔐 Full config.webOAuthRedirectUrl:', config.webOAuthRedirectUrl);
         
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',

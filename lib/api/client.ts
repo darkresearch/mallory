@@ -18,9 +18,9 @@ export const generateAPIUrl = (relativePath: string) => {
   }
 
   // In production, use environment variable
-  const apiBaseUrl = config.apiUrl;
+  const apiBaseUrl = config.backendApiUrl;
   if (!apiBaseUrl) {
-    throw new Error('API_URL configuration is not defined');
+    throw new Error('EXPO_PUBLIC_BACKEND_API_URL configuration is not defined');
   }
 
   return `${apiBaseUrl}${path}`;
@@ -29,7 +29,7 @@ export const generateAPIUrl = (relativePath: string) => {
 /**
  * Base API URL from environment
  */
-const API_URL = config.apiUrl || '';
+const API_URL = config.backendApiUrl || '';
 
 /**
  * Enhanced fetch wrapper for mobile-specific handling

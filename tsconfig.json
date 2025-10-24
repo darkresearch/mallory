@@ -6,9 +6,6 @@
     "paths": {
       "@/*": [
         "./*"
-      ],
-      "streamdown-rn": [
-        "../../packages/streamdown-rn/src"
       ]
     },
     "jsx": "react-jsx",
@@ -21,13 +18,10 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "../../packages/**/*.ts",
-    "../../packages/**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ],
   "exclude": [
-    "node_modules",
-    "../web/node_modules"
+    "node_modules"
   ]
 }

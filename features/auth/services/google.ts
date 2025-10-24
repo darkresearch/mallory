@@ -14,8 +14,8 @@ export const configureGoogleSignIn = () => {
   GoogleSignin.configure({
     // Get this from Google Cloud Console
     iosClientId: config.googleIosClientId,
-    // For Android (if needed)
-    webClientId: config.googleWebClientId,
+    // For Android
+    webClientId: config.googleAndroidClientId,
     // Scopes
     scopes: ['profile', 'email'],
     // Offline access for refresh tokens

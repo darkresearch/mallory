@@ -73,7 +73,7 @@ export async function sendToken(recipientAddress: string, amount: string, tokenA
       throw new Error('No auth token available');
     }
 
-    const baseApiUrl = config.apiUrl || 'http://localhost:3001';
+    const baseApiUrl = config.backendApiUrl || 'http://localhost:3001';
     console.log('💸 [sendToken] Sending to:', `${baseApiUrl}/api/wallet/send`);
     
     // Build request body - only include token_address for non-SOL tokens

@@ -2,7 +2,6 @@ import { View, Text, TouchableOpacity, ActivityIndicator, Image, StyleSheet, Pla
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -10,8 +9,6 @@ import Animated, {
   withDelay,
   Easing 
 } from 'react-native-reanimated';
-import { useTranslation } from 'react-i18next';
-import { LanguagePicker } from '@/components/auth/LanguagePicker';
 import { preview } from "radon-ide";
 import { LAYOUT } from '@/lib';
 
@@ -21,7 +18,6 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
-  const { t } = useTranslation('login');
 
   // Mobile detection: native mobile OR narrow web viewport
   const isMobile = Platform.OS === 'ios' || Platform.OS === 'android' || width < 768;
@@ -144,9 +140,6 @@ export default function LoginScreen() {
         }
       ]}
     >
-      {/* Dev language picker - absolute position in top-right */}
-      {__DEV__ && <LanguagePicker />}
-
       <View style={[styles.content, isMobile && styles.contentMobile]}>
         {/* Hero container - Centers text on mobile */}
         <View style={isMobile && styles.heroContainerMobile}>
@@ -155,14 +148,14 @@ export default function LoginScreen() {
             {textStage === 1 && (
               <Animated.View style={stage1AnimatedStyle}>
                 <Text style={[styles.heroText, isMobile && styles.heroTextMobile]}>
-                  {t('hero_stage1')}
+                  They've always said money talks.
                 </Text>
               </Animated.View>
             )}
             {textStage === 2 && (
               <Animated.View style={stage2AnimatedStyle}>
                 <Text style={[styles.heroText, isMobile && styles.heroTextMobile]}>
-                  {t('hero_stage2')}
+                  Now you can talk with money like never before.
                 </Text>
               </Animated.View>
             )}

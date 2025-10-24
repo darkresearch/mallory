@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx expo export --platform web",
+  "buildCommand": "bun expo export --platform web",
   "outputDirectory": "dist",
   "framework": null,
   "installCommand": "bun install",

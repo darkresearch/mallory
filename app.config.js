@@ -90,12 +90,12 @@ export default {
       eas: {
         projectId: "your-eas-project-id"
       },
-      authRedirectUrl: process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL,
-      apiUrl: process.env.EXPO_PUBLIC_API_URL,
+      webOAuthRedirectUrl: process.env.EXPO_PUBLIC_WEB_OAUTH_REDIRECT_URL,
+      backendApiUrl: process.env.EXPO_PUBLIC_BACKEND_API_URL,
       solanaRpcUrl: process.env.EXPO_PUBLIC_SOLANA_RPC_URL,
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-      googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      googleAndroidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
       googleIosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
     }
   }
