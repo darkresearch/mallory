@@ -2,7 +2,7 @@ export default {
   expo: {
     name: "Mallory",
     slug: "mallory",
-    version: "1.0.0",
+    version: "0.1.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "dark",
