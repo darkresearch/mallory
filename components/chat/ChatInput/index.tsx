@@ -15,7 +15,7 @@ export function ChatInput({
   onSend,
   onVoiceStart,
   onAttachmentPress,
-  placeholder = "Ask Scout",
+  placeholder = "Ask me anything",
   disabled = false
 }: ChatInputProps) {
   const [text, setText] = useState('');

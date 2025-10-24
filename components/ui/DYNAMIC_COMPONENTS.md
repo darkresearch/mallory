@@ -158,7 +158,7 @@ To add a new dynamic component:
 2. **Self-Contained:** Components should be self-sufficient
 3. **Error Handling:** Gracefully handle missing/invalid props
 4. **Mobile-First:** Design for small screens first
-5. **Dark Theme:** Match Scout's dark aesthetic
+5. **Dark Theme:** Match the app's dark aesthetic
 6. **Accessible:** Ensure keyboard navigation and screen reader support
 
 ## Technical Details
@@ -174,7 +174,7 @@ To add a new dynamic component:
 ✅ Use clear, descriptive prop names  
 ✅ Provide sensible defaults  
 ✅ Handle edge cases (empty data, errors)  
-✅ Match Scout's design system  
+✅ Match the app's design system  
 ✅ Include comprehensive examples  
 
 ### DON'T:
@@ -195,4 +195,4 @@ Dynamic components are automatically:
 - ✅ Error-handled with fallbacks
 - ✅ Available to the AI immediately after registration
 
-The registry provides type-safe, validated, and extensible component management for Scout's dynamic UI system.
+The registry provides type-safe, validated, and extensible component management for the app's dynamic UI system.

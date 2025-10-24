@@ -12,6 +12,8 @@ export const config = {
   supabaseAnonKey: Constants.expoConfig?.extra?.supabaseAnonKey as string,
   googleAndroidClientId: Constants.expoConfig?.extra?.googleAndroidClientId as string,
   googleIosClientId: Constants.expoConfig?.extra?.googleIosClientId as string,
+  termsUrl: Constants.expoConfig?.extra?.termsUrl as string,
+  privacyUrl: Constants.expoConfig?.extra?.privacyUrl as string,
 };
 
 // Debug log on load
@@ -22,5 +24,7 @@ console.log('📋 Config loaded:', {
   supabaseAnonKey: config.supabaseAnonKey ? 'loaded' : 'missing',
   googleAndroidClientId: config.googleAndroidClientId ? 'loaded' : 'missing',
   googleIosClientId: config.googleIosClientId ? 'loaded' : 'missing',
+  termsUrl: config.termsUrl ? 'loaded' : 'missing',
+  privacyUrl: config.privacyUrl ? 'loaded' : 'missing',
 });
 

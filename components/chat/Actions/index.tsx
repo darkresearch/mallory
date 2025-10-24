@@ -41,7 +41,7 @@ export const MessageActions: React.FC<MessageActionsData> = ({
     try {
       const result = await Share.share({
         message: messageContent,
-        title: 'Scout AI Response',
+        title: 'AI Response',
       });
       
       if (result.action === Share.sharedAction) {
