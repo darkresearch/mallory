@@ -6,7 +6,7 @@ Mallory is a production-ready, full-stack mobile boilerplate for building AI-pow
 
 ## What Makes Mallory Different?
 
-**Not another todo app boilerplate.** Mallory solves the hard problems in crypto x AI:
+Mallory solves the hard problems for modern applications, combining the latest scaffolding in crypto, AI, and mobile:
 
 - ✅ **Embedded wallets that actually work** - Grid integration with KYC flows, not just "install MetaMask"
 - ✅ **Streaming AI that feels native** - Token-by-token updates, not janky text replacements
@@ -17,7 +17,7 @@ Mallory is a production-ready, full-stack mobile boilerplate for building AI-pow
 - ✅ **Production-grade state management** - Real-time subscriptions, optimistic updates, error boundaries
 - ✅ **Actually cross-platform** - Native iOS/Android + Web, not "mobile-first with web hacks"
 
-**This is the boilerplate we built for Scout**, our production AI financial assistant. Now it's yours.
+**This is the boilerplate we built for [Dark's](https://darkresearch.ai) Scout**, our upcoming consumer finance app. Now it's yours.
 
 ---
 
@@ -47,14 +47,14 @@ bun run ios      # or: bun run android
 
 ## Why Mallory is Opinionated
 
-We made the hard technical choices so you don't have to. Every dependency was selected for a reason:
+Every dependency was selected for a reason:
 
 ### **Embedded Wallet Infrastructure: [Squads Grid](https://www.squads.so/grid)**
 - Non-custodial Solana wallets managed via API
 - No private key management complexity
 - Built-in KYC/compliance flows
 - Production-ready transaction signing
-- **Why Grid?** The only enterprise-grade embedded wallet solution that doesn't require you to become a custodian
+- **Why Grid?** An enterprise-grade embedded wallet solution that doesn't require you to become a custodian, and the only solution that forgoes vendor lock-in.
 
 ### **Backend-as-a-Service: [Supabase](https://supabase.com)**
 - PostgreSQL database with automatic APIs
@@ -64,7 +64,7 @@ We made the hard technical choices so you don't have to. Every dependency was se
 - **Why Supabase?** Open-source, self-hostable, and replaces 5+ separate services
 
 ### **AI Streaming: [Vercel AI SDK](https://sdk.vercel.ai)**
-- Framework-agnostic streaming chat
+- Framework-agnostic streaming chat (powered by [StreamdownRN](https://www.npmjs.com/package/streamdown-rn))
 - Built-in React hooks (`useChat`, streaming state)
 - Supports tool calling and dynamic UI
 - Works with any LLM provider
