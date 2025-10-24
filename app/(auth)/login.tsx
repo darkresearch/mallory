@@ -10,7 +10,7 @@ import Animated, {
   Easing 
 } from 'react-native-reanimated';
 import { preview } from "radon-ide";
-import { LAYOUT } from '@/lib';
+import { LAYOUT, config } from '@/lib';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -192,16 +192,21 @@ export default function LoginScreen() {
           </View>
 
           {/* Terms & Footer - Inline on mobile */}
-          {isMobile && (
+          {isMobile && (config.termsUrl || config.privacyUrl) && (
             <Animated.View style={[styles.footer, styles.footerMobile, termsAnimatedStyle]}>
               <Text style={[styles.disclaimer, styles.disclaimerMobile]}>
                 By continuing, you agree to our{' '}
-                <Text style={styles.termsLink} onPress={() => handleOpenLink('https://darkresearch.ai/terms')}>
+                {config.termsUrl && (
+                  <Text style={styles.termsLink} onPress={() => handleOpenLink(config.termsUrl)}>
                   Terms
-                </Text> and{' '}
-                <Text style={styles.termsLink} onPress={() => handleOpenLink('https://darkresearch.ai/privacy')}>
+                  </Text>
+                )}
+                {config.termsUrl && config.privacyUrl && ' and '}
+                {config.privacyUrl && (
+                  <Text style={styles.termsLink} onPress={() => handleOpenLink(config.privacyUrl)}>
                   Privacy Policy
                 </Text>
+                )}
               </Text>
             </Animated.View>
           )}
@@ -209,20 +214,21 @@ export default function LoginScreen() {
       </View>
 
       {/* Terms & Footer - Fixed at bottom on web */}
-      {!isMobile && (
+      {!isMobile && (config.termsUrl || config.privacyUrl) && (
         <Animated.View style={[styles.footer, styles.footerWeb, termsAnimatedStyle]}>
           <Text style={styles.disclaimer}>
             By continuing, you agree to our{' '}
-            <Text style={styles.termsLink} onPress={() => handleOpenLink('https://darkresearch.ai/terms')}>
+            {config.termsUrl && (
+              <Text style={styles.termsLink} onPress={() => handleOpenLink(config.termsUrl)}>
               Terms
-            </Text> and{' '}
-            <Text style={styles.termsLink} onPress={() => handleOpenLink('https://darkresearch.ai/privacy')}>
+              </Text>
+            )}
+            {config.termsUrl && config.privacyUrl && ' and '}
+            {config.privacyUrl && (
+              <Text style={styles.termsLink} onPress={() => handleOpenLink(config.privacyUrl)}>
               Privacy Policy
             </Text>
-          </Text>
-          
-          <Text style={styles.disclaimer}>
-            Dark AI is a financial technology company, not a bank or a digital asset custodian.
+            )}
           </Text>
         </Animated.View>
       )}

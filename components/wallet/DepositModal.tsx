@@ -93,7 +93,7 @@ export default function DepositModal({
           <View style={styles.instructionBox}>
             <Ionicons name="information-circle-outline" size={20} color="#4A9EFF" />
             <Text style={styles.instructionText}>
-              Send SOL from any external Solana wallet to this address. Funds will appear in your Scout wallet shortly after confirmation.
+              Send SOL from any external Solana wallet to this address. Funds will appear in your wallet shortly after confirmation.
             </Text>
           </View>
 

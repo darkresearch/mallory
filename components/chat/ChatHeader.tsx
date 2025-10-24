@@ -25,7 +25,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ user, styles }) => {
         <Feather name="menu" size={24} color="#8C8C8C" />
       </TouchableOpacity>
 
-      {/* Scout wordmark */}
+      {/* App wordmark */}
       <View style={styles.wordmarkContainer}>
         <Image 
           source={require('../../assets/images/wordmark.svg')}

@@ -13,6 +13,7 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
@@ -41,16 +42,6 @@ yarn-error.*
 *.tsbuildinfo
 
 # generated native folders
-# Track important config files but ignore generated content
-/ios/build/
-/ios/Pods/
-/ios/*.xcworkspace/
-/ios/*.xcodeproj/xcuserdata/
-/ios/*.xcodeproj/project.xcworkspace/xcuserdata/
-/ios/DerivedData/
-
-/android/app/build/
-/android/build/
-/android/.gradle/
-/android/app/release/
-/android/app/debug/
+# Run `expo prebuild` to generate these
+/ios/
+/android/

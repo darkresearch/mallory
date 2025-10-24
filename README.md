@@ -28,10 +28,10 @@ Mallory is a production-ready mobile application boilerplate built with React Na
 
 ### Prerequisites
 
-- Node.js 18+ or Bun
-- iOS development: macOS with Xcode
+- Node.js 18+ or Bun (Bun recommended)
+- iOS development: macOS with Xcode 14+
 - Android development: Android Studio
-- Expo CLI (`npm install -g expo-cli`)
+- Expo CLI (optional, can use `bunx expo` instead)
 
 ### Installation
 
@@ -53,21 +53,28 @@ cp .env.example .env
 
 Edit `.env` with your configuration values (see Configuration section below).
 
-4. Start the development server:
+4. **Generate native projects** (required for iOS/Android):
+```bash
+bun expo prebuild
+```
+
+This generates the `ios/` and `android/` folders with your app's branding from `app.config.js`.
+
+5. Start the development server:
 ```bash
 bun start
 ```
 
-5. Run on your platform:
+6. Run on your platform:
 ```bash
-# iOS
+# Web (no prebuild needed)
+bun run web
+
+# iOS (requires step 4)
 bun run ios
 
-# Android
+# Android (requires step 4)
 bun run android
-
-# Web
-bun run web
 ```
 
 ## Configuration
@@ -86,6 +93,8 @@ Mallory requires the following environment variables:
 - `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` - Google OAuth iOS Client ID (required for iOS native auth)
 - `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` - Google OAuth Android Client ID (required for Android native auth)
 - `EXPO_PUBLIC_SOLANA_RPC_URL` - Solana RPC endpoint for wallet features (defaults to mainnet-beta)
+- `EXPO_PUBLIC_TERMS_URL` - Terms of Service URL (displayed on login screen if provided)
+- `EXPO_PUBLIC_PRIVACY_URL` - Privacy Policy URL (displayed on login screen if provided)
 
 See [.env.example](.env.example) for detailed configuration documentation.
 
@@ -135,11 +144,11 @@ mallory/
 
 ### Native Builds
 
-For iOS and Android native builds, you'll need to run `expo prebuild` first:
+The native `ios/` and `android/` folders are not included in the repository. Generate them first:
 
 ```bash
-# Generate native folders
-expo prebuild
+# Generate native folders from app.config.js
+bun expo prebuild
 
 # iOS: Install CocoaPods dependencies
 cd ios && pod install && cd ..
@@ -150,6 +159,8 @@ bun run build:ios
 # Build for Android
 bun run build:android
 ```
+
+**Note:** The prebuild command uses your `app.config.js` settings to generate properly configured native projects with your app name, bundle ID, and branding.
 
 ### Web Deployment
 
@@ -163,16 +174,28 @@ The output will be in the `dist/` directory, ready for deployment to any static 
 
 ### EAS Build (Recommended)
 
-For managed builds via Expo Application Services:
+For managed cloud builds via Expo Application Services (no local Xcode/Android Studio needed):
 
 ```bash
-# Configure EAS
+# Install EAS CLI globally
+bun add -g eas-cli
+
+# Configure EAS (generates eas.json if needed)
 eas build:configure
 
 # Build for production
 eas build --platform ios
 eas build --platform android
+
+# Or build both at once
+eas build --platform all
 ```
+
+**Benefits:**
+- No need for local Xcode or Android Studio
+- Builds in the cloud
+- Automatic code signing
+- Perfect for CI/CD
 
 ## Backend
 
@@ -233,4 +256,4 @@ Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
 Built with ❤️ by [Dark](https://darkresearch.ai)
 
-Mallory is the open-source foundation of [Scout](https://scout.dark.xyz), Dark's production AI financial assistant.
+Mallory is an open-source AI chat boilerplate created by [Dark Research](https://darkresearch.ai).
