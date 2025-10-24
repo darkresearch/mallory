@@ -1,6 +1,6 @@
 {
   "name": "mallory",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Full-featured AI chat app boilerplate with auth, wallet, and dynamic UI",
   "main": "index.ts",
   "scripts": {
@@ -12,8 +12,7 @@
     "prebuild": "expo prebuild",
     "build:android": "eas build --platform android",
     "build:ios": "eas build --platform ios",
-    "type-check": "tsc --noEmit",
-    "postinstall": "node ./scripts/fix-lightningcss.js"
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.16",
