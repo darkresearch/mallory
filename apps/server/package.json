@@ -5,7 +5,7 @@
   "main": "src/server.ts",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "bun --watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "type-check": "tsc --noEmit"
@@ -14,12 +14,14 @@
     "@ai-sdk/anthropic": "^2.0.16",
     "@darkresearch/mallory-shared": "workspace:*",
     "@supabase/supabase-js": "^2.51.0",
+    "@supermemory/tools": "latest",
     "ai": "^5.0.50",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "exa-js": "^1.0.14",
     "express": "^4.18.2",
     "supermemory": "latest",
+    "uuid": "^13.0.0",
     "zod": "^4.1.8"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 import { secureStorage } from '../storage';
 
-const AUTH_TOKEN_KEY = 'scout_auth_token';
+const AUTH_TOKEN_KEY = 'mallory_auth_token';
 
 /**
  * Auth token management utilities

@@ -69,6 +69,12 @@ class WalletDataService {
 
       // Get auth token
       const token = await this.getAuthToken();
+      
+      if (!token) {
+        console.error('💰 [Mobile] No auth token available', { requestId });
+        throw new Error('No auth token available. Please sign in.');
+      }
+      
       console.log('💰 [Mobile] Auth token retrieved', {
         requestId,
         tokenPrefix: token.substring(0, 10) + '...',
@@ -124,11 +130,26 @@ class WalletDataService {
         throw new Error(data.message || data.error || 'API request failed');
       }
 
-      // Data is already in the right format from the holdings endpoint
+      // Parse and transform response from holdings endpoint
+      // Map server TokenHolding format to client EnrichedToken format
+      const transformedHoldings: EnrichedToken[] = (data.holdings || []).map((h: any) => ({
+        tokenAddress: h.tokenAddress,
+        tokenPfp: h.logoUrl || '',
+        tokenName: h.name || h.symbol || 'Unknown',
+        tokenSymbol: h.symbol || 'UNKNOWN',
+        tokenPrice: h.price || 0,
+        priceChange24h: 0, // Not provided by backend
+        volume24h: 0, // Not provided by backend
+        marketCap: 0, // Not provided by backend
+        holdings: h.uiAmount || 0,
+        holdingsValue: h.value || 0,
+        decimals: h.decimals || 9
+      }));
+
       const walletData: WalletData = {
-        totalBalance: parseFloat(data.data.totalValue?.toFixed(2) || '0.00'),
-        holdings: data.data.holdings || [],
-        smartAccountAddress: data.data.walletAddress?.substring(0, 8) + '...' || 'Unknown',
+        totalBalance: parseFloat(data.totalValue?.toFixed(2) || '0.00'),
+        holdings: transformedHoldings,
+        smartAccountAddress: data.smartAccountAddress || 'Unknown',
         gridAccountId: 'N/A', // Not needed from holdings endpoint
         lastUpdated: new Date().toISOString()
       };
@@ -137,7 +158,7 @@ class WalletDataService {
         requestId,
         totalValueUSD: walletData.totalBalance.toFixed(2),
         holdingsCount: walletData.holdings.length,
-        walletAddress: data.data.walletAddress,
+        walletAddress: data.smartAccountAddress,
         duration: `${duration}ms`
       });
 
@@ -250,7 +271,7 @@ class WalletDataService {
   private async getAuthToken(): Promise<string | null> {
     try {
       // Use the same key as AuthContext
-      return await secureStorage.getItem('scout_auth_token');
+      return await secureStorage.getItem('mallory_auth_token');
     } catch (error) {
       console.error('Failed to get auth token:', error);
       return null;

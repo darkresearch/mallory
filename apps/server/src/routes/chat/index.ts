@@ -1,103 +1,149 @@
 import express from 'express';
-import { streamText } from 'ai';
-import { anthropic } from '@ai-sdk/anthropic';
+import { streamText, UIMessage } from 'ai';
 import { authenticateUser, AuthenticatedRequest } from '../../middleware/auth.js';
 import { toolRegistry } from './tools/registry.js';
+import { setupModelProvider } from './config/modelProvider.js';
+import { buildStreamConfig } from './config/streamConfig.js';
+import { buildStreamResponse } from './config/streamResponse.js';
+import { logIncomingMessages, logConversationState, logModelConfiguration } from './debug.js';
 import type { ChatRequest } from '@darkresearch/mallory-shared';
 
 const router = express.Router();
 
+const getClaudeModel = () => {
+  return process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
+};
+
 /**
  * Chat endpoint for AI streaming with Claude
  * POST /api/chat
- * 
- * Streams AI responses using Server-Sent Events (SSE)
- * Requires authentication via Supabase JWT token
  */
 router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
   try {
+    // Extract and validate request
     const user = req.user!;
+    const userId = user.id;
+    
     const { messages, conversationId, clientContext }: ChatRequest = req.body;
 
-    console.log('💬 Chat request:', {
-      userId: user.id,
-      conversationId,
-      messageCount: messages.length,
-      hasContext: !!clientContext
-    });
+    logIncomingMessages(messages);
 
-    // Validate request
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({ 
-        error: 'Invalid request',
-        message: 'Messages array is required' 
-      });
+      return res.status(400).json({ error: 'Messages array is required' });
     }
 
     if (!conversationId) {
-      return res.status(400).json({ 
-        error: 'Invalid request',
-        message: 'Conversation ID is required' 
-      });
+      return res.status(400).json({ error: 'Conversation ID is required' });
     }
 
-    // Build system prompt with context
-    const systemPrompt = buildSystemPrompt(clientContext);
+    logConversationState(conversationId, [], clientContext);
 
-    // Build tools object - conditionally include Supermemory
-    const tools: any = {
-      searchWeb: toolRegistry.searchWeb,
-    };
-
-    // Add Supermemory tools if API key is available
-    if (process.env.SUPERMEMORY_API_KEY) {
-      const memoryTools = toolRegistry.createSupermemoryTools(
-        process.env.SUPERMEMORY_API_KEY,
-        user.id
-      );
-      Object.assign(tools, memoryTools);
-      console.log('🧠 Supermemory tools enabled for user:', user.id);
-    } else {
-      console.log('ℹ️  Supermemory not configured (SUPERMEMORY_API_KEY not set)');
-    }
-
-    console.log('🤖 Starting Claude stream with tools:', Object.keys(tools));
-
-    // Stream AI response with tools using AI SDK
-    const result = streamText({
-      model: anthropic(process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514'),
-      system: systemPrompt,
-      messages: messages.map(msg => ({
-        role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
-        content: msg.content
-      })),
-      tools,
-      maxTokens: 4096,
-      temperature: 0.7,
+    // Filter out system messages (they're triggers, not conversation history)
+    const conversationMessages = messages.filter((msg: UIMessage) => msg.role !== 'system');
+    console.log('💬 Message processing:', {
+      totalMessages: messages.length,
+      systemMessages: messages.length - conversationMessages.length,
+      conversationMessages: conversationMessages.length
     });
 
-    // Set up SSE headers
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+    // Setup model provider with smart strategy
+    const { model, processedMessages, strategy } = setupModelProvider(
+      conversationMessages,
+      conversationId,
+      userId,
+      getClaudeModel()
+    );
 
-    // Pipe AI SDK stream to response
-    result.pipeDataStreamToResponse(res);
+    // Prepare tools (always include memory tools if available)
+    const supermemoryApiKey = process.env.SUPERMEMORY_API_KEY;
+    const tools = {
+      searchWeb: toolRegistry.searchWeb,
+      ...(supermemoryApiKey ? toolRegistry.createSupermemoryTools(supermemoryApiKey, userId) : {}),
+    };
 
-    console.log('✅ Chat stream started for conversation:', conversationId);
+    // Log model configuration with actual enabled tools
+    logModelConfiguration(messages, tools, getClaudeModel());
 
-  } catch (error) {
-    console.error('❌ Chat error:', error);
+    // Build system prompt
+    const systemPrompt = buildSystemPrompt(clientContext);
+
+    // Build stream configuration
+    const streamConfig = buildStreamConfig({
+      model,
+      processedMessages,
+      systemPrompt,
+      tools,
+      strategy
+    });
+
+    // Start AI streaming
+    console.log('🎯 Starting AI stream');
+    const result = streamText(streamConfig);
+    console.log('✅ streamText call completed');
+
+    // Build UI message stream response
+    console.log('🌊 Creating UI message stream response');
+    const { streamResponse } = buildStreamResponse(result, messages, conversationId);
+    console.log('🚀 Stream response created');
+
+    // Monitor client connection
+    req.on('close', () => {
+      console.log('🔌 Client disconnected during stream');
+    });
     
-    if (!res.headersSent) {
-      res.status(500).json({ 
-        error: 'Chat failed',
-        message: error instanceof Error ? error.message : 'Unknown error occurred' 
+    req.on('error', (error) => {
+      console.log('❌ Client request error:', error);
+    });
+
+    // Pipe to Express response
+    console.log('🔄 Piping to Express response');
+    
+    if (streamResponse.headers) {
+      (streamResponse.headers as any).forEach((value: any, key: any) => {
+        res.setHeader(key, value);
       });
     }
+    
+    res.status(streamResponse.status || 200);
+    
+    if (streamResponse.body) {
+      const reader = streamResponse.body.getReader();
+      
+      const pump = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              console.log('✅ Stream completed successfully');
+              res.end();
+              break;
+            }
+            res.write(value);
+          }
+        } catch (error) {
+          console.error('❌ Stream error:', error);
+          res.end();
+        }
+      };
+      
+      pump();
+    } else {
+      console.log('❌ No response body found');
+      res.status(500).json({ error: 'No response body' });
+    }
+    
+    return;
+
+  } catch (error) {
+    console.error('❌ Chat handler error:', error);
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
+
+export { router as chatRouter };
 
 /**
  * Build system prompt with client context
@@ -131,6 +177,4 @@ function buildSystemPrompt(clientContext?: ChatRequest['clientContext']): string
 
   return contextParts.join('\n');
 }
-
-export { router as chatRouter };
 

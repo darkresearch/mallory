@@ -114,7 +114,7 @@ export default function LoginScreen() {
           <View style={[styles.hero, isMobile && styles.heroMobile]}>
             <Animated.View style={textAnimatedStyle}>
               <Text style={[styles.heroText, isMobile && styles.heroTextMobile]}>
-                Crypto x AI chat with wallet support, conversational AI, and dynamic UI
+                Mallory is an opinionated way to build an on-chain AI app.
               </Text>
             </Animated.View>
           </View>
