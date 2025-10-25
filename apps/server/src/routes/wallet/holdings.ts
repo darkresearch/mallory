@@ -6,19 +6,23 @@ import type { HoldingsResponse, TokenHolding } from '@darkresearch/mallory-share
 const router = express.Router();
 
 interface GridBalanceResponse {
-  success: boolean;
-  data?: {
+  data: {
     address: string;
+    lamports: number;
     sol: number;
     tokens: Array<{
-      mint: string;
       token_address: string;
-      amount: string;
+      amount: number;
       amount_decimal: string;
       decimals: number;
       symbol: string;
       name: string;
+      logo_url?: string;
     }>;
+  };
+  metadata: {
+    request_id: string;
+    timestamp: string;
   };
 }
 
@@ -163,6 +167,12 @@ router.get('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
 
     // Fetch balances from Grid API
     const gridUrl = `https://grid.squads.xyz/api/grid/v1/accounts/${walletAddress}/balances`;
+    console.log('💰 Fetching from Grid:', {
+      url: gridUrl,
+      environment: process.env.GRID_ENV || 'production',
+      hasApiKey: !!process.env.GRID_API_KEY
+    });
+
     const gridResponse = await fetch(gridUrl, {
       headers: {
         'Authorization': `Bearer ${process.env.GRID_API_KEY}`,
@@ -170,18 +180,28 @@ router.get('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       }
     });
 
+    console.log('💰 Grid API response status:', gridResponse.status);
+
     if (!gridResponse.ok) {
-      throw new Error(`Grid API error: ${gridResponse.status}`);
+      const errorText = await gridResponse.text();
+      console.error('💰 Grid API error response:', {
+        status: gridResponse.status,
+        statusText: gridResponse.statusText,
+        body: errorText
+      });
+      throw new Error(`Grid API error: ${gridResponse.status} - ${errorText}`);
     }
 
     const gridData: GridBalanceResponse = await gridResponse.json();
+    console.log('💰 Grid API response data:', JSON.stringify(gridData, null, 2));
 
-    if (!gridData.success || !gridData.data) {
-      throw new Error('Failed to fetch balances from Grid');
+    if (!gridData.data) {
+      console.error('💰 Grid response missing data field:', gridData);
+      throw new Error('Failed to fetch balances from Grid - no data field');
     }
 
     const tokens = gridData.data.tokens || [];
-    console.log('💰 Found', tokens.length, 'tokens');
+    console.log('💰 Found', tokens.length, 'tokens from Grid');
 
     // Prepare tokens for enrichment
     const tokensToEnrich = tokens

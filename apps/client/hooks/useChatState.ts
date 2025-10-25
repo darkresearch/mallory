@@ -12,6 +12,7 @@ export function useChatState({ currentConversationId, userId }: UseChatStateProp
   const [showImmediateReasoning, setShowImmediateReasoning] = useState(false);
   const [liveReasoningText, setLiveReasoningText] = useState('');
   const [hasInitialReasoning, setHasInitialReasoning] = useState(false);
+  const hasTriggeredProactiveMessage = useRef(false);
 
   // AI Chat using Vercel's useChat hook - with immediate feedback
   const aiChatResult = useAIChat({
@@ -118,6 +119,50 @@ export function useChatState({ currentConversationId, userId }: UseChatStateProp
     }
   }, [liveReasoningText, hasInitialReasoning]);
 
+  // Trigger proactive message for empty onboarding conversations
+  useEffect(() => {
+    const triggerProactiveMessage = async () => {
+      // Only run once per conversation, after history is loaded, when ready
+      if (
+        isLoadingHistory || 
+        hasTriggeredProactiveMessage.current || 
+        !currentConversationId || 
+        !sendAIMessage ||
+        aiStatus !== 'ready' ||
+        rawMessages.length > 0
+      ) {
+        return;
+      }
+
+      console.log('🤖 [Proactive] Checking for onboarding conversation...');
+      
+      // Load conversation metadata to check for onboarding flag
+      const { data: conversation, error } = await supabase
+        .from('conversations')
+        .select('metadata')
+        .eq('id', currentConversationId)
+        .single();
+      
+      if (error) {
+        console.error('🤖 [Proactive] Error loading conversation metadata:', error);
+        return;
+      }
+      
+      // If this is an onboarding conversation, trigger Scout's greeting
+      if (conversation?.metadata?.is_onboarding) {
+        console.log('🤖 [Proactive] Detected onboarding conversation - triggering greeting');
+        hasTriggeredProactiveMessage.current = true;
+        
+        // Send system message to trigger Scout's streaming greeting
+        sendAIMessage({
+          role: 'system',
+          content: 'onboarding_greeting',
+        } as any);
+      }
+    };
+
+    triggerProactiveMessage();
+  }, [isLoadingHistory, rawMessages.length, currentConversationId, sendAIMessage, aiStatus]);
 
   const handleSendMessage = (message: string) => {
     if (!sendAIMessage) return;

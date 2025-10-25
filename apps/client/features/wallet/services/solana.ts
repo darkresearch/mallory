@@ -5,9 +5,9 @@ import { gridClientService } from '../../grid/services/gridClient';
 
 const SOLANA_RPC_URL = config.solanaRpcUrl || 'https://api.mainnet-beta.solana.com';
 
-// Secure storage keys
-const WALLET_PRIVATE_KEY = 'scout_wallet_private_key';
-const WALLET_PUBLIC_KEY = 'scout_wallet_public_key';
+// Secure storage keys (legacy - not used with Grid wallets)
+const WALLET_PRIVATE_KEY = 'mallory_wallet_private_key';
+const WALLET_PUBLIC_KEY = 'mallory_wallet_public_key';
 
 // Initialize Solana connection
 export const connection = new Connection(SOLANA_RPC_URL, 'confirmed');

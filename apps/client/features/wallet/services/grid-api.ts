@@ -59,7 +59,7 @@ class WalletService {
 
   private async getAuthToken(): Promise<string | null> {
     try {
-      const token = await secureStorage.getItem('scout_auth_token');
+      const token = await secureStorage.getItem('mallory_auth_token');
       return token;
     } catch (error) {
       console.error('Error getting auth token:', error);

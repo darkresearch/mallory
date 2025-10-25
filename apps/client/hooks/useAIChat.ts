@@ -56,7 +56,7 @@ export function useAIChat({ conversationId, userId, onImmediateReasoning, onImme
     transport: new DefaultChatTransport({
       fetch: async (url, options) => {
         // Get auth token and add to headers
-        const token = await secureStorage.getItem('scout_auth_token');
+        const token = await secureStorage.getItem('mallory_auth_token');
         const fetchOptions: any = {
           ...options,
           headers: {
