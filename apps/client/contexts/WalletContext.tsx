@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { walletDataService, WalletData } from '../features/wallet';
+import { gridClientService } from '../features/grid';
 import { useAuth } from './AuthContext';
 
 interface WalletContextType {
@@ -31,17 +32,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       console.log('💰 [Context] Loading wallet data in background for user:', user.id);
       
+      // Get Grid account address from client-side secure storage
+      const gridAccount = await gridClientService.getAccount();
+      const gridAddress = gridAccount?.address;
+      
+      console.log('💰 [Context] Grid address from secure storage:', gridAddress);
+      
       const data = forceRefresh 
         ? await walletDataService.refreshWalletData()
         : await walletDataService.getWalletData();
       
+      // Override smartAccountAddress with client-side Grid address (source of truth)
+      const walletData = {
+        ...data,
+        smartAccountAddress: gridAddress || data.smartAccountAddress
+      };
+      
       console.log('💰 [Context] Wallet data loaded successfully', {
-        totalBalance: data.totalBalance,
-        holdingsCount: data.holdings.length,
-        hasSmartAccount: !!data.smartAccountAddress
+        totalBalance: walletData.totalBalance,
+        holdingsCount: walletData.holdings.length,
+        smartAccountAddress: walletData.smartAccountAddress
       });
       
-      setWalletData(data);
+      setWalletData(walletData);
       setError(null);
       
     } catch (err) {
@@ -53,6 +66,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const cachedData = walletDataService.getCachedData();
       if (cachedData) {
         console.log('💰 [Context] Using cached data due to error');
+        
+        // Try to add Grid address even with cached data
+        const gridAccount = await gridClientService.getAccount();
+        if (gridAccount?.address) {
+          cachedData.smartAccountAddress = gridAccount.address;
+        }
+        
         setWalletData(cachedData);
       }
     } finally {

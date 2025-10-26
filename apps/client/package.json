@@ -12,7 +12,14 @@
     "prebuild": "expo prebuild",
     "build:android": "eas build --platform android",
     "build:ios": "eas build --platform ios",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "bun test",
+    "test:e2e": "bun test __tests__/e2e/",
+    "test:e2e:verbose": "bun test __tests__/e2e/ --verbose",
+    "test:x402": "bun test __tests__/e2e/x402-payment.test.ts",
+    "test:setup:interactive": "bun __tests__/scripts/setup-test-wallet.ts",
+    "test:wallet:check": "bun __tests__/scripts/check-wallet-balance.ts",
+    "test:wallet:address": "bun __tests__/scripts/check-wallet-balance.ts | grep 'Wallet Address'"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.16",

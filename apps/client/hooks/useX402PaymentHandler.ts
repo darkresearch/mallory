@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { X402PaymentService } from '../features/x402';
+import { gridClientService } from '../features/grid';
 import type { X402PaymentRequirement } from '@darkresearch/mallory-shared';
-import { useWallet } from '../contexts/WalletContext';
 
 interface UseX402PaymentHandlerProps {
   messages: any[];
@@ -10,7 +10,6 @@ interface UseX402PaymentHandlerProps {
 
 export function useX402PaymentHandler({ messages, onPaymentFulfilled }: UseX402PaymentHandlerProps) {
   const processedToolCalls = useRef(new Set<string>());
-  const { walletData } = useWallet();
 
   useEffect(() => {
     console.log('🔍 [x402 Debug] useX402PaymentHandler triggered', {
@@ -59,29 +58,34 @@ export function useX402PaymentHandler({ messages, onPaymentFulfilled }: UseX402P
         if (X402PaymentService.shouldAutoApprove(amount, currency)) {
           console.log(`💰 Auto-approving x402 payment: ${amount} ${currency}`);
           
-          // Get Grid wallet address from WalletContext (server-managed wallet)
-          const gridAddress = walletData?.smartAccountAddress;
-          if (!gridAddress) {
-            console.error('❌ [x402] No Grid wallet address available in WalletContext');
-            processedToolCalls.current.add(toolCallId);
-            return;
-          }
-          
-          console.log('✅ [x402] Using Grid address from WalletContext:', gridAddress);
-          
           // Mark as processed BEFORE starting async work to prevent duplicate calls
           processedToolCalls.current.add(toolCallId);
           
-          X402PaymentService.payAndFetchData(paymentReq, gridAddress)
-            .then(data => {
+          // Execute payment with Grid address from client-side secure storage
+          (async () => {
+            try {
+              // Get Grid wallet address from client-side secure storage (NOT from server)
+              const gridAccount = await gridClientService.getAccount();
+              if (!gridAccount) {
+                console.error('❌ [x402] No Grid account found in secure storage');
+                processedToolCalls.current.delete(toolCallId);
+                return;
+              }
+              
+              const gridAddress = gridAccount.address;
+              console.log('✅ [x402] Using Grid address from secure storage:', gridAddress);
+              
+              // Execute x402 payment (fully client-side)
+              const data = await X402PaymentService.payAndFetchData(paymentReq, gridAddress);
               console.log('✅ x402 payment successful, data received');
               onPaymentFulfilled(data, paymentReq.toolName);
-            })
-            .catch(err => {
+              
+            } catch (err) {
               console.error('❌ x402 payment failed:', err);
               // Remove from processed set on error so it can be retried
               processedToolCalls.current.delete(toolCallId);
-            });
+            }
+          })();
         } else {
           console.log(`⚠️ Payment requires manual approval: ${amount} ${currency}`);
           // Mark as processed to prevent repeated approval requests
