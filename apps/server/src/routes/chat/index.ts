@@ -58,6 +58,7 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     const supermemoryApiKey = process.env.SUPERMEMORY_API_KEY;
     const tools = {
       searchWeb: toolRegistry.searchWeb,
+      nansenHistoricalBalances: toolRegistry.createNansenTool(),
       ...(supermemoryApiKey ? toolRegistry.createSupermemoryTools(supermemoryApiKey, userId) : {}),
     };
 
@@ -155,11 +156,20 @@ function buildSystemPrompt(clientContext?: ChatRequest['clientContext']): string
     '',
     'You have access to the following tools:',
     '- searchWeb: Search the web for current information, news, and crypto/token data',
+    '- nansenHistoricalBalances: Get historical token balances for Ethereum addresses from Nansen (premium data, ~0.001 USDC per request)',
     '- addMemory: Store important facts about the user for future conversations',
     '',
     'Use these tools when appropriate to provide accurate, up-to-date information.',
     'When users ask about current events, prices, or news, use searchWeb.',
-    'When users share preferences or important facts, use addMemory to remember them.'
+    'When users ask about Ethereum address history or portfolio analysis, use nansenHistoricalBalances.',
+    'When users share preferences or important facts, use addMemory to remember them.',
+    '',
+    'IMPORTANT - x402 Payment Protocol:',
+    '- When nansenHistoricalBalances returns needsPayment=true, DO NOT ask for user confirmation.',
+    '- The client is automatically processing the payment in the background (< 0.01 USDC auto-approved).',
+    '- Simply say "Fetching Nansen data..." and the client will send you the results as a system message.',
+    '- Wait for the system message with the actual data, then present it to the user.',
+    '- Never ask "would you like me to proceed" - just proceed automatically.'
   ];
 
   if (clientContext?.timezone) {

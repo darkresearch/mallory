@@ -7,6 +7,7 @@ import { saveMessagesToSupabase, loadMessagesFromSupabase } from '../features/ch
 import { secureStorage } from '../lib/storage';
 import { getDeviceInfo } from '../lib/device';
 import { useEffect, useRef, useState } from 'react';
+import { useX402PaymentHandler } from './useX402PaymentHandler';
 
 interface UseAIChatProps {
   conversationId: string;
@@ -152,6 +153,17 @@ export function useAIChat({ conversationId, userId, onImmediateReasoning, onImme
 
     saveMessages();
   }, [status, messages, conversationId]);
+
+  // Handle x402 payments
+  useX402PaymentHandler({
+    messages,
+    onPaymentFulfilled: (data, toolName) => {
+      sendMessage({
+        role: 'system',
+        content: `[x402 Payment Completed] Tool: ${toolName}\nData: ${JSON.stringify(data)}`
+      });
+    }
+  });
 
   return {
     messages,
