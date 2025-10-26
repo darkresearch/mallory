@@ -22,3 +22,5 @@ export type {
   GridAccountStatus
 } from './types/wallet';
 
+// x402 Payment Types and Utilities
+export * from './x402';

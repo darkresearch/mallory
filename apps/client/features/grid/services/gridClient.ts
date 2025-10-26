@@ -186,6 +186,60 @@ class GridClientService {
   }
 
   /**
+   * Send tokens (SOL or SPL) from Grid wallet
+   * Used by ephemeral wallet manager for funding
+   */
+  async sendTokens(params: {
+    recipient: string;
+    amount: string;
+    tokenMint?: string; // undefined = native SOL
+  }): Promise<string> {
+    try {
+      console.log('💸 Sending tokens via Grid:', params);
+
+      const { recipient, amount, tokenMint } = params;
+      
+      // Retrieve session secrets and account
+      const sessionSecretsJson = await secureStorage.getItem('grid_session_secrets');
+      if (!sessionSecretsJson) {
+        throw new Error('Session secrets not found');
+      }
+      
+      const sessionSecrets = JSON.parse(sessionSecretsJson);
+      
+      const accountJson = await secureStorage.getItem('grid_account');
+      if (!accountJson) {
+        throw new Error('Grid account not found');
+      }
+      
+      const account = JSON.parse(accountJson);
+
+      // Build transaction payload based on token type
+      const transactionPayload = {
+        type: tokenMint ? 'spl_transfer' : 'sol_transfer',
+        recipient,
+        amount,
+        ...(tokenMint && { mint: tokenMint })
+      };
+
+      // Use Grid's signAndSend
+      const signature = await this.client.signAndSend({
+        sessionSecrets,
+        session: account.authentication,
+        transactionPayload,
+        address: account.address
+      });
+
+      console.log('✅ Tokens sent via Grid:', signature);
+      
+      return signature;
+    } catch (error) {
+      console.error('❌ Token send error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Clear stored Grid data (logout)
    */
   async clearAccount() {

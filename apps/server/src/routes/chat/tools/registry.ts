@@ -1,5 +1,6 @@
 import { searchWeb } from './searchWeb.js';
 import { createSupermemoryTools } from './supermemory.js';
+import { createNansenTool } from './nansen.js';
 
 /**
  * Tool registry for Mallory AI assistant
@@ -8,9 +9,10 @@ import { createSupermemoryTools } from './supermemory.js';
 
 export const toolRegistry = {
   searchWeb,
-  createSupermemoryTools
+  createSupermemoryTools,
+  createNansenTool
 };
 
 // Export individual tools for easier imports
-export { searchWeb, createSupermemoryTools };
+export { searchWeb, createSupermemoryTools, createNansenTool };
 

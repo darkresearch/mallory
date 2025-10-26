@@ -1,5 +1,11 @@
 import { Platform } from 'react-native';
 import structuredClone from '@ungap/structured-clone';
+import { Buffer } from 'buffer';
+
+// Polyfill Buffer globally for Solana libraries
+if (typeof global.Buffer === 'undefined') {
+  global.Buffer = Buffer;
+}
 
 if (Platform.OS !== 'web') {
   const setupPolyfills = async () => {

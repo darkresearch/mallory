@@ -13,6 +13,12 @@
     "dev": "concurrently \"bun run client\" \"bun run server\"",
     "install:all": "bun install && cd apps/client && bun install && cd ../server && bun install"
   },
+  "dependencies": {
+    "@faremeter/fetch": "^0.7.0",
+    "@faremeter/info": "^0.7.0",
+    "@faremeter/payment-solana": "^0.7.0",
+    "@faremeter/wallet-solana": "^0.7.0"
+  },
   "devDependencies": {
     "concurrently": "^9.2.1"
   },
