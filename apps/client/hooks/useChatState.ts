@@ -17,6 +17,10 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
   const [showImmediateReasoning, setShowImmediateReasoning] = useState(false);
   const [liveReasoningText, setLiveReasoningText] = useState('');
   const [hasInitialReasoning, setHasInitialReasoning] = useState(false);
+  const [thinkingDuration, setThinkingDuration] = useState<number>(0);
+  const [isThinking, setIsThinking] = useState(false); // Simple flag: true from send to done
+  const [hasStreamStarted, setHasStreamStarted] = useState(false); // True when first stream data arrives
+  const thinkingStartTime = useRef<number | null>(null);
   const hasTriggeredProactiveMessage = useRef(false);
 
   // AI Chat using Vercel's useChat hook - with immediate feedback
@@ -65,37 +69,63 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
       return displayMessages;
     }
 
-    // We have reasoning - check if we need to create placeholder
-    const hasAssistantMessage = displayMessages.some(msg => msg.role === 'assistant');
-    console.log('🤖 Assistant message check:', { hasAssistantMessage });
+    // We have reasoning - check if the last message is from the user
+    const lastMessage = displayMessages[displayMessages.length - 1];
+    const lastMessageIsUser = lastMessage && lastMessage.role === 'user';
+    console.log('🤖 Last message check:', { 
+      hasLastMessage: !!lastMessage, 
+      lastMessageRole: lastMessage?.role,
+      lastMessageIsUser 
+    });
     
-    if (!hasAssistantMessage) {
-      // Create placeholder assistant message when reasoning starts but no assistant message exists yet
+    if (lastMessageIsUser) {
+      // Create placeholder assistant message immediately after user message
+      // Include an initial reasoning part so Chain of Thought renders immediately
       const placeholderMessage = {
         id: 'placeholder-reasoning',
         role: 'assistant' as const,
-        parts: [], // Empty parts, will be filled by live reasoning
+        parts: [
+          {
+            type: 'reasoning',
+            text: '', // Empty reasoning text initially
+            id: 'initial-reasoning'
+          }
+        ],
         content: '', // Required by useChat interface
         createdAt: new Date(),
       };
       
-      console.log('🎯 Creating placeholder assistant message for early reasoning display');
+      console.log('🎯 Creating placeholder assistant message for immediate reasoning display');
       console.log('📋 Final aiMessages array will have:', displayMessages.length + 1, 'messages');
       return [...displayMessages, placeholderMessage];
     }
     
-    console.log('✅ Assistant message exists - returning filtered messages as-is');
+    console.log('✅ Last message is assistant - returning filtered messages as-is');
     return displayMessages;
   }, [rawMessages, hasInitialReasoning]);
 
   // Show immediate reasoning indicator as soon as streaming starts
   useEffect(() => {
     if (aiStatus === 'streaming') {
-      console.log('⚡ Status changed to streaming - showing immediate indicator');
+      console.log('⚡ Status changed to streaming - first stream data arrived');
+      if (thinkingStartTime.current === null) {
+        thinkingStartTime.current = Date.now();
+      }
+      setHasStreamStarted(true); // First stream data - hide placeholder
       setShowImmediateReasoning(true);
     } else if (aiStatus === 'ready') {
-      console.log('✅ Status changed to ready - hiding immediate indicator');
+      // Calculate final thinking duration
+      if (thinkingStartTime.current !== null) {
+        const duration = Date.now() - thinkingStartTime.current;
+        console.log(`⏱️ Thinking duration: ${duration}ms`);
+        setThinkingDuration(duration);
+        thinkingStartTime.current = null;
+      }
+      console.log('✅ Status changed to ready - hiding thinking indicator and resetting state');
+      setIsThinking(false); // Stop showing thinking
+      setHasStreamStarted(false); // Reset for next message
       setShowImmediateReasoning(false);
+      setHasInitialReasoning(false); // Reset for next message
     }
   }, [aiStatus]);
 
@@ -175,10 +205,15 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
     if (!sendAIMessage) return;
     
     console.log('📤 Sending message to AI:', message);
-    // Clear all reasoning state for new message
-    setShowImmediateReasoning(false);
+    // Clear previous reasoning state
     setLiveReasoningText('');
-    setHasInitialReasoning(false); // Reset so placeholder gets created fresh
+    setThinkingDuration(0); // Reset duration for new message
+    setHasStreamStarted(false); // Reset - no stream data yet
+    thinkingStartTime.current = Date.now(); // Start timer immediately
+    // IMMEDIATELY show thinking - no conditions, no delays
+    setIsThinking(true);
+    setShowImmediateReasoning(true);
+    setHasInitialReasoning(true); // Create placeholder immediately
     // Server handles all storage and processing
     sendAIMessage({ text: message });
   };
@@ -189,6 +224,9 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
     liveReasoningText,
     hasInitialReasoning,
     isLoadingHistory,
+    thinkingDuration,
+    isThinking, // Simple flag for immediate UI
+    hasStreamStarted, // True when first stream data arrives
     
     // AI Chat results
     aiMessages,

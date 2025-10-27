@@ -226,19 +226,8 @@ function isChainOfThoughtPart(part: any): boolean {
  * Get default CoT open state based on device
  */
 function getCoTDefaultOpen(deviceInfo: DeviceInfo, hasToolCalls: boolean): boolean {
-  // Mobile/mobile-web: collapsed by default (save screen space)
-  if (deviceInfo.formFactor === 'mobile' || deviceInfo.isMobileWeb) {
-    // Exception: expand if tools were used (user wants to see what happened)
-    return hasToolCalls;
-  }
-  
-  // Desktop: expanded by default (more room to show reasoning)
-  if (deviceInfo.formFactor === 'desktop') {
-    return true;
-  }
-  
-  // Tablet: collapsed unless tools used
-  return hasToolCalls;
+  // Always collapsed by default
+  return false;
 }
 
 /**
@@ -314,16 +303,30 @@ function renderChainOfThoughtBlock(
   });
 
   // Add live reasoning step when streaming
-  if (isStreaming && liveReasoningText) {
-    steps.push({
-      id: `live-reasoning-${blockIndex}`,
-      type: 'reasoning',
-      label: 'AI Reasoning',
-      description: liveReasoningText + '▊', // Add blinking cursor
-      status: 'active',
-      timestamp: new Date().toISOString(),
-      data: { reasoningText: liveReasoningText, isLive: true },
-    });
+  if (isStreaming) {
+    if (liveReasoningText) {
+      steps.push({
+        id: `live-reasoning-${blockIndex}`,
+        type: 'reasoning',
+        label: 'AI Reasoning',
+        description: liveReasoningText + '▊', // Add blinking cursor
+        status: 'active',
+        timestamp: new Date().toISOString(),
+        data: { reasoningText: liveReasoningText, isLive: true },
+      });
+    } else if (steps.length === 0) {
+      // No steps yet and streaming - create initial placeholder step
+      // This ensures "Thinking" shows immediately
+      steps.push({
+        id: `initial-thinking-${blockIndex}`,
+        type: 'reasoning',
+        label: 'AI Reasoning',
+        description: '',
+        status: 'active',
+        timestamp: new Date().toISOString(),
+        data: { reasoningText: '', isLive: true },
+      });
+    }
   }
 
   // Determine default open state based on device
@@ -336,7 +339,7 @@ function renderChainOfThoughtBlock(
           steps,
           isComplete: !steps.some(s => s.status === 'active'),
         }}
-        isStreaming={steps.some(s => s.status === 'active')}
+        isStreaming={isStreaming || steps.some(s => s.status === 'active')}
         defaultOpen={defaultOpen}
       />
       

@@ -8,12 +8,13 @@ import Animated, {
   useAnimatedStyle, 
   withTiming, 
   runOnJS,
-  Easing 
+  Easing
 } from 'react-native-reanimated';
 import { Dimensions } from 'react-native';
 import { useConversations } from '../../contexts/ConversationsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { secureStorage } from '../../lib';
+import { PressableButton } from '../../components/ui/PressableButton';
 
 interface ConversationWithPreview {
   id: string;
@@ -49,6 +50,7 @@ export default function ChatHistoryScreen() {
   const [filteredConversations, setFilteredConversations] = useState<ConversationWithPreview[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
   
   // Determine if we're on mobile (small screen) or desktop/tablet
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
@@ -214,36 +216,49 @@ export default function ChatHistoryScreen() {
 
   // Handle new chat creation
   const handleNewChat = async () => {
+    // Prevent multiple rapid clicks
+    if (isCreatingChat) {
+      console.log('💬 Already creating a chat, ignoring duplicate click');
+      return;
+    }
+    
     console.log('💬 Creating new chat');
+    setIsCreatingChat(true);
     
-    // Create new conversation directly with user ID
-    const { createNewConversation } = await import('../../features/chat');
-    const conversationData = await createNewConversation(user?.id);
-    
-    console.log('💬 New conversation created:', conversationData.conversationId);
-    
-    // Refresh conversations to include the newly created one
-    // This ensures the list updates even if real-time broadcast doesn't fire
-    console.log('💬 Refreshing conversations list to include new conversation');
-    await refreshConversations();
-    
-    // Create navigation function to be called on the JS thread
-    const navigateToNewChat = () => {
-      console.log('💬 Navigating to new chat:', conversationData.conversationId);
-      router.push(`/(main)/chat?conversationId=${conversationData.conversationId}`);
-    };
-    
-    // Slide out to left with smooth transition, then navigate to new chat
-    translateX.value = withTiming(
-      -Dimensions.get('window').width,
-      {
-        duration: 350,
-        easing: Easing.in(Easing.cubic),
-      },
-      () => {
-        runOnJS(navigateToNewChat)();
-      }
-    );
+    try {
+      // Create new conversation directly with user ID
+      const { createNewConversation } = await import('../../features/chat');
+      const conversationData = await createNewConversation(user?.id);
+      
+      console.log('💬 New conversation created:', conversationData.conversationId);
+      
+      // Refresh conversations to include the newly created one
+      // This ensures the list updates even if real-time broadcast doesn't fire
+      console.log('💬 Refreshing conversations list to include new conversation');
+      await refreshConversations();
+      
+      // Create navigation function to be called on the JS thread
+      const navigateToNewChat = () => {
+        console.log('💬 Navigating to new chat:', conversationData.conversationId);
+        router.push(`/(main)/chat?conversationId=${conversationData.conversationId}`);
+      };
+      
+      // Slide out to left with smooth transition, then navigate to new chat
+      translateX.value = withTiming(
+        -Dimensions.get('window').width,
+        {
+          duration: 350,
+          easing: Easing.in(Easing.cubic),
+        },
+        () => {
+          runOnJS(navigateToNewChat)();
+        }
+      );
+    } catch (error) {
+      console.error('💬 Error creating new chat:', error);
+      // Reset state on error so user can try again
+      setIsCreatingChat(false);
+    }
   };
 
   // Render conversation item
@@ -285,7 +300,7 @@ export default function ChatHistoryScreen() {
                   styles.searchInput,
                   Platform.OS === 'web' && ({ outline: 'none' } as any)
                 ]}
-                placeholder="Search for chats"
+                placeholder="Search in chats"
                 placeholderTextColor="#E0CBB9"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -331,7 +346,7 @@ export default function ChatHistoryScreen() {
                   styles.searchInput,
                   Platform.OS === 'web' && ({ outline: 'none' } as any)
                 ]}
-                placeholder="Search for chats"
+                placeholder="Search in chats"
                 placeholderTextColor="#E0CBB9"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -346,14 +361,18 @@ export default function ChatHistoryScreen() {
           )}
 
           {/* New Chat Button */}
-          <TouchableOpacity 
-            style={styles.newChatButton}
+          <PressableButton
+            variant="ghost"
+            size="medium"
+            fullWidth
             onPress={handleNewChat}
-            activeOpacity={0.7}
+            loading={isCreatingChat}
+            icon={!isCreatingChat ? <Ionicons name="create-outline" size={20} color="#FBAA69" /> : undefined}
+            style={styles.newChatButton}
+            textStyle={styles.newChatText}
           >
-            <Ionicons name="create-outline" size={20} color="#FBAA69" />
-            <Text style={styles.newChatText}>New chat</Text>
-          </TouchableOpacity>
+            {isCreatingChat ? 'Creating chat...' : 'New chat'}
+          </PressableButton>
 
           {/* Content area */}
           <View style={styles.content}>
@@ -482,7 +501,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#000000',
+    color: '#FFF2E8',
     padding: 0,
     fontFamily: 'Satoshi',
   },
@@ -490,17 +509,16 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   newChatButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 5,
-    paddingVertical: 12,
     marginTop: 8,
     marginBottom: 16,
+    paddingHorizontal: 5,
+    paddingVertical: 12,
+    justifyContent: 'flex-start', // Left align
+    backgroundColor: 'transparent',
   },
   newChatText: {
     fontSize: 16,
     color: '#000000',
-    marginLeft: 8,
     fontFamily: 'Satoshi',
   },
   content: {
