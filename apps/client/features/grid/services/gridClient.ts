@@ -68,6 +68,48 @@ class GridClientService {
   }
 
   /**
+   * Create Grid account with signer-based authentication (for wallet users)
+   * No OTP verification needed - creates account immediately
+   * Uses backend proxy to avoid CORS issues
+   */
+  async createSignerAccount(walletPublicKey: string) {
+    try {
+      console.log('🔐 Creating Grid signer account for wallet:', walletPublicKey);
+      
+      // Call backend proxy (avoids CORS)
+      const backendUrl = config.backendApiUrl || 'http://localhost:3001';
+      const token = await secureStorage.getItem('mallory_auth_token');
+      
+      const response = await fetch(`${backendUrl}/api/grid/create-signer-account`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ walletPublicKey })
+      });
+      
+      const data = await response.json();
+      
+      console.log('🔐 Backend proxy response:', data);
+      
+      if (!data.success || !data.data) {
+        throw new Error(`Grid signer account creation failed: ${data.error || 'Unknown error'}`);
+      }
+      
+      // Store account data (no session secrets needed for signer accounts)
+      await secureStorage.setItem('grid_account', JSON.stringify(data.data));
+      
+      console.log('✅ Grid signer account created:', data.data.address);
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Grid signer account creation error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Verify OTP code and complete account setup
    * Uses backend proxy to avoid CORS issues
    */

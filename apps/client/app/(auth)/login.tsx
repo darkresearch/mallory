@@ -1,6 +1,8 @@
 import { View, Text, TouchableOpacity, ActivityIndicator, Image, StyleSheet, Platform, useWindowDimensions, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import AuthCarousel from '@/components/auth/AuthCarousel';
+import { signInWithSolanaWallet, getAllWallets } from '@/features/auth/services/solana-wallet';
 import { useState, useEffect } from 'react';
 import Animated, { 
   useSharedValue, 
@@ -14,7 +16,7 @@ import { LAYOUT, config } from '@/lib';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, isAuthenticated } = useAuth();
+  const { login, loginWithWallet, isAuthenticated } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
@@ -53,6 +55,25 @@ export default function LoginScreen() {
     termsTranslateY.value = withDelay(300, withTiming(0, fadeInConfig));
   }, []);
 
+  // Fix background color for mobile Safari (and other web browsers)
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    // Save original background colors
+    const originalHtmlBg = document.documentElement.style.backgroundColor;
+    const originalBodyBg = document.body.style.backgroundColor;
+
+    // Set to dark orange to match login screen
+    document.documentElement.style.backgroundColor = '#E67B25';
+    document.body.style.backgroundColor = '#E67B25';
+
+    // Restore original colors on unmount (when navigating away)
+    return () => {
+      document.documentElement.style.backgroundColor = originalHtmlBg;
+      document.body.style.backgroundColor = originalBodyBg;
+    };
+  }, []);
+
   // Animated styles
   const textAnimatedStyle = useAnimatedStyle(() => ({
     opacity: textOpacity.value,
@@ -83,6 +104,29 @@ export default function LoginScreen() {
     } catch (err: any) {
       setError(err.message || 'Login failed. Please try again.');
       console.error('Login error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleWalletLogin = async (walletName: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Find the wallet by name
+      const wallets = getAllWallets();
+      const selectedWallet = wallets.find(w => w.name === walletName);
+      
+      if (!selectedWallet) {
+        throw new Error(`Wallet ${walletName} not found`);
+      }
+      
+      // Sign in with selected wallet
+      await signInWithSolanaWallet(selectedWallet.wallet);
+    } catch (err: any) {
+      setError(err.message || 'Wallet login failed. Please try again.');
+      console.error('Wallet login error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -130,26 +174,14 @@ export default function LoginScreen() {
 
         {/* Bottom section - Button + Footer anchored to bottom on mobile */}
         <Animated.View style={[isMobile && styles.bottomSectionMobile, buttonsAnimatedStyle]}>
-          {/* Auth Button - Google */}
+          {/* Auth Carousel - Google + Wallets */}
           <View style={[styles.authSection, isMobile && styles.authSectionMobile]}>
-            <TouchableOpacity
-              style={[styles.googleButton, isMobile && styles.googleButtonMobile]}
-              onPress={handleLogin}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color="#666" />
-              ) : (
-                <>
-                  <Image
-                    source={{ uri: 'https://www.google.com/favicon.ico' }}
-                    style={styles.googleIcon}
-                    resizeMode="contain"
-                  />
-                  <Text style={styles.googleButtonText}>Continue with Google</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <AuthCarousel
+              onGoogleLogin={handleLogin}
+              onWalletLogin={handleWalletLogin}
+              isLoading={isLoading}
+              isMobile={isMobile}
+            />
 
             {/* Error Message */}
             {error && (

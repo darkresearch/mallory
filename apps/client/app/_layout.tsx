@@ -9,6 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider } from '../contexts/AuthContext';
 import { ConversationsProvider } from '../contexts/ConversationsContext';
 import { WalletProvider } from '../contexts/WalletContext';
+import { WalletAdapterProvider } from '../contexts/WalletAdapterContext';
 import AuthGate from '../components/auth/AuthGate';
 import 'react-native-url-polyfill/auto';
 
@@ -50,23 +51,25 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
       <SafeAreaProvider style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
-        <AuthProvider>
-          <AuthGate>
-            <ConversationsProvider>
-              <WalletProvider>
-                <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' }}>
-                  <Stack
-                    screenOptions={{
-                      headerShown: false,
-                      contentStyle: { backgroundColor: '#FFEFE3' },
-                      animation: 'fade',
-                    }}
-                  />
-                </View>
-              </WalletProvider>
-            </ConversationsProvider>
-          </AuthGate>
-        </AuthProvider>
+        <WalletAdapterProvider>
+          <AuthProvider>
+            <AuthGate>
+              <ConversationsProvider>
+                <WalletProvider>
+                  <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any }}>
+                    <Stack
+                      screenOptions={{
+                        headerShown: false,
+                        contentStyle: { backgroundColor: '#FFEFE3' },
+                        animation: 'fade',
+                      }}
+                    />
+                  </View>
+                </WalletProvider>
+              </ConversationsProvider>
+            </AuthGate>
+          </AuthProvider>
+        </WalletAdapterProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

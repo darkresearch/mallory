@@ -84,6 +84,85 @@ router.post('/init-account', authenticateUser, async (req: AuthenticatedRequest,
 });
 
 /**
+ * POST /api/grid/create-signer-account
+ * 
+ * Create Grid account using signer-based authentication (for wallet users)
+ * This is for users who authenticate with their Solana wallet instead of email
+ * 
+ * Body: { walletPublicKey: string }
+ * Returns: Grid account data with address
+ */
+router.post('/create-signer-account', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { walletPublicKey } = req.body;
+    
+    if (!walletPublicKey) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'walletPublicKey is required' 
+      });
+    }
+    
+    console.log('🔐 [Grid Proxy] Creating signer-based account for wallet:', walletPublicKey);
+    
+    // Create Grid account with signer-based authentication
+    // This creates an account immediately without OTP verification
+    const response = await gridClient.createAccount({
+      type: 'signers',
+      signers: [walletPublicKey],
+      threshold: 1
+    });
+    
+    console.log('🔐 [Grid Proxy] Grid API response:', response);
+    
+    if (!response.success || !response.data) {
+      return res.status(400).json({
+        success: false,
+        error: response.error || 'Failed to create signer-based Grid account'
+      });
+    }
+    
+    // Sync Grid address to database (using service role to bypass RLS)
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    
+    const { error: dbError } = await supabase
+      .from('users_grid')
+      .upsert({
+        id: req.user!.id,
+        solana_wallet_address: (response.data as any).address,
+        account_type: 'signer',
+        wallet_public_key: walletPublicKey,
+        grid_account_status: 'active',
+        updated_at: new Date().toISOString()
+      });
+    
+    if (dbError) {
+      console.error('⚠️ Failed to sync Grid signer account to database:', dbError);
+      // Don't fail the request - Grid account is still valid
+    } else {
+      console.log('✅ Grid signer account synced to database:', (response.data as any).address);
+    }
+    
+    // Return Grid account data
+    res.json({
+      success: true,
+      data: response.data
+    });
+    
+  } catch (error) {
+    console.error('❌ [Grid Proxy] Create signer account error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
  * POST /api/grid/verify-otp
  * 
  * Proxy for OTP verification (both new accounts and re-auth)
@@ -165,6 +244,8 @@ router.post('/verify-otp', authenticateUser, async (req: AuthenticatedRequest, r
       .upsert({
         id: req.user!.id,
         solana_wallet_address: authResult.data.address,
+        account_type: 'email',
+        grid_account_status: 'active',
         updated_at: new Date().toISOString()
       });
     
