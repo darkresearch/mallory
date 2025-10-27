@@ -25,11 +25,12 @@ mallory/
 - 🎨 **Modern UI**: Beautiful, responsive design with Reanimated
 
 ### Server (Backend API)
-- 🤖 **AI Streaming**: Claude integration with Server-Sent Events
-- 🔧 **AI Tools**: Web search (Exa) and user memory (Supermemory)
+- 🤖 **AI Streaming**: Claude integration with Server-Sent Events and extended thinking
+- 🔧 **AI Tools**: Web search (Exa), user memory (Supermemory), and 20+ Nansen data APIs
+- 💰 **x402 Payments**: Server-side implementation for premium data access
 - 💎 **Wallet Data**: Price enrichment via Birdeye API
 - 🔒 **Secure Auth**: Supabase JWT validation
-- 🚀 **Minimal & Clean**: Only essential backend features
+- 🚀 **Production Ready**: Comprehensive testing infrastructure
 
 ## 🚀 Quick Start
 
@@ -128,6 +129,7 @@ See [apps/server/README.md](./apps/server/README.md) for detailed server documen
 **AI Tools:**
 - `searchWeb` - Web search via Exa (always available)
 - `addMemory` - User memory via Supermemory (optional)
+- `nansen*` - 20+ Nansen API endpoints for blockchain analytics (requires x402 payments)
 
 ## 🔑 Grid Wallet Integration
 
@@ -137,13 +139,14 @@ Mallory uses [Grid](https://developers.squads.so) for embedded wallets. Key feat
 - **Email-Based Auth**: Simple OTP verification
 - **Smart Contract Wallets**: Spending limits and programmable transactions
 - **Production Ready**: Sandbox and production environments
+- **x402 Integration**: Automatic micropayments for premium data APIs
 
 **Flow:**
 1. User enters email → Grid sends OTP
 2. User verifies OTP → Grid account created
 3. Session secrets stored locally (encrypted)
-4. All transactions signed client-side
-5. Signed transactions submitted to Solana
+4. All transactions signed client-side or server-side (with secrets sent for signing only)
+5. x402 payments handled server-side using ephemeral wallets
 
 ## 🏗️ Architecture
 
@@ -214,11 +217,14 @@ MIT License - see [LICENSE](./LICENSE) for details.
 Built with:
 - [Expo](https://expo.dev) - React Native framework
 - [Grid (Squads)](https://developers.squads.so) - Embedded wallets
-- [Anthropic](https://anthropic.com) - Claude AI
+- [Anthropic](https://anthropic.com) - Claude AI with extended thinking
 - [Exa](https://exa.ai) - AI-powered web search
 - [Supermemory](https://supermemory.ai) - User memory & RAG
 - [Supabase](https://supabase.com) - Auth & database
 - [Birdeye](https://birdeye.so) - Solana market data
+- [Nansen](https://nansen.ai) - Blockchain analytics (via x402)
+- [Faremeter](https://x402.org) - x402 payment protocol
+- [streamdown-rn](https://www.npmjs.com/package/streamdown-rn) - React Native markdown streaming
 
 ---
 

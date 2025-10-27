@@ -27,6 +27,8 @@ bun install
 
 This installs dependencies for all workspace packages (client, server, shared).
 
+> **Using npm instead of Bun?** You can use `npm install` but Bun is 3-10x faster and recommended for this project.
+
 ### 3. Configure Environment Variables
 
 #### Client Configuration
@@ -90,6 +92,12 @@ SUPERMEMORY_API_KEY=your-supermemory-key
 BIRDEYE_API_KEY=your-birdeye-key
 GRID_API_KEY=your-grid-api-key
 GRID_ENV=sandbox
+
+# Nansen (Optional - for blockchain analytics via x402)
+NANSEN_API_KEY=your-nansen-api-key
+
+# Solana RPC (Optional - for x402 payments)
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 
 # CORS (Optional)
 ALLOWED_ORIGINS=http://localhost:8081,http://localhost:19006
@@ -290,8 +298,13 @@ Expected:
 5. ✅ **Send Transaction** (requires funded wallet)
    - Click "Send" in wallet
    - Enter recipient address and amount
-   - Transaction signed client-side
+   - Transaction signed and submitted
    - Success message appears
+
+6. ✅ **Test AI Tools** (optional)
+   - Try: "Search for Solana news on Exa"
+   - Try: "Remember I prefer technical analysis"
+   - With Nansen: "Show historical balances for vitalik.eth"
 
 ## 🐛 Troubleshooting
 
@@ -328,13 +341,52 @@ Expected:
 
 **Stream cuts off or doesn't appear:**
 - Check browser console for errors
-- Verify server logs show "Chat stream started"
-- Ensure Anthropic API key is valid
+- Verify server logs show "🎯 Starting AI stream"
+- Ensure Anthropic API key is valid and has credits
+- Check network tab for SSE connection
+
+**x402 payment fails:**
+- Verify Grid wallet has both SOL and USDC
+- Check server logs for ephemeral wallet creation
+- Ensure Nansen API key is valid (if using Nansen tools)
+- Verify Solana RPC is accessible
+
+## 🧪 Testing (Optional)
+
+Mallory includes comprehensive E2E testing infrastructure:
+
+```bash
+cd apps/client
+
+# One-time setup (creates test accounts)
+bun run test:setup
+
+# Fund the test wallet (address shown in setup)
+# Send: 0.1 SOL + 5 USDC to the displayed address
+
+# Check wallet balance
+bun run test:balance
+
+# Run all validation tests
+bun run test:validate:all
+
+# Run E2E tests
+bun run test:e2e
+
+# Run specific test suites
+bun run test:grid                  # Grid wallet tests
+bun run test:x402                  # x402 payment tests
+bun run test:x402:nansen           # Nansen integration tests
+```
+
+See [apps/client/__tests__/README.md](./apps/client/__tests__/README.md) for full testing documentation.
 
 ## 📚 Next Steps
 
 - [API Documentation](./apps/server/docs/API.md)
 - [Grid SDK Reference](https://developers.squads.so/grid/v1/sdk-reference/reference/v0.1.0/quickstart)
+- [Testing Guide](./apps/client/__tests__/README.md)
+- [Quick Reference](./QUICK_REFERENCE.md)
 - [Deployment Guide](./README.md#deployment)
 
 ## 🆘 Getting Help
