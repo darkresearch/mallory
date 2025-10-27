@@ -9,6 +9,13 @@ node_modules/
 dist/
 build/
 .expo/
+*.js.map
+*.d.ts.map
+
+# TypeScript build artifacts in source
+packages/*/src/**/*.js
+packages/*/src/**/*.d.ts
+!packages/*/src/**/*.config.js
 
 # Logs
 *.log

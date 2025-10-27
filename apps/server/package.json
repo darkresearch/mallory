@@ -6,8 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/server.ts",
-    "build": "tsc",
-    "start": "node dist/apps/server/src/server.js",
+    "build": "bun build src/server.ts --outdir dist --target node --format esm --sourcemap --external @solana/web3.js --external @solana/spl-token --external @sqds/grid --external @supabase/supabase-js --external express --external cors --external dotenv --external zod --external ai --external @ai-sdk/anthropic --external exa-js --external supermemory --external @supermemory/tools --external uuid",
+    "build:tsc": "tsc",
+    "start": "node dist/server.js",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
