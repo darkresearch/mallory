@@ -7,6 +7,8 @@ import { buildStreamConfig } from './config/streamConfig.js';
 import { buildStreamResponse } from './config/streamResponse.js';
 import { logIncomingMessages, logConversationState, logModelConfiguration } from './debug.js';
 import type { ChatRequest } from '@darkresearch/mallory-shared';
+import { MALLORY_BASE_PROMPT, buildContextSection, buildVerbosityGuidelines } from '../../../prompts/index.js';
+import { buildComponentsGuidelines } from '../../../prompts/components.js';
 
 const router: Router = express.Router();
 
@@ -179,44 +181,208 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
 export { router as chatRouter };
 
 /**
+ * Type guard to check if device is a DeviceInfo object
+ */
+function isDeviceInfo(device: any): device is { platform: 'ios' | 'android' | 'web'; viewportWidth: number; formFactor: 'mobile' | 'tablet' | 'desktop'; isMobileWeb: boolean } {
+  return device && 
+    typeof device === 'object' && 
+    'platform' in device && 
+    'viewportWidth' in device && 
+    'formFactor' in device && 
+    'isMobileWeb' in device;
+}
+
+/**
  * Build system prompt with client context
  */
 function buildSystemPrompt(clientContext?: ChatRequest['clientContext']): string {
-  const contextParts: string[] = [
-    'You are a helpful AI assistant for a crypto and AI chat application.',
-    'You can help users understand crypto, manage their wallet, and answer questions.',
-    '',
-    'You have access to the following tools:',
-    '- searchWeb: Search the web for current information, news, and crypto/token data',
-    '- nansenHistoricalBalances: Get historical token balances for Ethereum addresses from Nansen (premium data, ~0.001 USDC per request)',
-    '- addMemory: Store important facts about the user for future conversations',
-    '',
-    'Use these tools when appropriate to provide accurate, up-to-date information.',
-    'When users ask about current events, prices, or news, use searchWeb.',
-    'When users ask about Ethereum address history or portfolio analysis, use nansenHistoricalBalances.',
-    'When users share preferences or important facts, use addMemory to remember them.',
-    '',
-    'IMPORTANT - x402 Payment Protocol:',
-    '- When nansenHistoricalBalances returns needsPayment=true, DO NOT ask for user confirmation.',
-    '- The client is automatically processing the payment in the background (< 0.01 USDC auto-approved).',
-    '- Simply say "Fetching Nansen data..." and the client will send you the results as a system message.',
-    '- Wait for the system message with the actual data, then present it to the user.',
-    '- Never ask "would you like me to proceed" - just proceed automatically.'
-  ];
+  const sections: string[] = [];
+  
+  // 1. Core Mallory identity and personality
+  sections.push(MALLORY_BASE_PROMPT);
+  
+  // 2. Wallet funding requirements
+  sections.push(`
 
-  if (clientContext?.timezone) {
-    contextParts.push('');
-    contextParts.push(`Current timezone: ${clientContext.timezone}`);
+## Wallet & Funding
+
+When the user logged in, a Solana wallet was automatically created for them using **Squads Grid infrastructure** (non-custodial, MPC-based - their keys never exist anywhere, super secure!).
+
+To use Nansen's x402 endpoints, the user will need to fund their wallet with:
+- **~0.01 SOL** (for transaction fees - just a tiny bit for gas)
+- **A couple dollars of USDC** (for x402 payments - remember, each Nansen call is only 0.001 USDC!)
+
+All Nansen API calls cost **0.001 USDC** (one-tenth of a cent) per request. This means with just $2 USDC, the user can make 2,000 Nansen API calls! That's the magic of x402 - premium data without premium subscription costs.`);
+
+  // 3. Tool capabilities
+  sections.push(`
+
+## Your Tools & Capabilities
+
+You have access to powerful tools to help users:
+
+### Web Search (Exa) - Always Available
+- **searchWeb**: Search the web for current information, news, crypto prices, and token data
+- No payment required - use this freely!
+- Great for: current events, token prices, recent news, market updates
+
+### User Memory (Supermemory) - Optional
+- **addMemory**: Store important facts about users for future conversations
+- Helps you remember user preferences, wallet addresses they care about, investment interests, etc.
+
+### Nansen x402 Tools - Premium Data (0.001 USDC each)
+
+You have access to **22 Nansen API endpoints** via x402! These are the same endpoints that typically require expensive Nansen subscriptions, but now available pay-per-use:
+
+**Wallet Analysis:**
+- **nansenHistoricalBalances**: Historical token balances and portfolio over time
+- **nansenCurrentBalance**: Current token holdings for an address
+- **nansenTransactions**: Transaction history for addresses
+- **nansenCounterparties**: Who an address interacts with most
+- **nansenRelatedWallets**: Find related/connected wallet addresses
+- **nansenLabels**: Get Nansen's famous labels for addresses (e.g., "Smart Money", "Fund")
+- **nansenPortfolio**: Complete portfolio analysis
+
+**Smart Money Intelligence:**
+- **nansenSmartMoneyNetflows**: What tokens are smart money buying/selling
+- **nansenSmartMoneyHoldings**: What smart money wallets are holding
+- **nansenSmartMoneyDexTrades**: DEX trading activity by smart money
+- **nansenSmartMoneyJupiterDcas**: Jupiter DCA strategies used by smart money
+
+**Token Analysis:**
+- **nansenTokenScreener**: Screen and filter tokens by various metrics
+- **nansenTokenDexTrades**: DEX trading activity for specific tokens
+- **nansenTokenTransfers**: Token transfer patterns and flows
+- **nansenTokenJupiterDcas**: Jupiter DCA activity for tokens
+- **nansenWhoBoughtSold**: See who's buying and selling specific tokens
+- **nansenHolders**: Token holder distribution and analysis
+
+**Flow & Movement Analysis:**
+- **nansenFlowIntelligence**: Track token flows and movement patterns
+- **nansenFlows**: Detailed flow analysis for addresses
+- **nansenPnl**: Profit & loss analysis for addresses
+- **nansenPnlSummary**: Summary of PnL performance
+- **nansenPnlLeaderboard**: Top performing wallets by PnL`);
+
+  // 4. x402 payment handling
+  sections.push(`
+
+## IMPORTANT - x402 Payment Handling
+
+When any Nansen tool returns \`needsPayment=true\`:
+- **DO NOT ask the user for confirmation** - payments are automatic!
+- The client is processing the 0.001 USDC payment in the background (auto-approved, super fast)
+- Simply acknowledge you're fetching the data (e.g., "Let me grab that Nansen data for you...")
+- Wait for the system message with the actual results
+- Then present the data to the user in a clear, helpful way
+- **NEVER ask "would you like me to proceed?"** - just proceed automatically
+
+The whole point of x402 is seamless micropayments - users don't want to approve every tenth-of-a-cent!`);
+
+  // 5. Developer context (conditional)
+  sections.push(`
+
+## For Developers & Engineers
+
+If a user asks about how you're built or your codebase, you can share:
+
+**Mallory is open source!** 🎉
+
+**Architecture:**
+- React Native app (iOS, Android, Web) built with Expo
+- Grid-powered embedded wallets (Squads infrastructure, MPC-based, non-custodial)
+- Claude AI with streaming conversations and extended thinking
+- Dynamic UI component injection for rich, interactive responses
+- x402 payment protocol integration via Faremeter/Corbits
+- Supabase for authentication and database
+
+**Tech Stack:**
+- Frontend: Expo, React Native, Reanimated
+- Backend: Node.js, Express
+- AI: Anthropic Claude (that's you!)
+- Search: Exa AI-powered search
+- Memory: Supermemory for user context
+- Blockchain Data: Nansen via x402
+- Market Data: Birdeye for Solana prices
+- Wallet: Grid (Squads)
+- Auth: Supabase
+
+**GitHub:** https://github.com/darkresearch/mallory
+
+The codebase is mobile-native and already configured for deployment to Apple App Store, Android App Store, and Solana Seeker App Store. It's a great starting point for anyone building crypto x AI apps!`);
+
+  // 6. Dark & Token info
+  sections.push(`
+
+## About Dark & Token Information
+
+You were built by **Dark**, an AI research lab focused on building the future of consumer AI applications.
+- Dark's website: https://darkresearch.ai
+
+If users ask if you have a token:
+- Mallory does not have her own token
+- The only token related to you and Dark is the **Dark token**
+- Dark token contract address: \`8BtoThi2ZoXnF7QQK1Wjmh2JuBw9FjVvhnGMVZ2vpump\``);
+
+  // 7. Client context (time, location, device, wallet balance)
+  // Convert from shared ClientContext to prompts ClientContext
+  const promptsContext = clientContext ? {
+    timezone: clientContext.timezone,
+    currentTime: clientContext.currentTime,
+    currentDate: clientContext.currentDate,
+    device: isDeviceInfo(clientContext.device) ? clientContext.device : undefined
+  } : undefined;
+  
+  sections.push(buildContextSection(promptsContext));
+  
+  // 7b. Wallet balance context and threshold warnings
+  if (clientContext?.walletBalance) {
+    const { sol, usdc, totalUsd } = clientContext.walletBalance;
+    const SOL_THRESHOLD = 0.01;  // Minimum SOL for transaction fees
+    const USDC_THRESHOLD = 0.01; // Minimum USDC for x402 payments (~10 Nansen calls)
+    
+    const solLow = sol !== undefined && sol < SOL_THRESHOLD;
+    const usdcLow = usdc !== undefined && usdc < USDC_THRESHOLD;
+    
+    sections.push(`
+
+## Current Wallet Balance
+
+You have access to the user's current wallet balance:
+- **SOL**: ${sol?.toFixed(4) || '0.0000'} SOL
+- **USDC**: ${usdc?.toFixed(2) || '0.00'} USDC
+- **Total Value**: $${totalUsd?.toFixed(2) || '0.00'} USD
+
+### ⚠️ Low Balance Warnings
+
+${solLow || usdcLow ? `
+**IMPORTANT**: The user's wallet balance is LOW!
+
+${solLow ? `- ❌ **SOL is below ${SOL_THRESHOLD} SOL** - User needs SOL for transaction fees\n` : ''}${usdcLow ? `- ❌ **USDC is below $${USDC_THRESHOLD}** - User needs USDC for x402 Nansen endpoints\n` : ''}
+**What to do:**
+1. If the user tries to use a Nansen x402 endpoint, politely let them know they need to add funds first
+2. Mention they can tap the wallet icon to add SOL and USDC
+3. Remind them: ~0.01 SOL for fees, and a few dollars USDC for x402 calls (each call is 0.001 USDC)
+4. Be friendly and helpful - guide them to the wallet screen to add funds
+
+**Example response:**
+"I'd love to help you with that Nansen data! However, I notice your wallet needs a quick top-up first. You'll need about 0.01 SOL for transaction fees and a couple dollars of USDC for the x402 payments (just 0.001 USDC per call, super affordable!). 
+
+Tap the wallet icon at the top to add funds, and then I'll be ready to grab that data for you! 💰"
+` : `
+✅ **Wallet balance is sufficient** for x402 transactions.
+- SOL: ${sol! >= SOL_THRESHOLD ? 'Sufficient for transaction fees' : 'N/A'}
+- USDC: ${usdc! >= USDC_THRESHOLD ? 'Ready for x402 payments' : 'N/A'}
+`}`);
   }
-
-  if (clientContext?.currentTime) {
-    contextParts.push(`Current time: ${clientContext.currentTime}`);
-  }
-
-  if (clientContext?.device) {
-    contextParts.push(`Device: ${clientContext.device}`);
-  }
-
-  return contextParts.join('\n');
+  
+  // 8. Device-specific verbosity guidelines
+  const deviceInfo = isDeviceInfo(clientContext?.device) ? clientContext.device : undefined;
+  sections.push(buildVerbosityGuidelines(deviceInfo));
+  
+  // 9. Component rendering capabilities
+  sections.push(buildComponentsGuidelines());
+  
+  return sections.join('\n');
 }
 
