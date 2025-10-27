@@ -43,6 +43,9 @@ export default function ChatScreen() {
     liveReasoningText,
     hasInitialReasoning,
     isLoadingHistory,
+    thinkingDuration,
+    isThinking,
+    hasStreamStarted,
     aiMessages,
     aiError,
     aiStatus,
@@ -108,6 +111,9 @@ export default function ChatScreen() {
             aiError={aiError}
             hasInitialReasoning={hasInitialReasoning}
             liveReasoningText={liveReasoningText}
+            thinkingDuration={thinkingDuration}
+            isThinking={isThinking}
+            hasStreamStarted={hasStreamStarted}
             isLoadingHistory={isLoadingHistory}
             regenerateMessage={regenerateMessage}
             scrollViewRef={scrollViewRef}

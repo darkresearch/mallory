@@ -1,11 +1,11 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useRef } from 'react';
+import { Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { ChainOfThoughtHeaderProps } from './types';
 
 /**
- * ChainOfThoughtHeader - Collapsible trigger with brain icon
- * Mirrors Vercel's AI SDK ChainOfThoughtHeader for React Native
+ * ChainOfThoughtHeader - Collapsible trigger with dynamic text
+ * Shows "Thinking..." with pulsing animation while streaming
+ * Shows "Thought for X seconds" when complete
  */
 export const ChainOfThoughtHeader: React.FC<ChainOfThoughtHeaderProps> = ({
   children,
@@ -13,7 +13,67 @@ export const ChainOfThoughtHeader: React.FC<ChainOfThoughtHeaderProps> = ({
   onPress,
   style,
   textStyle,
+  isStreaming = false,
+  totalDuration,
 }) => {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Warm pulsing animation while streaming
+  useEffect(() => {
+    if (isStreaming) {
+      const animation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.5,
+            duration: 1200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1200,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      animation.start();
+      return () => animation.stop();
+    } else {
+      // Reset to full opacity when not streaming
+      pulseAnim.setValue(1);
+    }
+  }, [isStreaming, pulseAnim]);
+
+  // Determine text to display
+  const getDisplayText = () => {
+    if (children) return children;
+    
+    if (isStreaming) {
+      return 'Thinking';
+    }
+    
+    if (totalDuration !== undefined && totalDuration > 0) {
+      const milliseconds = totalDuration;
+      const seconds = milliseconds / 1000;
+      const minutes = seconds / 60;
+      const hours = minutes / 60;
+      
+      if (hours >= 1) {
+        return `Thought for ${Math.floor(hours)}h`;
+      } else if (minutes >= 1) {
+        return `Thought for ${Math.floor(minutes)}m`;
+      } else if (seconds >= 1) {
+        return `Thought for ${Math.floor(seconds)}s`;
+      } else {
+        // Less than 1 second, don't show duration
+        return 'Thought quickly';
+      }
+    }
+    
+    return 'Thought quickly';
+  };
+
+  const displayText = getDisplayText();
+
   return (
     <TouchableOpacity
       style={[styles.header, style]}
@@ -22,27 +82,15 @@ export const ChainOfThoughtHeader: React.FC<ChainOfThoughtHeaderProps> = ({
       accessibilityLabel={isOpen ? "Collapse chain of thought" : "Expand chain of thought"}
       accessibilityState={{ expanded: isOpen }}
     >
-      <Ionicons 
-        name="layers" 
-        size={16} 
-        color="#C95900" 
-        style={[styles.icon, { opacity: 0.8 }]} 
-      />
-      
-      <Text style={[styles.text, textStyle]}>
-        {children || 'Chain of Thought'}
-      </Text>
-      
-      <Ionicons 
-        name="chevron-down"
-        size={16}
-        color="#C95900"
+      <Animated.Text 
         style={[
-          styles.chevron,
-          { opacity: 0.8 },
-          isOpen && styles.chevronRotated,
+          styles.text, 
+          textStyle,
+          isStreaming && { opacity: pulseAnim }
         ]}
-      />
+      >
+        {displayText}
+      </Animated.Text>
     </TouchableOpacity>
   );
 };
@@ -53,23 +101,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 0,
     paddingVertical: 8,
-    gap: 8,
-  },
-  icon: {
-    // Layers icon styling
+    width: '100%',
   },
   text: {
-    flex: 1,
     fontSize: 14,
     color: '#C95900',
     opacity: 0.8,
     fontWeight: '500',
-  },
-  chevron: {
-    transform: [{ rotate: '0deg' }],
-  },
-  chevronRotated: {
-    transform: [{ rotate: '180deg' }],
   },
 });
 

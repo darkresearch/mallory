@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Alert,
@@ -14,6 +13,7 @@ import {
   Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { PressableButton } from '../ui/PressableButton';
 
 interface TokenHolding {
   tokenAddress: string;
@@ -275,27 +275,27 @@ export default function SendModal({
             <Text style={styles.error}>{error}</Text>
           ) : null}
 
-          <TouchableOpacity
-            style={[styles.sendButton, isSending && styles.sendButtonDisabled]}
+          <PressableButton
+            fullWidth
             onPress={handleSend}
-            disabled={isSending || !selectedToken}
+            loading={isSending}
+            disabled={!selectedToken}
+            style={styles.sendButton}
+            textStyle={styles.sendButtonText}
           >
-            {isSending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.sendButtonText}>
-                Send {selectedToken?.tokenSymbol || 'Token'}
-              </Text>
-            )}
-          </TouchableOpacity>
+            Send {selectedToken?.tokenSymbol || 'Token'}
+          </PressableButton>
 
-          <TouchableOpacity 
-            style={styles.cancelButton}
+          <PressableButton 
+            variant="secondary"
+            fullWidth
             onPress={handleClose}
             disabled={isSending}
+            style={styles.cancelButton}
+            textStyle={styles.cancelButtonText}
           >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
+            Cancel
+          </PressableButton>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -411,13 +411,8 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     backgroundColor: '#4A9EFF',
-    paddingVertical: 16,
     borderRadius: 12,
-    alignItems: 'center',
     marginBottom: 12,
-  },
-  sendButtonDisabled: {
-    opacity: 0.6,
   },
   sendButtonText: {
     color: '#fff',
@@ -425,8 +420,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   cancelButton: {
-    paddingVertical: 12,
-    alignItems: 'center',
+    marginBottom: 8,
   },
   cancelButtonText: {
     color: '#8E8E93',

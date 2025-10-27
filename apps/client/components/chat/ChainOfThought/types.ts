@@ -38,6 +38,8 @@ export interface ChainOfThoughtHeaderProps {
   onPress: () => void;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  isStreaming?: boolean;
+  totalDuration?: number;
 }
 
 export interface ChainOfThoughtContentProps {

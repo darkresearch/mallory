@@ -5,13 +5,12 @@ import {
   Modal,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
+import { PressableButton } from '../ui/PressableButton';
 import { gridClientService } from '../../features/grid/services/gridClient';
 
 interface OtpVerificationModalProps {
@@ -239,30 +238,30 @@ export default function OtpVerificationModal({
             <Text style={styles.error}>{error}</Text>
           ) : null}
 
-          <TouchableOpacity
-            style={[styles.button, isVerifying && styles.buttonDisabled]}
+          <PressableButton
+            fullWidth
             onPress={handleButtonPress}
-            disabled={isVerifying}
+            loading={isVerifying}
+            style={styles.button}
+            textStyle={styles.buttonText}
           >
-            {isVerifying ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>{getButtonText()}</Text>
-            )}
-          </TouchableOpacity>
+            {getButtonText()}
+          </PressableButton>
 
           {/* Sign Out Button */}
-          <TouchableOpacity 
-            style={styles.signOutButton}
+          <PressableButton
+            variant="ghost"
+            fullWidth
             onPress={() => {
               console.log('🚪 Sign out button pressed from OTP modal');
               logout();
             }}
-            activeOpacity={0.7}
+            icon={<Ionicons name="log-out-outline" size={16} color="#FFEFE3" />}
+            textStyle={styles.signOutText}
+            style={styles.signOutButton}
           >
-            <Ionicons name="log-out-outline" size={16} color="#FFEFE3" />
-            <Text style={styles.signOutText}>Sign out</Text>
-          </TouchableOpacity>
+            Sign out
+          </PressableButton>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -341,13 +340,8 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: '#FBAA69',
-    paddingVertical: 16,
     borderRadius: 12,
-    alignItems: 'center',
     marginBottom: 12,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
   buttonText: {
     color: '#000000',
@@ -356,12 +350,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi',
   },
   signOutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
     marginTop: 8,
   },
   signOutText: {
