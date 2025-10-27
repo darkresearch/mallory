@@ -5,6 +5,7 @@
  */
 
 import '../setup/test-env';
+import { buildClientContext } from '@darkresearch/mallory-shared';
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -55,11 +56,9 @@ export async function sendChatMessage(
       },
     ],
     conversationId,
-    clientContext: {
-      timezone: 'America/New_York',
-      currentTime: new Date().toISOString(),
-      device: 'test-environment',
-    },
+    clientContext: buildClientContext({
+      getDeviceInfo: () => 'test-environment'
+    }),
   };
 
   // Include Grid session secrets if provided (for x402 payments)
@@ -122,11 +121,9 @@ export async function sendChatWithHistory(
     body: JSON.stringify({
       messages,
       conversationId,
-      clientContext: {
-        timezone: 'America/New_York',
-        currentTime: new Date().toISOString(),
-        device: 'test-environment',
-      },
+      clientContext: buildClientContext({
+        getDeviceInfo: () => 'test-environment'
+      }),
     }),
   });
 

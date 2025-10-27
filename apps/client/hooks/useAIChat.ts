@@ -7,6 +7,7 @@ import { saveMessagesToSupabase, loadMessagesFromSupabase } from '../features/ch
 import { secureStorage } from '../lib/storage';
 import { getDeviceInfo } from '../lib/device';
 import { useEffect, useRef, useState } from 'react';
+import { loadGridContextForX402, buildClientContext } from '@darkresearch/mallory-shared';
 
 interface UseAIChatProps {
   conversationId: string;
@@ -58,23 +59,16 @@ export function useAIChat({ conversationId, userId, onImmediateReasoning, onImme
         // Get auth token and Grid session secrets
         const token = await secureStorage.getItem('mallory_auth_token');
         
-        // Get Grid session secrets for x402 payments
-        let gridSessionSecrets = null;
-        let gridSession = null;
-        try {
-          const { gridClientService } = await import('../features/grid');
-          const account = await gridClientService.getAccount();
-          const sessionSecretsJson = await secureStorage.getItem('grid_session_secrets');
-          
-          if (account && sessionSecretsJson) {
-            gridSessionSecrets = JSON.parse(sessionSecretsJson);
-            gridSession = account.authentication;
-            gridSession.address = account.address; // Ensure address is included
-            console.log('🔐 [useAIChat] Sending Grid context for x402 payments');
+        // Get Grid context for x402 payments (shared utility)
+        const { gridSessionSecrets, gridSession } = await loadGridContextForX402({
+          getGridAccount: async () => {
+            const { gridClientService } = await import('../features/grid');
+            return await gridClientService.getAccount();
+          },
+          getSessionSecrets: async () => {
+            return await secureStorage.getItem('grid_session_secrets');
           }
-        } catch (error) {
-          console.log('⚠️ [useAIChat] Grid context not available:', error);
-        }
+        });
         
         // Parse existing body and add Grid context
         const existingBody = JSON.parse(options?.body as string || '{}');
@@ -97,12 +91,10 @@ export function useAIChat({ conversationId, userId, onImmediateReasoning, onImme
       body: {
         conversationId,
         // userId removed - now comes from authenticated token on server
-        clientContext: {
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          currentTime: new Date().toISOString(),
-          currentDate: new Date().toISOString(),
-          device: getDeviceInfo(viewportWidth),
-        }
+        clientContext: buildClientContext({
+          viewportWidth: viewportWidth || undefined,
+          getDeviceInfo: () => getDeviceInfo(viewportWidth)
+        })
       },
     }),
     id: conversationId,

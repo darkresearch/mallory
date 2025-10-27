@@ -7,6 +7,7 @@ import { authenticateTestUser, loadGridSession } from '../setup/test-helpers';
 import { createTestConversation } from './conversation-test';
 import { sendChatMessage, parseStreamResponse } from './chat-api';
 import { executeX402Payment } from './x402-test-helpers';
+import { loadGridContextForX402 } from '@darkresearch/mallory-shared';
 
 interface NansenEndpointTestConfig {
   name: string;
@@ -65,9 +66,16 @@ export async function testNansenEndpoint(
   console.log(`🧪 Testing: ${name}`);
   console.log('━'.repeat(70), '\n');
 
-  // Step 1: Load Grid session secrets
+  // Step 1: Load Grid context for x402 (using shared utility)
   console.log('🔐 Loading Grid session secrets for x402...');
-  const gridSession = await loadGridSession();
+  const gridSessionData = await loadGridSession();
+  const { gridSessionSecrets, gridSession } = await loadGridContextForX402({
+    getGridAccount: async () => ({
+      authentication: gridSessionData.authentication,
+      address: gridSessionData.address
+    }),
+    getSessionSecrets: async () => JSON.stringify(gridSessionData.sessionSecrets)
+  });
   
   // Step 2: Send query to AI with Grid context
   console.log(`📋 Query: "${query}"`);
@@ -75,11 +83,8 @@ export async function testNansenEndpoint(
   
   const conversationId = await createTestConversation(userId);
   const response = await sendChatMessage(query, conversationId, authToken, {
-    gridSessionSecrets: gridSession.sessionSecrets,
-    gridSession: {
-      address: gridSession.address,
-      authentication: gridSession.authentication
-    }
+    gridSessionSecrets,
+    gridSession
   });
   
   // Step 3: Parse AI response - should get actual data, not payment requirement

@@ -26,3 +26,9 @@ export type {
 export * from './x402';
 export { EphemeralWalletManager, type GridTokenSender } from './x402/EphemeralWalletManager';
 export { X402PaymentService } from './x402/X402PaymentService';
+
+// Grid utilities
+export { loadGridContextForX402, type GridContext, type GridContextOptions } from './grid/context';
+
+// Chat utilities
+export { buildClientContext, type ClientContext, type ClientContextOptions } from './chat/clientContext';
