@@ -232,6 +232,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     paddingHorizontal: 8, // Reduced from 16 to align with chat input
     paddingTop: 16, // Add top padding for first message
+    width: '100%', // Ensure it respects container width
   },
   messageRow: {
     flexDirection: 'row',
@@ -251,6 +252,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     flexDirection: 'column', // Stack star above content
     alignItems: 'flex-start',
+    flex: 1, // Allow it to take available width
+    maxWidth: '100%', // But don't overflow
+    minWidth: 0, // Allow flex shrinking
   },
   assistantHeader: {
     marginBottom: 8, // Space between star and content
@@ -266,6 +270,9 @@ const styles = StyleSheet.create({
   },
   assistantContent: {
     width: '100%', // Full width since star is above
+    maxWidth: '100%', // Prevent overflow
+    minWidth: 0, // Allow flex shrinking
+    alignSelf: 'stretch', // Stretch to full available width
     // No background - freeform content
   },
   messageBubble: {
