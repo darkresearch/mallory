@@ -10,6 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../contexts/AuthContext';
 import { gridClientService } from '../../features/grid/services/gridClient';
 
 interface OtpVerificationModalProps {
@@ -25,6 +27,7 @@ export default function OtpVerificationModal({
   userEmail,
   gridUser
 }: OtpVerificationModalProps) {
+  const { logout } = useAuth();
   const [otp, setOtp] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState('');
@@ -94,33 +97,81 @@ export default function OtpVerificationModal({
       // Determine if this is re-authentication or new account
       const isReauth = user.isReauth === true;
       
-      console.log('🔐 Verifying OTP:', isReauth ? 'Re-auth flow' : 'New account flow');
+      console.log('🔐 Verifying OTP (attempt 1):', isReauth ? 'Re-auth flow' : 'New account flow');
       
-      // Use appropriate verification method
-      const authResult = isReauth 
-        ? await gridClientService.completeReauthentication(user, otp)
-        : await gridClientService.verifyAccount(user, otp);
-      
-      console.log('🔐 [OTP Verification] Auth result:', {
-        success: authResult.success,
-        hasData: !!authResult.data,
-        address: authResult.data?.address,
-      });
-      
-      if (authResult.success && authResult.data) {
-        console.log('✅ Grid account verified:', authResult.data.address);
-        console.log('🔐 [OTP Verification] Setting verification success...');
-        setVerificationSuccess(true);
-        // Signal success - AuthContext will handle sync to server
-        onClose(true);
-        console.log('🔐 [OTP Verification] onClose(true) called');
-      } else {
-        console.log('❌ [OTP Verification] Verification failed - showing error');
-        setError('Verification failed. Invalid email and code combination.');
+      // Try the initial flow based on isReauth flag
+      let authResult;
+      try {
+        authResult = isReauth 
+          ? await gridClientService.completeReauthentication(user, otp)
+          : await gridClientService.verifyAccount(user, otp);
+        
+        console.log('🔐 [OTP Verification] Auth result (attempt 1):', {
+          success: authResult.success,
+          hasData: !!authResult.data,
+          address: authResult.data?.address,
+        });
+        
+        if (authResult.success && authResult.data) {
+          console.log('✅ Grid account verified on first attempt:', authResult.data.address);
+          setVerificationSuccess(true);
+          onClose(true);
+          return;
+        }
+      } catch (firstError) {
+        const errorMessage = firstError instanceof Error ? firstError.message : String(firstError);
+        console.log('⚠️ [OTP Verification] First attempt failed:', errorMessage);
+        
+        // Check if error is "Invalid email and code combination" - likely wrong flow
+        if (errorMessage.toLowerCase().includes('invalid email and code combination')) {
+          console.log('🔄 [OTP Verification] Detected wrong flow, retrying with opposite method...');
+          
+          // Retry with the opposite flow
+          try {
+            const oppositeFlow = !isReauth;
+            console.log('🔐 Verifying OTP (attempt 2):', oppositeFlow ? 'Re-auth flow' : 'New account flow');
+            
+            authResult = oppositeFlow
+              ? await gridClientService.completeReauthentication(user, otp)
+              : await gridClientService.verifyAccount(user, otp);
+            
+            console.log('🔐 [OTP Verification] Auth result (attempt 2):', {
+              success: authResult.success,
+              hasData: !!authResult.data,
+              address: authResult.data?.address,
+            });
+            
+            if (authResult.success && authResult.data) {
+              console.log('✅ Grid account verified on second attempt (opposite flow):', authResult.data.address);
+              setVerificationSuccess(true);
+              onClose(true);
+              return;
+            }
+          } catch (secondError) {
+            console.error('❌ [OTP Verification] Both flows failed:', secondError);
+            // Fall through to show error
+          }
+        }
+        
+        // If we get here, either it wasn't a flow error or both flows failed
+        throw firstError;
       }
+      
+      // If we reach here without returning, verification failed
+      console.log('❌ [OTP Verification] Verification failed - showing error');
+      setError('Verification failed. Please check your code and try again.');
     } catch (error) {
       console.error('❌ OTP verification error:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred. Please try again.';
+      
+      // Provide more specific error messages
+      if (errorMessage.toLowerCase().includes('session secrets not found')) {
+        setError('Session expired. Please request a new code.');
+      } else if (errorMessage.toLowerCase().includes('invalid email and code combination')) {
+        setError('Unable to verify code. Please request a new one.');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setIsVerifying(false);
     }
@@ -198,6 +249,19 @@ export default function OtpVerificationModal({
             ) : (
               <Text style={styles.buttonText}>{getButtonText()}</Text>
             )}
+          </TouchableOpacity>
+
+          {/* Sign Out Button */}
+          <TouchableOpacity 
+            style={styles.signOutButton}
+            onPress={() => {
+              console.log('🚪 Sign out button pressed from OTP modal');
+              logout();
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="log-out-outline" size={16} color="#FFEFE3" />
+            <Text style={styles.signOutText}>Sign out</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -289,6 +353,22 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Satoshi',
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 8,
+  },
+  signOutText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFEFE3',
+    letterSpacing: 0.5,
     fontFamily: 'Satoshi',
   },
 });

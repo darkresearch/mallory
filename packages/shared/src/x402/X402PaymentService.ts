@@ -134,6 +134,12 @@ export class X402PaymentService {
       });
 
       console.log('🌐 [x402] Making request (Faremeter will handle 402 automatically)...');
+      console.log('📤 [x402] Request details:', {
+        url: apiUrl,
+        method,
+        headers,
+        body: JSON.stringify(body, null, 2)
+      });
 
       // Step 8: Make request - Faremeter automatically handles payment
       const response = await fetchWithPayer(apiUrl, {
@@ -142,8 +148,17 @@ export class X402PaymentService {
         body: JSON.stringify(body)
       });
 
+      console.log('📥 [x402] Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`x402 API error: ${response.status}`);
+        // Log response details for debugging
+        const errorText = await response.text();
+        console.error('❌ [x402] API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`x402 API error: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();

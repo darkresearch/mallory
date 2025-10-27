@@ -153,28 +153,61 @@ router.post('/verify-otp', authenticateUser, async (req: AuthenticatedRequest, r
     }
     
     // Sync Grid address to database (using service role to bypass RLS)
-    // This is imported at top of file
+    // Retry logic: 3 attempts with exponential backoff
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
     
-    const { error: dbError } = await supabase
-      .from('users_grid')
-      .upsert({
-        id: req.user!.id,
-        solana_wallet_address: authResult.data.address,
-        account_type: 'email',
-        grid_account_status: 'active',
-        updated_at: new Date().toISOString()
+    const maxRetries = 3;
+    let dbError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`🔄 [Grid Proxy] Database sync attempt ${attempt}/${maxRetries}`);
+      
+      const { error } = await supabase
+        .from('users_grid')
+        .upsert({
+          id: req.user!.id,
+          solana_wallet_address: authResult.data.address,
+          account_type: 'email',
+          grid_account_status: 'active',
+          updated_at: new Date().toISOString()
+        });
+      
+      if (!error) {
+        console.log('✅ Grid address synced to database:', authResult.data.address);
+        dbError = null;
+        break;
+      }
+      
+      dbError = error;
+      console.error(`⚠️ Database sync attempt ${attempt} failed:`, {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
       });
+      
+      // Wait before retrying (exponential backoff: 100ms, 200ms, 400ms)
+      if (attempt < maxRetries) {
+        const delayMs = 100 * Math.pow(2, attempt - 1);
+        console.log(`⏳ Waiting ${delayMs}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
     
     if (dbError) {
-      console.error('⚠️ Failed to sync Grid address to database:', dbError);
-      // Don't fail the request - Grid account is still valid
-    } else {
-      console.log('✅ Grid address synced to database:', authResult.data.address);
+      console.error('❌ Failed to sync Grid address after all retries:', dbError);
+      // Return error to client - Grid account exists but DB sync failed
+      // User can use recovery endpoint or retry login to fix this
+      return res.status(500).json({
+        success: false,
+        error: 'Grid account created but database sync failed. Please try logging in again.',
+        gridAccountCreated: true,
+        address: authResult.data.address
+      });
     }
     
     // Return Grid account data
