@@ -153,28 +153,61 @@ router.post('/verify-otp', authenticateUser, async (req: AuthenticatedRequest, r
     }
     
     // Sync Grid address to database (using service role to bypass RLS)
-    // This is imported at top of file
+    // Retry logic: 3 attempts with exponential backoff
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
     
-    const { error: dbError } = await supabase
-      .from('users_grid')
-      .upsert({
-        id: req.user!.id,
-        solana_wallet_address: authResult.data.address,
-        account_type: 'email',
-        grid_account_status: 'active',
-        updated_at: new Date().toISOString()
+    const maxRetries = 3;
+    let dbError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`🔄 [Grid Proxy] Database sync attempt ${attempt}/${maxRetries}`);
+      
+      const { error } = await supabase
+        .from('users_grid')
+        .upsert({
+          id: req.user!.id,
+          solana_wallet_address: authResult.data.address,
+          account_type: 'email',
+          grid_account_status: 'active',
+          updated_at: new Date().toISOString()
+        });
+      
+      if (!error) {
+        console.log('✅ Grid address synced to database:', authResult.data.address);
+        dbError = null;
+        break;
+      }
+      
+      dbError = error;
+      console.error(`⚠️ Database sync attempt ${attempt} failed:`, {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
       });
+      
+      // Wait before retrying (exponential backoff: 100ms, 200ms, 400ms)
+      if (attempt < maxRetries) {
+        const delayMs = 100 * Math.pow(2, attempt - 1);
+        console.log(`⏳ Waiting ${delayMs}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
     
     if (dbError) {
-      console.error('⚠️ Failed to sync Grid address to database:', dbError);
-      // Don't fail the request - Grid account is still valid
-    } else {
-      console.log('✅ Grid address synced to database:', authResult.data.address);
+      console.error('❌ Failed to sync Grid address after all retries:', dbError);
+      // Return error to client - Grid account exists but DB sync failed
+      // User can use recovery endpoint or retry login to fix this
+      return res.status(500).json({
+        success: false,
+        error: 'Grid account created but database sync failed. Please try logging in again.',
+        gridAccountCreated: true,
+        address: authResult.data.address
+      });
     }
     
     // Return Grid account data
@@ -364,6 +397,105 @@ router.post('/send-tokens', authenticateUser, async (req: AuthenticatedRequest, 
     
   } catch (error) {
     console.error('❌ [Grid Proxy] Send tokens error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * POST /api/grid/sync-account
+ * 
+ * Recovery endpoint for users stuck without users_grid records
+ * Manually syncs Grid address to database for authenticated user
+ * 
+ * Use cases:
+ * - User has Supabase auth + Grid account but missing users_grid record
+ * - Database sync failed during OTP verification
+ * - Support/admin recovery tool
+ * 
+ * Body: { address: string }
+ * Returns: { success: boolean }
+ */
+router.post('/sync-account', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { address } = req.body;
+    
+    if (!address) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Grid wallet address is required' 
+      });
+    }
+    
+    console.log('🔄 [Grid Recovery] Syncing account for user:', req.user!.id);
+    console.log('   Address:', address);
+    
+    // Validate address format (basic Solana address validation)
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid Solana address format'
+      });
+    }
+    
+    // Use service role to bypass RLS
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    
+    // Sync to database with retry logic
+    const maxRetries = 3;
+    let dbError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`🔄 [Grid Recovery] Database sync attempt ${attempt}/${maxRetries}`);
+      
+      const { error } = await supabase
+        .from('users_grid')
+        .upsert({
+          id: req.user!.id,
+          solana_wallet_address: address,
+          account_type: 'email',
+          grid_account_status: 'active',
+          updated_at: new Date().toISOString()
+        });
+      
+      if (!error) {
+        console.log('✅ [Grid Recovery] Grid address synced successfully:', address);
+        dbError = null;
+        break;
+      }
+      
+      dbError = error;
+      console.error(`⚠️ [Grid Recovery] Sync attempt ${attempt} failed:`, error);
+      
+      if (attempt < maxRetries) {
+        const delayMs = 100 * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+    
+    if (dbError) {
+      console.error('❌ [Grid Recovery] Failed to sync after all retries:', dbError);
+      return res.status(500).json({
+        success: false,
+        error: 'Database sync failed. Please contact support.',
+        details: dbError.message
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Grid account synced successfully',
+      address
+    });
+    
+  } catch (error) {
+    console.error('❌ [Grid Recovery] Error:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error'

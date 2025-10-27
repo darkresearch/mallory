@@ -24,5 +24,18 @@ describe('X402 Nansen Current Balance', () => {
     expect(data).toBeDefined();
     console.log('✅ Test passed\n');
   }, 120000);
+
+  test('Should handle Solana address analysis request', async () => {
+    const data = await testNansenEndpoint({
+      name: 'Current Balance - Solana Address',
+      query: 'Can you analyze AWgfUQi2Z4HFbn7FtcqBc7UjZAF9H7HqYwnYBJbFbZ1p?',
+      expectedToolName: 'nansenCurrentBalance',
+      urlFragment: 'current-balance',
+      timeout: 120000
+    }, context);
+
+    expect(data).toBeDefined();
+    console.log('✅ Test passed\n');
+  }, 120000);
 });
 

@@ -24,6 +24,18 @@ describe('X402 Nansen PnL Summary', () => {
     console.log('✅ Test passed\n');
   }, 120000); // Test timeout: 2 minutes
 
+  test('Should handle Solana address PnL request', async () => {
+    const data = await testNansenEndpoint({
+      name: 'PnL Summary - Solana Address',
+      query: 'What is the PnL for AWgfUQi2Z4HFbn7FtcqBc7UjZAF9H7HqYwnYBJbFbZ1p?',
+      expectedToolName: 'nansenPnlSummary',
+      urlFragment: 'pnl-summary'
+    }, context);
+
+    expect(data).toBeDefined();
+    console.log('✅ Test passed\n');
+  }, 120000);
+
 });
 
 
