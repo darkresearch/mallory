@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
 interface ChatHeaderProps {
@@ -22,13 +21,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ user, styles }) => {
           router.push('/(main)/chat-history');
         }}
       >
-        <Feather name="menu" size={24} color="#8C8C8C" />
+        <Feather name="menu" size={24} color="#FBAA69" />
       </TouchableOpacity>
 
-      {/* App wordmark */}
+      {/* App logo */}
       <View style={styles.wordmarkContainer}>
         <Image 
-          source={require('../../assets/images/wordmark.svg')}
+          source={require('../../assets/mallory-logo.png')}
           style={styles.wordmarkImage}
           resizeMode="contain"
         />
@@ -42,11 +41,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ user, styles }) => {
           router.push('/(main)/wallet');
         }}
       >
-        <LinearGradient
-          colors={['#81A6E5', '#1F4A95']}
-          style={styles.profileGradientBorder}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <View
+          style={[styles.profileGradientBorder, { backgroundColor: '#E67B25' }]}
         >
           {user?.profilePicture ? (
             <Image
@@ -61,7 +57,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ user, styles }) => {
               </Text>
             </View>
           )}
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     </View>
   );

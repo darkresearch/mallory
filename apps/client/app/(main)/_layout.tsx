@@ -6,7 +6,7 @@ export default function MainLayout() {
     <Stack 
       screenOptions={{ 
         headerShown: false,
-        contentStyle: { backgroundColor: '#05080C' },
+        contentStyle: { backgroundColor: '#FFEFE3' },
         animation: Platform.OS === 'web' ? 'fade' : 'slide_from_right',
       }}
     >

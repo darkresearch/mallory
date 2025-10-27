@@ -25,7 +25,7 @@ export const ChainOfThoughtHeader: React.FC<ChainOfThoughtHeaderProps> = ({
       <Ionicons 
         name="layers" 
         size={16} 
-        color="#DCE9FF" 
+        color="#C95900" 
         style={[styles.icon, { opacity: 0.8 }]} 
       />
       
@@ -33,10 +33,10 @@ export const ChainOfThoughtHeader: React.FC<ChainOfThoughtHeaderProps> = ({
         {children || 'Chain of Thought'}
       </Text>
       
-      <Ionicons
+      <Ionicons 
         name="chevron-down"
         size={16}
-        color="#DCE9FF"
+        color="#C95900"
         style={[
           styles.chevron,
           { opacity: 0.8 },
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   text: {
     flex: 1,
     fontSize: 14,
-    color: '#DCE9FF',
+    color: '#C95900',
     opacity: 0.8,
     fontWeight: '500',
   },

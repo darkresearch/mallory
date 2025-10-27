@@ -25,13 +25,14 @@ export default function RootLayout() {
     'Satoshi-Medium': require('../assets/fonts/Satoshi-Medium.ttf'),
     'Satoshi-Bold': require('../assets/fonts/Satoshi-Bold.ttf'),
     'Satoshi': require('../assets/fonts/Satoshi-Regular.ttf'), // Default weight
+    'Belwe-Medium': require('../assets/fonts/BelweMediumBT.ttf'),
   });
 
   useEffect(() => {
-    // Set up status bar for dark theme
-    StatusBar.setBarStyle('light-content');
+    // Set up status bar for light theme
+    StatusBar.setBarStyle('dark-content');
     if (Platform.OS === 'android') {
-      StatusBar.setBackgroundColor('#05080C');
+      StatusBar.setBackgroundColor('#FFEFE3');
       StatusBar.setTranslucent(true);
     }
   }, []);
@@ -47,17 +48,17 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#05080C' }}>
-      <SafeAreaProvider style={{ flex: 1, backgroundColor: '#05080C' }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
+      <SafeAreaProvider style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
         <AuthProvider>
           <AuthGate>
             <ConversationsProvider>
               <WalletProvider>
-                <View style={{ flex: 1, backgroundColor: '#05080C', minHeight: '100vh' }}>
+                <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' }}>
                   <Stack
                     screenOptions={{
                       headerShown: false,
-                      contentStyle: { backgroundColor: '#05080C' },
+                      contentStyle: { backgroundColor: '#FFEFE3' },
                       animation: 'fade',
                     }}
                   />

@@ -7,7 +7,7 @@ interface PulsingStarProps {
 }
 
 /**
- * PulsingStar - Animated dark star for streaming states
+ * PulsingStar - Animated logo for streaming states
  * Shows when AI is actively processing/thinking
  */
 export const PulsingStar: React.FC<PulsingStarProps> = ({
@@ -48,7 +48,7 @@ export const PulsingStar: React.FC<PulsingStarProps> = ({
         ]}
       >
         <Image 
-          source={require('../../../assets/images/dark-star.svg')}
+          source={require('../../../assets/mallory-logo.png')}
           style={[styles.star, { width: size, height: size }]} 
           resizeMode="contain"
         />

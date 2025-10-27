@@ -60,10 +60,6 @@ export default function WalletScreen() {
     return `${address.slice(0, 5)}...${address.slice(-5)}`;
   };
 
-  const handleInstabuy = (tokenName: string) => {
-    console.log(`Instabuy pressed for ${tokenName}`);
-    // TODO: Implement Instabuy functionality
-  };
 
   const handleAddMoney = () => {
     console.log('Add Money pressed');
@@ -193,7 +189,7 @@ export default function WalletScreen() {
             style={styles.backButton}
             onPress={handleBack}
           >
-            <Ionicons name="arrow-back" size={24} color="#EDEDED" />
+            <Ionicons name="arrow-back" size={24} color="#FBAA69" />
           </TouchableOpacity>
         </View>
 
@@ -206,28 +202,22 @@ export default function WalletScreen() {
             {/* Profile Picture */}
             <View style={styles.profileSection}>
               {user?.profilePicture ? (
-                <LinearGradient
-                  colors={['#81A6E5', '#1F4A95']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.profileGradientBorder}
+                <View
+                  style={[styles.profileGradientBorder, { backgroundColor: '#E67B25' }]}
                 >
                   <Image 
                     source={{ uri: user.profilePicture }} 
                     style={styles.profilePicture}
                   />
-                </LinearGradient>
+                </View>
               ) : (
-                <LinearGradient
-                  colors={['#81A6E5', '#1F4A95']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.profileGradientBorder}
+                <View
+                  style={[styles.profileGradientBorder, { backgroundColor: '#E67B25' }]}
                 >
                   <View style={styles.profilePicturePlaceholder}>
                     <Ionicons name="person" size={32} color="#8E8E93" />
                   </View>
-                </LinearGradient>
+                </View>
               )}
             </View>
 
@@ -243,7 +233,7 @@ export default function WalletScreen() {
               <Ionicons 
                 name={addressCopied ? "checkmark" : "copy-outline"} 
                 size={16} 
-                color={addressCopied ? "#00D4AA" : "#8E8E93"} 
+                color={addressCopied ? "#00D4AA" : "#212121"} 
               />
             </TouchableOpacity>
 
@@ -284,7 +274,7 @@ export default function WalletScreen() {
           {(isLoading && !walletData) || (error && !walletData) || (walletData && walletData.holdings && walletData.holdings.length > 0) ? (
             <>
               <LinearGradient
-                  colors={['#05080C', '#05080C', 'transparent']}
+                  colors={['#FFEFE3', '#FFEFE3', 'transparent']}
                   style={styles.topFade}
                   pointerEvents="none"
               >
@@ -299,14 +289,14 @@ export default function WalletScreen() {
                   <RefreshControl
                     refreshing={isRefreshing}
                     onRefresh={refreshWalletData}
-                    tintColor="#4E9DFF"
-                    colors={["#4E9DFF"]}
+                    tintColor="#E67B25"
+                    colors={["#E67B25"]}
                   />
                 }
               >
                 {isLoading && !walletData ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#4E9DFF" />
+                    <ActivityIndicator size="large" color="#E67B25" />
                     <Text style={styles.loadingText}>Loading wallet data...</Text>
                   </View>
                 ) : error && !walletData ? (
@@ -329,7 +319,6 @@ export default function WalletScreen() {
                       holdings={holding.holdings}
                       holdingsValue={holding.holdingsValue}
                       tokenPrice={holding.tokenPrice}
-                      onInstabuyPress={() => handleInstabuy(holding.tokenName)}
                     />
                   ))
                 )}
@@ -338,7 +327,7 @@ export default function WalletScreen() {
           ) : (
             /* Show empty state without "Current holdings" header when no holdings */
             <View style={styles.emptyHoldings}>
-              <Ionicons name="wallet-outline" size={48} color="#4E9DFF" />
+              <Ionicons name="wallet-outline" size={48} color="#E67B25" />
               <Text style={styles.emptyHoldingsTitle}>No tokens yet</Text>
               <Text style={styles.emptyHoldingsSubtitle}>
                 Your token holdings will appear here once you make your first purchase.
@@ -356,14 +345,14 @@ export default function WalletScreen() {
               }}
               activeOpacity={0.7}
             >
-              <Ionicons name="log-out-outline" size={16} color="rgba(255, 255, 255, 0.8)" />
+              <Ionicons name="log-out-outline" size={16} color="#212121" />
               <Text style={styles.signOutText}>Sign out</Text>
             </TouchableOpacity>
           </View>
 
           {/* Bottom Fade Gradient */}
           <LinearGradient
-            colors={['transparent', '#05080C', '#05080C']}
+            colors={['transparent', '#FFEFE3', '#FFEFE3']}
             style={styles.bottomFade}
             pointerEvents="none"
           />
@@ -398,7 +387,7 @@ export default function WalletScreen() {
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#05080C',
+    backgroundColor: '#FFEFE3',
   },
   wideContainer: {
     flex: 1,
@@ -418,7 +407,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     alignItems: 'center',
     paddingVertical: 12,
-    backgroundColor: '#05080C',
+    backgroundColor: '#FFEFE3',
   },
   backButton: {
     padding: 8,
@@ -475,7 +464,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '300',
     fontFamily: 'Satoshi',
-    color: '#8E8E93',
+    color: '#212121',
     // border: '1px solid red',
   },
   totalBalanceLabel: {
@@ -487,7 +476,7 @@ const styles = StyleSheet.create({
   totalBalanceValue: {
     fontSize: 44,
     fontWeight: '700',
-    color: '#EDEDED',
+    color: '#E67B25',
     fontFamily: 'Satoshi-Bold',
     marginBottom: 24,
     // border: '1px solid red',
@@ -508,13 +497,13 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#4E81D9',
+    backgroundColor: '#FBAA69',
     justifyContent: 'center',
     alignItems: 'center',
   },
   actionButtonLabel: {
     fontSize: 12,
-    color: '#fff',
+    color: '#212121',
     textAlign: 'center',
     fontFamily: 'Satoshi',
   },
@@ -529,7 +518,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#EDEDED',
+    color: '#212121',
     textAlign: 'left',
     fontFamily: 'Satoshi',
   },
@@ -562,7 +551,7 @@ const styles = StyleSheet.create({
   signOutText: {
     fontSize: 16,
     fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: '#212121',
     letterSpacing: 0.5,
     fontFamily: 'Satoshi',
   },

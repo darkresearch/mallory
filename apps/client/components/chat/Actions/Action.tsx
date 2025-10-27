@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   actionText: {
-    color: '#DCE9FF',
+    color: '#C95900',
     fontSize: 12,
     fontWeight: '500',
   },
