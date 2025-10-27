@@ -254,7 +254,12 @@ export default function OtpVerificationModal({
             fullWidth
             onPress={() => {
               console.log('🚪 Sign out button pressed from OTP modal');
-              logout();
+              // Close modal first to prevent blocking navigation
+              onClose(false);
+              // Then trigger logout
+              setTimeout(() => {
+                logout();
+              }, 100);
             }}
             icon={<Ionicons name="log-out-outline" size={16} color="#FFEFE3" />}
             textStyle={styles.signOutText}

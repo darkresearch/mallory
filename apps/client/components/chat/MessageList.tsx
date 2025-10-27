@@ -4,6 +4,7 @@ import { SimpleMessageRenderer } from './SimpleMessageRenderer';
 import { EmptyState } from './EmptyState';
 import { PulsingStar } from './ChainOfThought/PulsingStar';
 import { getDeviceInfo } from '@/lib/device';
+import { supabase } from '@/lib';
 
 /**
  * Immediate M logo placeholder - shows pulsing M instantly when user sends message
@@ -40,6 +41,7 @@ interface MessageListProps {
   thinkingDuration: number;
   isThinking: boolean;
   hasStreamStarted: boolean;
+  isOnboardingGreeting: boolean;
   isLoadingHistory?: boolean;
   regenerateMessage?: () => void;
   scrollViewRef: React.RefObject<ScrollView>;
@@ -59,6 +61,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   thinkingDuration,
   isThinking,
   hasStreamStarted,
+  isOnboardingGreeting,
   isLoadingHistory,
   regenerateMessage,
   scrollViewRef,
@@ -70,6 +73,25 @@ export const MessageList: React.FC<MessageListProps> = ({
 }) => {
   const { width: viewportWidth } = useWindowDimensions();
   const deviceInfo = getDeviceInfo(viewportWidth);
+  
+  // Check if this is an onboarding conversation by querying metadata
+  const [isOnboardingConversation, setIsOnboardingConversation] = React.useState(false);
+  
+  React.useEffect(() => {
+    const checkOnboarding = async () => {
+      if (!currentConversationId) return;
+      
+      const { data } = await supabase
+        .from('conversations')
+        .select('metadata')
+        .eq('id', currentConversationId)
+        .single();
+      
+      setIsOnboardingConversation(!!data?.metadata?.is_onboarding);
+    };
+    
+    checkOnboarding();
+  }, [currentConversationId]);
   
   console.log('🎬 MessageList render:', {
     aiMessagesLength: aiMessages.length,
@@ -154,6 +176,10 @@ export const MessageList: React.FC<MessageListProps> = ({
                 messagePartsLength: message.parts?.length || 0,
               });
               
+              // Check if this is the onboarding greeting (first message in onboarding conversation)
+              // Always apply styling to first message in onboarding (even after streaming completes)
+              const isOnboardingGreetingMessage = index === 0 && isOnboardingConversation;
+              
               return (
                 <View key={message.id} style={styles.assistantMessageContainer}>
                   <SimpleMessageRenderer
@@ -163,6 +189,8 @@ export const MessageList: React.FC<MessageListProps> = ({
                     liveReasoningText={isStreamingMessage ? liveReasoningText : ''}
                     deviceInfo={deviceInfo}
                     onRegenerate={regenerateMessage}
+                    thinkingText={isOnboardingGreetingMessage && isStreamingMessage ? 'Mallory wants to say hello' : undefined}
+                    isOnboardingMessage={isOnboardingGreetingMessage}
                     onComponentError={(error) => {
                       console.warn('SimpleMessageRenderer component error:', error);
                     }}

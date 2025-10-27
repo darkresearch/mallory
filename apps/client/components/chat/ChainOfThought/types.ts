@@ -30,6 +30,7 @@ export interface ChainOfThoughtProps {
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   style?: ViewStyle;
+  thinkingText?: string; // Custom text to show while thinking (e.g. "Mallory wants to say hello")
 }
 
 export interface ChainOfThoughtHeaderProps {
