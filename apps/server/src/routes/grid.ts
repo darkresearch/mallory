@@ -132,6 +132,19 @@ router.post('/verify-otp', authenticateUser, async (req: AuthenticatedRequest, r
       address: authResult.data?.address
     });
     
+    // DETAILED LOGGING FOR DEBUGGING
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('🔐 [Grid Proxy] RAW GRID SDK RESPONSE STRUCTURE:');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('Data keys:', authResult.data ? Object.keys(authResult.data) : []);
+    console.log('Authentication type:', typeof authResult.data?.authentication);
+    console.log('Authentication is array:', Array.isArray(authResult.data?.authentication));
+    console.log('Authentication keys:', authResult.data?.authentication ? Object.keys(authResult.data.authentication) : []);
+    console.log('Authentication value:', authResult.data?.authentication);
+    console.log('Full data object:', JSON.stringify(authResult.data, null, 2));
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log();
+    
     if (!authResult.success || !authResult.data) {
       return res.status(400).json({
         success: false,

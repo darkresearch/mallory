@@ -190,7 +190,12 @@ class GridClientService {
    */
   async completeReauthentication(user: any, otpCode: string) {
     try {
-      console.log('🔄 Completing re-authentication with OTP');
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('🔄 GRID RE-AUTHENTICATION STARTED');
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('OTP Code:', otpCode);
+      console.log('User email:', user.email);
+      console.log();
       
       // Retrieve session secrets from secure storage
       const sessionSecretsJson = await secureStorage.getItem('grid_session_secrets');
@@ -199,11 +204,14 @@ class GridClientService {
       }
       
       const sessionSecrets = JSON.parse(sessionSecretsJson);
+      console.log('✅ Session secrets loaded from storage');
+      console.log();
       
       // Call backend proxy to complete auth (avoids CORS)
       const backendUrl = config.backendApiUrl || 'http://localhost:3001';
       const token = await secureStorage.getItem('mallory_auth_token');
       
+      console.log('📤 Sending verification request to backend...');
       const response = await fetch(`${backendUrl}/api/grid/verify-otp`, {
         method: 'POST',
         headers: {
@@ -220,7 +228,25 @@ class GridClientService {
       
       const authResult = await response.json();
       
-      console.log('🔄 Backend proxy verification response:', authResult);
+      console.log('📥 Backend verification response:', {
+        success: authResult.success,
+        hasData: !!authResult.data,
+        address: authResult.data?.address,
+        error: authResult.error
+      });
+      
+      // DETAILED LOGGING FOR DEBUGGING
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('📥 CLIENT RECEIVED - FULL AUTHRESULT.DATA STRUCTURE:');
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('Data keys:', authResult.data ? Object.keys(authResult.data) : []);
+      console.log('Authentication type:', typeof authResult.data?.authentication);
+      console.log('Authentication is array:', Array.isArray(authResult.data?.authentication));
+      console.log('Authentication keys:', authResult.data?.authentication ? Object.keys(authResult.data.authentication) : []);
+      console.log('Authentication value:', authResult.data?.authentication);
+      console.log('Full structure:', JSON.stringify(authResult.data, null, 2));
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log();
       
       if (!authResult.success || !authResult.data) {
         throw new Error(`Re-authentication failed: ${authResult.error || 'Unknown error'}`);
@@ -228,12 +254,41 @@ class GridClientService {
       
       // Store account data
       await secureStorage.setItem('grid_account', JSON.stringify(authResult.data));
+      console.log('💾 Grid account data stored to secure storage');
+      console.log();
       
-      console.log('✅ Grid re-authentication successful:', authResult.data.address);
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('✅ GRID RE-AUTHENTICATION SUCCESSFUL');
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('Grid Address:', authResult.data.address);
+      console.log('Account Keys:', Object.keys(authResult.data));
+      console.log();
+      console.log('Authentication Field Analysis:');
+      console.log('  Type:', typeof authResult.data.authentication);
+      console.log('  Is Array:', Array.isArray(authResult.data.authentication));
+      if (Array.isArray(authResult.data.authentication)) {
+        console.log('  Array Length:', authResult.data.authentication.length);
+        console.log('  First Element Keys:', authResult.data.authentication[0] ? Object.keys(authResult.data.authentication[0]) : 'N/A');
+        console.log('  First Element:', authResult.data.authentication[0]);
+      } else {
+        console.log('  Object Keys:', Object.keys(authResult.data.authentication || {}));
+        console.log('  Value:', authResult.data.authentication);
+      }
+      console.log();
+      console.log('🔍 SEARCH FOR THIS IN LOGS: "GRID RE-AUTHENTICATION SUCCESSFUL"');
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log();
       
       return authResult;
     } catch (error) {
-      console.error('❌ Grid re-authentication completion error:', error);
+      console.error('═══════════════════════════════════════════════════════════');
+      console.error('❌ GRID RE-AUTHENTICATION FAILED');
+      console.error('═══════════════════════════════════════════════════════════');
+      console.error('Error:', error);
+      console.error();
+      console.error('🔍 SEARCH FOR THIS IN LOGS: "GRID RE-AUTHENTICATION FAILED"');
+      console.error('═══════════════════════════════════════════════════════════');
+      console.error();
       throw error;
     }
   }
