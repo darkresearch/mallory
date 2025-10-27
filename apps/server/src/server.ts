@@ -95,7 +95,6 @@ app.listen(PORT, () => {
   console.log(`   POST /api/grid/init-account - Grid init (CORS proxy)`);
   console.log(`   POST /api/grid/verify-otp - Grid OTP verify (CORS proxy)`);
   console.log(`   POST /api/grid/send-tokens - Grid token transfer (CORS proxy)`);
-  console.log(`   POST /api/auth/set-email - Set email for Web3 users`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('');
 });
