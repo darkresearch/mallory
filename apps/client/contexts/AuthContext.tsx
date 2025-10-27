@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Platform } from 'react-native';
 import { router } from 'expo-router';
-import { walletService } from '../features/wallet';
 import { supabase, secureStorage, config } from '../lib';
 import { configureGoogleSignIn, signInWithGoogle, signOutFromGoogle } from '../features/auth';
+import { gridClientService } from '../features/grid';
+import OtpVerificationModal from '../components/grid/OtpVerificationModal';
 
 interface User {
   id: string;
@@ -13,6 +14,7 @@ interface User {
   // From users table
   instantBuyAmount?: number;
   instayieldEnabled?: boolean;
+  hasCompletedOnboarding?: boolean;
   // Grid wallet info
   solanaAddress?: string;
   gridAccountStatus?: 'not_created' | 'pending_verification' | 'active';
@@ -45,6 +47,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [needsReauth, setNeedsReauth] = useState(false);
   const [isCheckingReauth, setIsCheckingReauth] = useState(false);
   const hasCheckedReauth = useRef(false);
+  
+  // Grid OTP modal state
+  const [showGridOtpModal, setShowGridOtpModal] = useState(false);
+  const [gridUserForOtp, setGridUserForOtp] = useState<any>(null);
 
   console.log('AuthProvider rendering, user:', user?.email || 'none', 'isLoading:', isLoading);
 
@@ -84,36 +90,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check re-auth status only when explicitly triggered (not automatically)
   // This prevents infinite loops while still allowing manual re-auth checks
 
-  // Grid useEffect - ONLY handles Grid account management
+  // Client-side Grid account initialization
   useEffect(() => {
-    const handleGridAccount = async () => {
-      if (!user?.id) {
-        console.log('🏦 No user ID, skipping Grid account check');
+    const checkGridAccount = async () => {
+      // Only run if we have a user AND we're not still loading
+      if (!user?.id || !user?.email || isLoading) {
+        console.log('🏦 Skipping Grid check:', { hasUser: !!user?.id, isLoading });
         return;
       }
       
-      console.log('🏦 Checking if user needs Grid account...');
+      console.log('🏦 Checking Grid account...');
       
-      // Check if user already has a Grid account
-      if (user.gridAccountId) {
-        console.log('🏦 User already has Grid account:', user.gridAccountId);
+      // First, check if Grid account exists in client-side secure storage
+      const gridAccount = await gridClientService.getAccount();
+      
+      if (gridAccount) {
+        console.log('✅ Grid account found in secure storage:', gridAccount.address);
+        // No sync needed - already synced when OTP was verified
         return;
       }
       
-      // Create Grid account for user
-      console.log('🏦 No Grid account found, creating one for user:', user.id);
-      const token = await secureStorage.getItem(AUTH_TOKEN_KEY);
-      if (token) {
-        await createOrRefreshGridAccount(token, user.id);
+      console.log('🏦 No Grid account in secure storage, checking database...');
+      
+      // Check if user already has Grid account in database (existing users)
+      const { data: existingGridData } = await supabase
+        .from('users_grid')
+        .select('solana_wallet_address, grid_account_id')
+        .eq('id', user.id)
+        .single();
+      
+      if (existingGridData?.solana_wallet_address) {
+        console.log('🏦 Found existing Grid account in Mallory DB:', existingGridData.solana_wallet_address);
+        
+        // Try re-authentication first (existing Grid account)
+        try {
+          const { user: gridUser } = await gridClientService.reauthenticateAccount(user.email);
+          setGridUserForOtp({ ...gridUser, isReauth: true });
+          setShowGridOtpModal(true);
+        } catch (reauthError) {
+          console.warn('⚠️ Re-auth failed, trying account creation as fallback:', reauthError);
+          
+          // Fallback: Grid might not have this email registered
+          // This can happen if Grid account creation failed previously
+          try {
+            const { user: gridUser } = await gridClientService.createAccount(user.email);
+            setGridUserForOtp({ ...gridUser, isReauth: false });
+            setShowGridOtpModal(true);
+          } catch (createError) {
+            console.error('❌ Both re-auth and creation failed:', createError);
+          }
+        }
+      } else {
+        console.log('🏦 No Grid account in database - creating new one');
+        
+        // New user - create Grid account (sends OTP email)
+        try {
+          const { user: gridUser } = await gridClientService.createAccount(user.email);
+          setGridUserForOtp({ ...gridUser, isReauth: false });
+          setShowGridOtpModal(true);
+        } catch (error) {
+          console.error('❌ Failed to create Grid account:', error);
+        }
       }
     };
-
-    handleGridAccount();
-  }, [user?.id]); // Only run when user ID changes
+    
+    checkGridAccount();
+  }, [user?.id, user?.email, isLoading]);
 
   const checkAuthSession = async () => {
+    console.log('🔍 checkAuthSession called');
     try {
       // Get session from Supabase
+      console.log('🔍 About to call supabase.auth.getSession()');
       const { data: { session }, error } = await supabase.auth.getSession();
       console.log('checkAuthSession - Session:', !!session, 'Error:', error);
       console.log('checkAuthSession - Session data:', session ? {
@@ -195,11 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(user);
       console.log('✅ User set successfully');
 
-      // Check if user needs re-authentication immediately after sign-in
-      console.log('🔐 Triggering immediate re-auth check after sign-in for:', user.email);
-      checkReauthStatusForUser(user);
-
-      // Grid account logic is now handled by separate useEffect
+      // Grid account logic is now handled by separate useEffect (client-side only)
     } catch (error) {
       console.error('❌ Error handling sign in:', error);
     }
@@ -267,31 +311,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Create or refresh Grid account in background
-  const createOrRefreshGridAccount = async (accessToken: string, userId?: string) => {
-    try {
-      console.log('🏦 Creating/checking Grid account for user:', userId);
-      
-      const result = await walletService.setupWallet();
-      console.log('Grid account result:', result);
-      
-      if (result.success && result.wallet) {
-        // Update user state with Grid info
-        setUser(prev => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            solanaAddress: result.wallet?.address,
-            gridAccountStatus: result.wallet?.ready_for_transactions ? 'active' : 'pending_verification',
-            gridAccountId: result.wallet?.id
-          };
-        });
-      }
-    } catch (error) {
-      console.error('Error creating Grid account:', error);
-    }
-  };
-
   // Check re-auth status for a specific user (avoids state dependency issues)
   const checkReauthStatusForUser = async (targetUser: User | null) => {
     if (!targetUser || isCheckingReauth) {
@@ -304,7 +323,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       console.log('🔐 Step 1: Getting auth token...');
-      const token = await secureStorage.getItem('scout_auth_token');
+      const token = await secureStorage.getItem(AUTH_TOKEN_KEY);
       if (!token) {
         throw new Error('No auth token available');
       }
@@ -360,11 +379,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setNeedsReauth(needsVerification);
       }
 
-      // If verification needed, trigger OTP email
+      // If verification needed, user will be prompted via Grid OTP modal
       if (needsVerification) {
-        console.log('🔐 Step 7: Triggering OTP email...');
-        await walletService.setupWallet(); // This will send OTP
-        console.log('🔐 Step 7: OTP email triggered successfully');
+        console.log('🔐 User needs verification - Grid OTP modal will handle this');
       }
 
       console.log('🔐 Re-auth check completed successfully');
@@ -530,6 +547,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      {showGridOtpModal && (
+        <OtpVerificationModal
+          visible={showGridOtpModal}
+          onClose={async (success: boolean) => {
+            if (!success) {
+              // User cannot skip - Grid setup is required
+              console.error('❌ Grid setup is required to use Mallory');
+              // Keep modal open by not changing state
+              return;
+            }
+            
+            // Success - Grid address already synced by backend
+            // Refresh auth context to update user state from database
+            await refreshGridAccount();
+            
+            setShowGridOtpModal(false);
+            setGridUserForOtp(null);
+          }}
+          userEmail={user?.email || ''}
+          gridUser={gridUserForOtp}
+        />
+      )}
     </AuthContext.Provider>
   );
 }

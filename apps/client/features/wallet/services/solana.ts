@@ -80,38 +80,13 @@ export async function sendToken(recipientAddress: string, amount: string, tokenA
 
     console.log('💸 [sendToken] Using Grid account:', account.address);
 
-    // Determine token mint
-    // Default to USDC if no token specified
-    const tokenMint = tokenAddress || '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'; // USDC
-    
-    // Convert amount to smallest unit (6 decimals for USDC, 9 for SOL)
-    const decimals = 6; // TODO: Get actual decimals from token metadata
-    const amountInSmallestUnit = parseFloat(amount) * Math.pow(10, decimals);
-    
-    console.log('💸 [sendToken] Creating spending limit:', {
-      amount: amountInSmallestUnit,
-      mint: tokenMint,
-      destination: recipientAddress
+    // Send tokens directly using Grid's working sendTokens method
+    // tokenAddress is the mint address for SPL tokens, or undefined for SOL
+    const signature = await gridClientService.sendTokens({
+      recipient: recipientAddress,
+      amount,
+      tokenMint: tokenAddress
     });
-
-    // Create spending limit transaction
-    const spendingLimitPayload = {
-      amount: amountInSmallestUnit,
-      mint: tokenMint,
-      period: 'one_time' as const,
-      destinations: [recipientAddress]
-    };
-    
-    // Get transaction payload from Grid
-    const result = await gridClientService.createSpendingLimit(
-      account.address,
-      spendingLimitPayload
-    );
-    
-    console.log('💸 [sendToken] Spending limit created, signing transaction...');
-
-    // Sign and send transaction (all client-side)
-    const signature = await gridClientService.signAndSendTransaction(result.data);
     
     console.log('✅ [sendToken] Transaction successful:', signature);
 

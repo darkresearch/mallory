@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { chatRouter } from './routes/chat/index.js';
 import { holdingsRouter } from './routes/wallet/holdings.js';
+import gridRouter from './routes/grid.js';
 
 // Load environment variables
 dotenv.config();
@@ -57,6 +58,7 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/chat', chatRouter);
 app.use('/api/wallet/holdings', holdingsRouter);
+app.use('/api/grid', gridRouter);
 
 // 404 handler
 app.use((req, res) => {
@@ -88,6 +90,9 @@ app.listen(PORT, () => {
   console.log(`   GET  /health - Health check`);
   console.log(`   POST /api/chat - AI chat streaming`);
   console.log(`   GET  /api/wallet/holdings - Wallet holdings`);
+  console.log(`   POST /api/grid/init-account - Grid init (CORS proxy)`);
+  console.log(`   POST /api/grid/verify-otp - Grid OTP verify (CORS proxy)`);
+  console.log(`   POST /api/grid/send-tokens - Grid token transfer (CORS proxy)`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('');
 });

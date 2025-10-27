@@ -24,7 +24,7 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     const user = req.user!;
     const userId = user.id;
     
-    const { messages, conversationId, clientContext }: ChatRequest = req.body;
+    const { messages, conversationId, clientContext, gridSessionSecrets, gridSession } = req.body;
 
     logIncomingMessages(messages);
 
@@ -34,6 +34,11 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
 
     if (!conversationId) {
       return res.status(400).json({ error: 'Conversation ID is required' });
+    }
+
+    // Log Grid context availability (for x402 payments)
+    if (gridSessionSecrets && gridSession) {
+      console.log('🔐 Grid context available for x402 payments');
     }
 
     logConversationState(conversationId, [], clientContext);
@@ -54,32 +59,38 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       getClaudeModel()
     );
 
+    // Prepare x402 context for Nansen tools
+    const x402Context = (gridSessionSecrets && gridSession) ? {
+      gridSessionSecrets,
+      gridSession
+    } : undefined;
+
     // Prepare tools (always include memory tools if available)
     const supermemoryApiKey = process.env.SUPERMEMORY_API_KEY;
     const tools = {
       searchWeb: toolRegistry.searchWeb,
-      nansenHistoricalBalances: toolRegistry.createNansenTool(),
-      nansenSmartMoneyNetflows: toolRegistry.createNansenSmartMoneyNetflowsTool(),
-      nansenSmartMoneyHoldings: toolRegistry.createNansenSmartMoneyHoldingsTool(),
-      nansenSmartMoneyDexTrades: toolRegistry.createNansenSmartMoneyDexTradesTool(),
-      nansenSmartMoneyJupiterDcas: toolRegistry.createNansenSmartMoneyJupiterDcasTool(),
-      nansenCurrentBalance: toolRegistry.createNansenCurrentBalanceTool(),
-      nansenTransactions: toolRegistry.createNansenTransactionsTool(),
-      nansenCounterparties: toolRegistry.createNansenCounterpartiesTool(),
-      nansenRelatedWallets: toolRegistry.createNansenRelatedWalletsTool(),
-      nansenPnlSummary: toolRegistry.createNansenPnlSummaryTool(),
-      nansenPnl: toolRegistry.createNansenPnlTool(),
-      nansenLabels: toolRegistry.createNansenLabelsTool(),
-      nansenTokenScreener: toolRegistry.createNansenTokenScreenerTool(),
-      nansenFlowIntelligence: toolRegistry.createNansenFlowIntelligenceTool(),
-      nansenHolders: toolRegistry.createNansenHoldersTool(),
-      nansenFlows: toolRegistry.createNansenFlowsTool(),
-      nansenWhoBoughtSold: toolRegistry.createNansenWhoBoughtSoldTool(),
-      nansenTokenDexTrades: toolRegistry.createNansenTokenDexTradesTool(),
-      nansenTokenTransfers: toolRegistry.createNansenTokenTransfersTool(),
-      nansenTokenJupiterDcas: toolRegistry.createNansenTokenJupiterDcasTool(),
-      nansenPnlLeaderboard: toolRegistry.createNansenPnlLeaderboardTool(),
-      nansenPortfolio: toolRegistry.createNansenPortfolioTool(),
+      nansenHistoricalBalances: toolRegistry.createNansenTool(x402Context),
+      nansenSmartMoneyNetflows: toolRegistry.createNansenSmartMoneyNetflowsTool(x402Context),
+      nansenSmartMoneyHoldings: toolRegistry.createNansenSmartMoneyHoldingsTool(x402Context),
+      nansenSmartMoneyDexTrades: toolRegistry.createNansenSmartMoneyDexTradesTool(x402Context),
+      nansenSmartMoneyJupiterDcas: toolRegistry.createNansenSmartMoneyJupiterDcasTool(x402Context),
+      nansenCurrentBalance: toolRegistry.createNansenCurrentBalanceTool(x402Context),
+      nansenTransactions: toolRegistry.createNansenTransactionsTool(x402Context),
+      nansenCounterparties: toolRegistry.createNansenCounterpartiesTool(x402Context),
+      nansenRelatedWallets: toolRegistry.createNansenRelatedWalletsTool(x402Context),
+      nansenPnlSummary: toolRegistry.createNansenPnlSummaryTool(x402Context),
+      nansenPnl: toolRegistry.createNansenPnlTool(x402Context),
+      nansenLabels: toolRegistry.createNansenLabelsTool(x402Context),
+      nansenTokenScreener: toolRegistry.createNansenTokenScreenerTool(x402Context),
+      nansenFlowIntelligence: toolRegistry.createNansenFlowIntelligenceTool(x402Context),
+      nansenHolders: toolRegistry.createNansenHoldersTool(x402Context),
+      nansenFlows: toolRegistry.createNansenFlowsTool(x402Context),
+      nansenWhoBoughtSold: toolRegistry.createNansenWhoBoughtSoldTool(x402Context),
+      nansenTokenDexTrades: toolRegistry.createNansenTokenDexTradesTool(x402Context),
+      nansenTokenTransfers: toolRegistry.createNansenTokenTransfersTool(x402Context),
+      nansenTokenJupiterDcas: toolRegistry.createNansenTokenJupiterDcasTool(x402Context),
+      nansenPnlLeaderboard: toolRegistry.createNansenPnlLeaderboardTool(x402Context),
+      nansenPortfolio: toolRegistry.createNansenPortfolioTool(x402Context),
       ...(supermemoryApiKey ? toolRegistry.createSupermemoryTools(supermemoryApiKey, userId) : {}),
     };
 

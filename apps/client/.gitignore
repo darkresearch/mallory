@@ -8,3 +8,6 @@ expo-env.d.ts
 # Test secrets and environment
 .test-secrets/
 .env.test
+
+# Maestro
+.maestro/reports/

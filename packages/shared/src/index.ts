@@ -24,3 +24,5 @@ export type {
 
 // x402 Payment Types and Utilities
 export * from './x402';
+export { EphemeralWalletManager, type GridTokenSender } from './x402/EphemeralWalletManager';
+export { X402PaymentService } from './x402/X402PaymentService';

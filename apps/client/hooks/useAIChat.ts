@@ -7,7 +7,6 @@ import { saveMessagesToSupabase, loadMessagesFromSupabase } from '../features/ch
 import { secureStorage } from '../lib/storage';
 import { getDeviceInfo } from '../lib/device';
 import { useEffect, useRef, useState } from 'react';
-import { useX402PaymentHandler } from './useX402PaymentHandler';
 
 interface UseAIChatProps {
   conversationId: string;
@@ -56,10 +55,37 @@ export function useAIChat({ conversationId, userId, onImmediateReasoning, onImme
     // Use DefaultChatTransport with API URL inside - required for Expo streaming
     transport: new DefaultChatTransport({
       fetch: async (url, options) => {
-        // Get auth token and add to headers
+        // Get auth token and Grid session secrets
         const token = await secureStorage.getItem('mallory_auth_token');
+        
+        // Get Grid session secrets for x402 payments
+        let gridSessionSecrets = null;
+        let gridSession = null;
+        try {
+          const { gridClientService } = await import('../features/grid');
+          const account = await gridClientService.getAccount();
+          const sessionSecretsJson = await secureStorage.getItem('grid_session_secrets');
+          
+          if (account && sessionSecretsJson) {
+            gridSessionSecrets = JSON.parse(sessionSecretsJson);
+            gridSession = account.authentication;
+            gridSession.address = account.address; // Ensure address is included
+            console.log('🔐 [useAIChat] Sending Grid context for x402 payments');
+          }
+        } catch (error) {
+          console.log('⚠️ [useAIChat] Grid context not available:', error);
+        }
+        
+        // Parse existing body and add Grid context
+        const existingBody = JSON.parse(options?.body as string || '{}');
+        const enhancedBody = {
+          ...existingBody,
+          ...(gridSessionSecrets && gridSession ? { gridSessionSecrets, gridSession } : {})
+        };
+        
         const fetchOptions: any = {
           ...options,
+          body: JSON.stringify(enhancedBody),
           headers: {
             ...options?.headers,
             'Authorization': `Bearer ${token}`,
@@ -154,16 +180,7 @@ export function useAIChat({ conversationId, userId, onImmediateReasoning, onImme
     saveMessages();
   }, [status, messages, conversationId]);
 
-  // Handle x402 payments
-  useX402PaymentHandler({
-    messages,
-    onPaymentFulfilled: (data, toolName) => {
-      sendMessage({
-        role: 'system',
-        content: `[x402 Payment Completed] Tool: ${toolName}\nData: ${JSON.stringify(data)}`
-      });
-    }
-  });
+  // x402 payments now handled server-side - no client-side handler needed
 
   return {
     messages,

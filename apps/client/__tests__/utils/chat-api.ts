@@ -17,22 +17,56 @@ interface ChatMessage {
  * @param message - Message text
  * @param conversationId - Conversation ID
  * @param authToken - Auth token
- * @param backendUrl - Backend URL (optional, defaults to TEST_BACKEND_URL)
+ * @param options - Optional config including Grid session for x402
  * @returns Response stream
  */
 export async function sendChatMessage(
   message: string,
   conversationId: string,
   authToken: string,
-  backendUrl?: string
+  options?: {
+    backendUrl?: string;
+    gridSessionSecrets?: any;
+    gridSession?: any;
+  }
 ): Promise<Response> {
-  const url = backendUrl || process.env.TEST_BACKEND_URL || 'http://localhost:3001';
+  const url = options?.backendUrl || process.env.TEST_BACKEND_URL || 'http://localhost:3001';
   const endpoint = `${url}/api/chat`;
 
   console.log('💬 Sending chat message');
   console.log('   Endpoint:', endpoint);
   console.log('   Message:', message.substring(0, 50) + (message.length > 50 ? '...' : ''));
   console.log('   Conversation:', conversationId);
+  if (options?.gridSessionSecrets) {
+    console.log('   Grid context: Included (for x402 payments)');
+  }
+
+  const body: any = {
+    messages: [
+      {
+        role: 'user',
+        content: message,
+        parts: [
+          {
+            type: 'text',
+            text: message,
+          },
+        ],
+      },
+    ],
+    conversationId,
+    clientContext: {
+      timezone: 'America/New_York',
+      currentTime: new Date().toISOString(),
+      device: 'test-environment',
+    },
+  };
+
+  // Include Grid session secrets if provided (for x402 payments)
+  if (options?.gridSessionSecrets && options?.gridSession) {
+    body.gridSessionSecrets = options.gridSessionSecrets;
+    body.gridSession = options.gridSession;
+  }
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -40,26 +74,7 @@ export async function sendChatMessage(
       'Authorization': `Bearer ${authToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      messages: [
-        {
-          role: 'user',
-          content: message,
-          parts: [
-            {
-              type: 'text',
-              text: message,
-            },
-          ],
-        },
-      ],
-      conversationId,
-      clientContext: {
-        timezone: 'America/New_York',
-        currentTime: new Date().toISOString(),
-        device: 'test-environment',
-      },
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {

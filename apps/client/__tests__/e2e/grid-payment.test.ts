@@ -6,7 +6,7 @@
 
 import { describe, test, expect, beforeAll } from 'bun:test';
 import { authenticateTestUser, loadGridSession } from '../setup/test-helpers';
-import { EphemeralWalletManagerTest } from '../utils/ephemeral-wallet-test';
+import { EphemeralWalletManagerTest } from '../utils/x402-test-helpers';
 
 describe('Grid Payment Operations', () => {
   let gridSession: any;

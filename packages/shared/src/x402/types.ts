@@ -56,46 +56,57 @@ export interface NansenSmartMoneyJupiterDcasRequest {
 }
 
 export interface NansenCurrentBalanceRequest {
-  wallet_address: string;
+  address: string;
   chain: string;
 }
 
 export interface NansenTransactionsRequest {
-  wallet_address: string;
+  address: string;
   chain: string;
   date: { from: string; to: string };
   pagination: { page: number; per_page: number };
 }
 
 export interface NansenCounterpartiesRequest {
-  wallet_address: string;
+  address: string;
   chain: string;
+  date: { from: string; to: string };
   pagination: { page: number; per_page: number };
 }
 
 export interface NansenRelatedWalletsRequest {
-  wallet_address: string;
+  address: string;
   chain: string;
   pagination: { page: number; per_page: number };
 }
 
 export interface NansenPnlSummaryRequest {
-  wallet_address: string;
+  address: string;
   chain: string;
+  date: { from: string; to: string };
 }
 
 export interface NansenPnlRequest {
-  wallet_address: string;
+  address: string;
   chain: string;
+  date: { from: string; to: string };
   pagination: { page: number; per_page: number };
 }
 
 export interface NansenLabelsRequest {
-  wallet_address: string;
+  parameters: {
+    chain: string;
+    address: string;
+  };
+  pagination: {
+    page: number;
+    recordsPerPage: number;
+  };
 }
 
 export interface NansenTokenScreenerRequest {
   chains: string[];
+  date: { from: string; to: string };
   pagination: { page: number; per_page: number };
 }
 
@@ -139,7 +150,6 @@ export interface NansenTokenTransfersRequest {
 
 export interface NansenTokenJupiterDcasRequest {
   token_address: string;
-  chain: string;
   pagination: { page: number; per_page: number };
 }
 
