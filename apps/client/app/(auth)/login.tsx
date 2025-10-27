@@ -2,7 +2,6 @@ import { View, Text, TouchableOpacity, ActivityIndicator, Image, StyleSheet, Pla
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import AuthCarousel from '@/components/auth/AuthCarousel';
-import { signInWithSolanaWallet, getAllWallets } from '@/features/auth/services/solana-wallet';
 import { useState, useEffect } from 'react';
 import Animated, { 
   useSharedValue, 
@@ -16,7 +15,7 @@ import { LAYOUT, config } from '@/lib';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, loginWithWallet, isAuthenticated } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
@@ -109,33 +108,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleWalletLogin = async (walletName: string) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      // Find the wallet by name
-      const wallets = getAllWallets();
-      const selectedWallet = wallets.find(w => w.name === walletName);
-      
-      if (!selectedWallet) {
-        throw new Error(`Wallet ${walletName} not found`);
-      }
-      
-      // Sign in with selected wallet
-      await signInWithSolanaWallet(selectedWallet.wallet);
-    } catch (err: any) {
-      setError(err.message || 'Wallet login failed. Please try again.');
-      console.error('Wallet login error:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleComingSoon = (provider: string) => {
-    console.log(`${provider} login coming soon`);
-  };
-
   const handleOpenLink = (url: string) => {
     Linking.openURL(url).catch((err) => console.error('Failed to open URL:', err));
   };
@@ -174,11 +146,10 @@ export default function LoginScreen() {
 
         {/* Bottom section - Button + Footer anchored to bottom on mobile */}
         <Animated.View style={[isMobile && styles.bottomSectionMobile, buttonsAnimatedStyle]}>
-          {/* Auth Carousel - Google + Wallets */}
+          {/* Auth Carousel - Google */}
           <View style={[styles.authSection, isMobile && styles.authSectionMobile]}>
             <AuthCarousel
               onGoogleLogin={handleLogin}
-              onWalletLogin={handleWalletLogin}
               isLoading={isLoading}
               isMobile={isMobile}
             />

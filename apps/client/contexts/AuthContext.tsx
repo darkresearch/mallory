@@ -2,14 +2,13 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useRe
 import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import { supabase, secureStorage, config } from '../lib';
-import { configureGoogleSignIn, signInWithGoogle, signOutFromGoogle, signInWithSolanaWallet } from '../features/auth';
+import { configureGoogleSignIn, signInWithGoogle, signOutFromGoogle } from '../features/auth';
 import { gridClientService } from '../features/grid';
 import OtpVerificationModal from '../components/grid/OtpVerificationModal';
-import EmailCollectionModal from '../components/auth/EmailCollectionModal';
 
 interface User {
   id: string;
-  email?: string; // Optional for wallet-only auth
+  email?: string;
   displayName?: string;
   profilePicture?: string;
   // From users table
@@ -20,8 +19,6 @@ interface User {
   solanaAddress?: string;
   gridAccountStatus?: 'not_created' | 'pending_verification' | 'active';
   gridAccountId?: string;
-  // Wallet auth info
-  walletAddress?: string; // For wallet-authenticated users (from identity)
 }
 
 interface AuthContextType {
@@ -31,7 +28,6 @@ interface AuthContextType {
   needsReauth: boolean;
   isCheckingReauth: boolean;
   login: () => Promise<void>;
-  loginWithWallet: () => Promise<void>;
   logout: () => Promise<void>;
   refreshGridAccount: () => Promise<void>;
   completeReauth: () => Promise<void>;
@@ -55,18 +51,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Grid OTP modal state
   const [showGridOtpModal, setShowGridOtpModal] = useState(false);
   const [gridUserForOtp, setGridUserForOtp] = useState<any>(null);
-  
-  // Email collection modal state (for wallet users)
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [walletAddressForEmail, setWalletAddressForEmail] = useState<string | null>(null);
-
-  // Debug: Track modal state changes
-  useEffect(() => {
-    console.log('🏦 [DEBUG] Modal state changed:', {
-      showEmailModal,
-      showGridOtpModal,
-    });
-  }, [showEmailModal, showGridOtpModal]);
 
   console.log('AuthProvider rendering, user:', user?.email || 'none', 'isLoading:', isLoading);
 
@@ -112,30 +96,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🏦 [DEBUG] checkGridAccount called with user:', {
         userId: user?.id,
         email: user?.email,
-        walletAddress: user?.walletAddress,
         isLoading,
         hasId: !!user?.id,
         hasEmail: !!user?.email,
-        hasWallet: !!user?.walletAddress,
       });
       
-      // Only run if we have a user
-      if (!user?.id || isLoading) {
-        console.log('🏦 [DEBUG] Skipping - no user or still loading');
-        return;
-      }
-      
-      // SIMPLIFIED LOGIC: If wallet user has no email, show email modal immediately
-      if (user.walletAddress && !user.email) {
-        console.log('🏦 [DEBUG] ✅ WALLET USER WITHOUT EMAIL - SHOWING EMAIL MODAL');
-        setWalletAddressForEmail(user.walletAddress);
-        setShowEmailModal(true);
-        return; // Stop here - don't check Grid accounts yet
-      }
-      
-      // If user has email, proceed with normal Grid account setup
-      if (!user.email) {
-        console.log('🏦 [DEBUG] No email and no wallet - unexpected state');
+      // Only run if we have a user with email
+      if (!user?.id || !user?.email || isLoading) {
+        console.log('🏦 [DEBUG] Skipping - no user, no email, or still loading');
         return;
       }
       
@@ -211,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     
     checkGridAccount();
-  }, [user?.id, user?.email, user?.walletAddress, isLoading]);
+  }, [user?.id, user?.email, isLoading]);
 
   const checkAuthSession = async () => {
     console.log('🔍 checkAuthSession called');
@@ -279,35 +247,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('Grid data fetch error:', gridError);
       }
 
-      // Extract wallet address from identities for Web3 auth
-      console.log('🔍 DEBUG - Checking for wallet identity:', {
-        hasIdentities: !!session.user.identities,
-        identitiesCount: session.user.identities?.length,
-        identities: session.user.identities,
-        userMetadata: session.user.user_metadata,
-        userMetadataSub: session.user.user_metadata?.sub,
-      });
-      
-      const walletIdentity = session.user.identities?.find((identity: any) => 
-        identity.provider === 'solana'
-      );
-      
-      // Wallet address can be in multiple places depending on Supabase version
-      let walletAddress = walletIdentity?.identity_data?.sub; // From identity
-      
-      // Fallback: Check user_metadata.sub (format: "web3:solana:PUBLICKEY")
-      if (!walletAddress && session.user.user_metadata?.sub?.startsWith('web3:solana:')) {
-        walletAddress = session.user.user_metadata.sub.replace('web3:solana:', '');
-        console.log('✅ Wallet address found in user_metadata.sub:', walletAddress);
-      }
-      
-      console.log('🔍 Final wallet address:', walletAddress);
-
       const user: User = {
         id: session.user.id,
-        // Email priority: users table → new_email (pending) → email (confirmed)
-        // For Web3 users, email goes to new_email until confirmed
-        email: userData?.email || session.user.new_email || session.user.email,
+        email: userData?.email || session.user.email,
         // From Google OAuth metadata
         displayName: session.user.user_metadata?.name || session.user.user_metadata?.full_name,
         profilePicture: session.user.user_metadata?.avatar_url,
@@ -319,8 +261,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         solanaAddress: gridData?.solana_wallet_address,
         gridAccountStatus: gridData?.grid_account_status || 'not_created',
         gridAccountId: gridData?.grid_account_id,
-        // Wallet auth info
-        walletAddress: walletAddress,
       };
 
       console.log('👤 Setting user:', user);
@@ -368,10 +308,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hasCheckedReauth.current = false;
     
     // Clear modal states
-    setShowEmailModal(false);
     setShowGridOtpModal(false);
     setGridUserForOtp(null);
-    setWalletAddressForEmail(null);
     console.log('🚪 [clearAuthState] Modals cleared');
     
     // Clear wallet cache
@@ -523,31 +461,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await checkReauthStatus();
   };
 
-  const loginWithWallet = async () => {
-    try {
-      setIsLoading(true);
-      
-      if (Platform.OS !== 'web') {
-        throw new Error('Wallet login is only supported on web platform');
-      }
-
-      console.log('🔐 Starting wallet login...');
-      
-      // Sign in with Solana wallet using Supabase Web3 auth
-      const result = await signInWithSolanaWallet();
-      
-      console.log('✅ Wallet login successful:', result.walletAddress);
-      
-      // The session will be handled by Supabase's onAuthStateChange listener
-      // which will trigger handleSignIn
-    } catch (error: any) {
-      console.error('❌ Wallet login error:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const login = async () => {
     try {
       setIsLoading(true);
@@ -622,104 +535,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const handleEmailSubmit = async (email: string) => {
-    console.log('📧 [Email Submit] Starting - email:', email);
-    
-    try {
-      // Create email-based Grid account with the provided email
-      // This follows the SAME flow as Google sign-in users
-      console.log('📧 [Email Submit] Creating Grid account...');
-      const { user: gridUser } = await gridClientService.createAccount(email);
-      
-      console.log('📧 [Email Submit] ✅ Grid account creation initiated');
-      console.log('📧 [Email Submit] Grid user:', gridUser);
-      
-      // Update local user state with email
-      console.log('📧 [Email Submit] Updating user state with email...');
-      setUser(prev => {
-        if (!prev) return null;
-        return { ...prev, email };
-      });
-      
-      // Use backend to force-set email (bypasses confirmation with service role)
-      console.log('📧 [Email Submit] ===== BACKEND EMAIL UPDATE START =====');
-      console.log('📧 [Email Submit] Calling backend to set email:', email);
-      
-      const backendUrl = config.backendApiUrl || 'http://localhost:3001';
-      const token = await secureStorage.getItem('mallory_auth_token');
-      
-      const emailResponse = await fetch(`${backendUrl}/api/auth/set-email`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email })
-      });
-      
-      const emailResult = await emailResponse.json();
-      
-      console.log('📧 [Email Submit] ===== BACKEND EMAIL UPDATE RESPONSE =====');
-      console.log('📧 [Email Submit] Backend response:', {
-        success: emailResult.success,
-        email: emailResult.email,
-        error: emailResult.error,
-      });
-      
-      if (!emailResult.success) {
-        console.error('❌ Backend email update failed:', emailResult.error);
-        // Don't throw - continue with Grid setup
-      } else {
-        console.log('✅ Email set in Supabase auth via backend:', emailResult.email);
-      }
-      console.log('📧 [Email Submit] ===== BACKEND EMAIL UPDATE END =====');
-      
-      // Close email modal, show OTP modal (same flow as Google users!)
-      console.log('📧 [Email Submit] Closing email modal, showing OTP modal...');
-      setShowEmailModal(false);
-      setWalletAddressForEmail(null);
-      setGridUserForOtp({ ...gridUser, isReauth: false });
-      setShowGridOtpModal(true);
-      console.log('📧 [Email Submit] Modal states updated - email modal should close, OTP modal should show');
-      
-      // Store email in our users table (don't rely on auth.users which requires confirmation)
-      console.log('📧 [Email Submit] Storing email in users table...');
-      const { data: usersData, error: usersError } = await supabase
-        .from('users')
-        .upsert({
-          id: user!.id,
-          email: email,
-          updated_at: new Date().toISOString(),
-        });
-      
-      if (usersError) {
-        console.error('❌ Could not store email in users table:', {
-          message: usersError.message,
-          code: usersError.code,
-          details: usersError.details,
-          hint: usersError.hint,
-        });
-        // Don't fail - Grid account works even without users table email
-      } else {
-        console.log('✅ Email stored in users table:', usersData);
-      }
-      
-      console.log('📧 [Email Submit] COMPLETED SUCCESSFULLY');
-    } catch (error: any) {
-      console.error('❌ [Email Submit] ERROR:', error);
-      
-      // Check for duplicate email error from Grid
-      const errorMessage = error?.message || error?.toString() || '';
-      if (errorMessage.includes('already exists') || 
-          errorMessage.includes('duplicate') || 
-          errorMessage.includes('409')) {
-        throw new Error('This email is already in use. Please use a different email address.');
-      }
-      
-      throw error;
-    }
-  };
-
   const refreshGridAccount = async () => {
     console.log('🔄 [refreshGridAccount] Starting...');
     
@@ -772,7 +587,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         needsReauth,
         isCheckingReauth,
         login,
-        loginWithWallet,
         logout,
         refreshGridAccount,
         completeReauth,
@@ -780,23 +594,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      
-      {/* Email Collection Modal (for wallet users) */}
-      {(() => {
-        console.log('🏦 [DEBUG] Email modal render check:', {
-          showEmailModal,
-          walletAddressForEmail,
-          shouldRender: showEmailModal,
-        });
-        return showEmailModal ? (
-          <EmailCollectionModal
-            visible={showEmailModal}
-            onSubmit={handleEmailSubmit}
-            onSignOut={logout}
-            walletAddress={walletAddressForEmail || undefined}
-          />
-        ) : null;
-      })()}
       
       {/* Grid OTP Verification Modal */}
       {showGridOtpModal && (
