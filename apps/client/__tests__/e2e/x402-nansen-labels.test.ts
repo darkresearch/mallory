@@ -24,6 +24,18 @@ describe('X402 Nansen Labels', () => {
     console.log('✅ Test passed\n');
   }, 120000); // Test timeout: 2 minutes
 
+  test('Should handle Solana address labels request', async () => {
+    const data = await testNansenEndpoint({
+      name: 'Address Labels - Solana Address',
+      query: 'What labels does AWgfUQi2Z4HFbn7FtcqBc7UjZAF9H7HqYwnYBJbFbZ1p have?',
+      expectedToolName: 'nansenLabels',
+      urlFragment: 'labels'
+    }, context);
+
+    expect(data).toBeDefined();
+    console.log('✅ Test passed\n');
+  }, 120000);
+
 });
 
 
