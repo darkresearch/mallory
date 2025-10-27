@@ -63,12 +63,40 @@ export function useAIChat({ conversationId, userId, onImmediateReasoning, onImme
         const { gridSessionSecrets, gridSession } = await loadGridContextForX402({
           getGridAccount: async () => {
             const { gridClientService } = await import('../features/grid');
-            return await gridClientService.getAccount();
+            const account = await gridClientService.getAccount();
+            console.log('🔐 [useAIChat] Grid account structure:', {
+              hasAccount: !!account,
+              accountKeys: account ? Object.keys(account) : [],
+              hasAddress: !!account?.address,
+              address: account?.address,
+              hasAuthentication: !!account?.authentication
+            });
+            // Transform to match test structure (authentication + address at top level)
+            // Grid SDK might store these differently, but backend needs both accessible
+            return account ? {
+              authentication: account.authentication || account,
+              address: account.address
+            } : null;
           },
           getSessionSecrets: async () => {
             return await secureStorage.getItem('grid_session_secrets');
           }
         });
+        
+        if (gridSessionSecrets && gridSession) {
+          console.log('═══════════════════════════════════════════════════════════');
+          console.log('✅ GRID CONTEXT LOADED FOR X402');
+          console.log('═══════════════════════════════════════════════════════════');
+          console.log('Grid Address:', gridSession.address);
+          console.log('Has Session Secrets:', !!gridSessionSecrets);
+          console.log('Has Authentication:', !!gridSession);
+          console.log();
+          console.log('🔍 SEARCH FOR THIS: "GRID CONTEXT LOADED FOR X402"');
+          console.log('═══════════════════════════════════════════════════════════');
+          console.log();
+        } else {
+          console.warn('⚠️ Grid context NOT available - x402 payments will not work');
+        }
         
         // Parse existing body and add Grid context
         const existingBody = JSON.parse(options?.body as string || '{}');

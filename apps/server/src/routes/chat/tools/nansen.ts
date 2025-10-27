@@ -140,6 +140,14 @@ function createGridSender(sessionSecrets: any, session: any, address: string): G
         throw new Error('Failed to prepare transaction');
       }
 
+      console.log('🔐 [Grid SDK] signAndSend parameters:', {
+        hasSessionSecrets: !!sessionSecrets,
+        sessionType: typeof session,
+        sessionIsArray: Array.isArray(session),
+        sessionKeys: session ? Object.keys(session) : [],
+        address
+      });
+      
       const result = await gridClient.signAndSend({
         sessionSecrets,
         session,
@@ -187,9 +195,10 @@ async function handleX402OrReturnRequirement(
     }
 
     // Create Grid sender with session context
+    // gridSession now has structure: { authentication: [...], address: "..." }
     const gridSender = createGridSender(
       x402Context.gridSessionSecrets,
-      x402Context.gridSession,
+      x402Context.gridSession.authentication,  // Pass authentication array to Grid SDK
       x402Context.gridSession.address
     );
 

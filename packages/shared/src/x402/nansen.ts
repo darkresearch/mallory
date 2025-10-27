@@ -146,83 +146,61 @@ export const NansenUtils = {
   },
 
   formatCurrentBalanceRequest(params: { address: string; chain?: string }): NansenCurrentBalanceRequest {
-    return { address: params.address, chain: params.chain || 'ethereum' };
+    return { wallet_address: params.address, chain: params.chain || 'ethereum' };
   },
   getCurrentBalanceUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/profiler/address/current-balance`;
   },
 
-  formatTransactionsRequest(params: { address: string; chain?: string; startDate?: string; endDate?: string }): NansenTransactionsRequest {
-    const dateRange = params.startDate && params.endDate 
-      ? { from: params.startDate, to: params.endDate }
-      : this.getDefaultDateRange();
-    return { address: params.address, chain: params.chain || 'ethereum', date: dateRange, pagination: { page: 1, per_page: 100 } };
+  formatTransactionsRequest(params: { address: string; chain?: string }): NansenTransactionsRequest {
+    const dateRange = this.getDefaultDateRange();
+    return { wallet_address: params.address, chain: params.chain || 'ethereum', date: dateRange, pagination: { page: 1, per_page: 100 } };
   },
   getTransactionsUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/profiler/address/transactions`;
   },
 
-  formatCounterpartiesRequest(params: { address: string; chain?: string; startDate?: string; endDate?: string }): NansenCounterpartiesRequest {
-    const dateRange = params.startDate && params.endDate 
-      ? { from: params.startDate, to: params.endDate }
-      : this.getDefaultDateRange();
-    return { address: params.address, chain: params.chain || 'ethereum', date: dateRange, pagination: { page: 1, per_page: 100 } };
+  formatCounterpartiesRequest(params: { address: string; chain?: string }): NansenCounterpartiesRequest {
+    return { wallet_address: params.address, chain: params.chain || 'ethereum', pagination: { page: 1, per_page: 100 } };
   },
   getCounterpartiesUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/profiler/address/counterparties`;
   },
 
   formatRelatedWalletsRequest(params: { address: string; chain?: string }): NansenRelatedWalletsRequest {
-    return { address: params.address, chain: params.chain || 'ethereum', pagination: { page: 1, per_page: 100 } };
+    return { wallet_address: params.address, chain: params.chain || 'ethereum', pagination: { page: 1, per_page: 100 } };
   },
   getRelatedWalletsUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/profiler/address/related-wallets`;
   },
 
-  formatPnlSummaryRequest(params: { address: string; chain?: string; startDate?: string; endDate?: string }): NansenPnlSummaryRequest {
-    const dateRange = params.startDate && params.endDate 
-      ? { from: params.startDate, to: params.endDate }
-      : this.getDefaultDateRange();
-    return { address: params.address, chain: params.chain || 'ethereum', date: dateRange };
+  formatPnlSummaryRequest(params: { address: string; chain?: string }): NansenPnlSummaryRequest {
+    return { wallet_address: params.address, chain: params.chain || 'ethereum' };
   },
   getPnlSummaryUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/profiler/address/pnl-summary`;
   },
 
-  formatPnlRequest(params: { address: string; chain?: string; startDate?: string; endDate?: string }): NansenPnlRequest {
-    const dateRange = params.startDate && params.endDate 
-      ? { from: params.startDate, to: params.endDate }
-      : this.getDefaultDateRange();
-    return { address: params.address, chain: params.chain || 'ethereum', date: dateRange, pagination: { page: 1, per_page: 100 } };
+  formatPnlRequest(params: { address: string; chain?: string }): NansenPnlRequest {
+    return { wallet_address: params.address, chain: params.chain || 'ethereum', pagination: { page: 1, per_page: 100 } };
   },
   getPnlUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/profiler/address/pnl`;
   },
 
-  formatLabelsRequest(params: { address: string; chain?: string }): NansenLabelsRequest {
-    // Beta endpoint uses different format with parameters wrapper
-    return {
-      parameters: {
-        chain: params.chain || 'ethereum',
-        address: params.address
-      },
-      pagination: {
-        page: 1,
-        recordsPerPage: 100
-      }
-    };
+  formatLabelsRequest(params: { address: string }): NansenLabelsRequest {
+    return { wallet_address: params.address };
   },
   getLabelsUrl(): string {
-    return `${X402_CONSTANTS.getNansenApiBase()}/api/beta/profiler/address/labels`;
+    return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/profiler/address/labels`;
   },
 
   // Token God Mode endpoints
   formatTokenScreenerRequest(params: { chains?: string[] }): NansenTokenScreenerRequest {
-    const dateRange = this.getDefaultDateRange();
-    return { chains: params.chains || ['ethereum', 'solana'], date: dateRange, pagination: { page: 1, per_page: 100 } };
+    return { chains: params.chains || ['ethereum', 'solana'], pagination: { page: 1, per_page: 100 } };
   },
   getTokenScreenerUrl(): string {
-    return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/token-screener`;
+    return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/tgm/token-screener`;
   },
 
   formatFlowIntelligenceRequest(params: { token_address: string; chain?: string }): NansenFlowIntelligenceRequest {
@@ -239,58 +217,47 @@ export const NansenUtils = {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/tgm/holders`;
   },
 
-  formatFlowsRequest(params: { token_address: string; chain?: string; startDate?: string; endDate?: string }): NansenFlowsRequest {
-    const dateRange = params.startDate && params.endDate 
-      ? { from: params.startDate, to: params.endDate }
-      : this.getDefaultDateRange();
+  formatFlowsRequest(params: { token_address: string; chain?: string }): NansenFlowsRequest {
+    const dateRange = this.getDefaultDateRange();
     return { token_address: params.token_address, chain: params.chain || 'ethereum', date: dateRange };
   },
   getFlowsUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/tgm/flows`;
   },
 
-  formatWhoBoughtSoldRequest(params: { token_address: string; chain?: string; startDate?: string; endDate?: string }): NansenWhoBoughtSoldRequest {
-    const dateRange = params.startDate && params.endDate 
-      ? { from: params.startDate, to: params.endDate }
-      : this.getDefaultDateRange();
+  formatWhoBoughtSoldRequest(params: { token_address: string; chain?: string }): NansenWhoBoughtSoldRequest {
+    const dateRange = this.getDefaultDateRange();
     return { token_address: params.token_address, chain: params.chain || 'ethereum', date: dateRange, pagination: { page: 1, per_page: 100 } };
   },
   getWhoBoughtSoldUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/tgm/who-bought-sold`;
   },
 
-  formatTokenDexTradesRequest(params: { token_address: string; chain?: string; startDate?: string; endDate?: string }): NansenTokenDexTradesRequest {
-    const dateRange = params.startDate && params.endDate 
-      ? { from: params.startDate, to: params.endDate }
-      : this.getDefaultDateRange();
+  formatTokenDexTradesRequest(params: { token_address: string; chain?: string }): NansenTokenDexTradesRequest {
+    const dateRange = this.getDefaultDateRange();
     return { token_address: params.token_address, chain: params.chain || 'ethereum', date: dateRange, pagination: { page: 1, per_page: 100 } };
   },
   getTokenDexTradesUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/tgm/dex-trades`;
   },
 
-  formatTokenTransfersRequest(params: { token_address: string; chain?: string; startDate?: string; endDate?: string }): NansenTokenTransfersRequest {
-    const dateRange = params.startDate && params.endDate 
-      ? { from: params.startDate, to: params.endDate }
-      : this.getDefaultDateRange();
+  formatTokenTransfersRequest(params: { token_address: string; chain?: string }): NansenTokenTransfersRequest {
+    const dateRange = this.getDefaultDateRange();
     return { token_address: params.token_address, chain: params.chain || 'ethereum', date: dateRange, pagination: { page: 1, per_page: 100 } };
   },
   getTokenTransfersUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/tgm/transfers`;
   },
 
-  formatTokenJupiterDcasRequest(params: { token_address: string }): NansenTokenJupiterDcasRequest {
-    // Jupiter is Solana-only, no chain parameter needed
-    return { token_address: params.token_address, pagination: { page: 1, per_page: 100 } };
+  formatTokenJupiterDcasRequest(params: { token_address: string; chain?: string }): NansenTokenJupiterDcasRequest {
+    return { token_address: params.token_address, chain: params.chain || 'solana', pagination: { page: 1, per_page: 100 } };
   },
   getTokenJupiterDcasUrl(): string {
-    return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/tgm/jup-dca`;
+    return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/tgm/jupiter-dcas`;
   },
 
-  formatPnlLeaderboardRequest(params: { token_address: string; chain?: string; startDate?: string; endDate?: string }): NansenPnlLeaderboardRequest {
-    const dateRange = params.startDate && params.endDate 
-      ? { from: params.startDate, to: params.endDate }
-      : this.getDefaultDateRange();
+  formatPnlLeaderboardRequest(params: { token_address: string; chain?: string }): NansenPnlLeaderboardRequest {
+    const dateRange = this.getDefaultDateRange();
     return { token_address: params.token_address, chain: params.chain || 'ethereum', date: dateRange, pagination: { page: 1, per_page: 100 } };
   },
   getPnlLeaderboardUrl(): string {
