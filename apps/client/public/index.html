@@ -76,6 +76,33 @@
       transform: translateZ(0);
       -webkit-transform: translateZ(0);
     }
+    
+    /* Ensure long strings wrap properly on web */
+    /* Force text wrapping in all text-containing elements */
+    p, span, div, a, li {
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    
+    /* Ensure pre and code blocks wrap - these often contain long strings */
+    pre {
+      white-space: pre-wrap !important;
+      word-wrap: break-word !important;
+      overflow-wrap: anywhere !important;
+    }
+    
+    code {
+      white-space: pre-wrap !important;
+      word-break: break-all !important;
+      overflow-wrap: anywhere !important;
+    }
+    
+    /* Exception for input fields - allow normal text input behavior */
+    input, textarea {
+      word-break: normal;
+      overflow-wrap: normal;
+      white-space: normal;
+    }
   </style>
   <script>
     // Set viewport height CSS variables for safe area handling
