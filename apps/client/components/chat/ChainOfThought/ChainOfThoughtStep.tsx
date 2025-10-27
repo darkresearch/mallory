@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ChainOfThoughtStepProps, STEP_ICONS, STEP_COLORS } from './types';
 import { getToolDisplayName } from '../../../lib/toolDisplayNames';
@@ -115,7 +115,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#C95900',
     lineHeight: 16,
-  },
+    // Web-specific: wrap long strings without breaking layout
+    ...(Platform.OS === 'web' && {
+      overflowWrap: 'break-word',
+    }),
+  } as any,
   toolDetails: {
     marginTop: 2,
   },

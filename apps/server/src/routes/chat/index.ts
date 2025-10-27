@@ -74,15 +74,17 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       nansenHistoricalBalances: toolRegistry.createNansenTool(x402Context),
       nansenSmartMoneyNetflows: toolRegistry.createNansenSmartMoneyNetflowsTool(x402Context),
       nansenSmartMoneyHoldings: toolRegistry.createNansenSmartMoneyHoldingsTool(x402Context),
-      nansenSmartMoneyDexTrades: toolRegistry.createNansenSmartMoneyDexTradesTool(x402Context),
-      nansenSmartMoneyJupiterDcas: toolRegistry.createNansenSmartMoneyJupiterDcasTool(x402Context),
+      // DISABLED - Nansen doesn't allow these endpoints:
+      // nansenSmartMoneyDexTrades: toolRegistry.createNansenSmartMoneyDexTradesTool(x402Context),
+      // nansenSmartMoneyJupiterDcas: toolRegistry.createNansenSmartMoneyJupiterDcasTool(x402Context),
       nansenCurrentBalance: toolRegistry.createNansenCurrentBalanceTool(x402Context),
       nansenTransactions: toolRegistry.createNansenTransactionsTool(x402Context),
       nansenCounterparties: toolRegistry.createNansenCounterpartiesTool(x402Context),
       nansenRelatedWallets: toolRegistry.createNansenRelatedWalletsTool(x402Context),
       nansenPnlSummary: toolRegistry.createNansenPnlSummaryTool(x402Context),
       nansenPnl: toolRegistry.createNansenPnlTool(x402Context),
-      nansenLabels: toolRegistry.createNansenLabelsTool(x402Context),
+      // DISABLED - Nansen doesn't allow this endpoint:
+      // nansenLabels: toolRegistry.createNansenLabelsTool(x402Context),
       nansenTokenScreener: toolRegistry.createNansenTokenScreenerTool(x402Context),
       nansenFlowIntelligence: toolRegistry.createNansenFlowIntelligenceTool(x402Context),
       nansenHolders: toolRegistry.createNansenHoldersTool(x402Context),
@@ -232,7 +234,7 @@ You have access to powerful tools to help users:
 
 ### Nansen x402 Tools - Premium Data (0.001 USDC each)
 
-You have access to **22 Nansen API endpoints** via x402! These are the same endpoints that typically require expensive Nansen subscriptions, but now available pay-per-use:
+You have access to **19 Nansen API endpoints** via x402! These are the same endpoints that typically require expensive Nansen subscriptions, but now available pay-per-use:
 
 **Wallet Analysis:**
 - **nansenHistoricalBalances**: Historical token balances and portfolio over time
@@ -240,14 +242,11 @@ You have access to **22 Nansen API endpoints** via x402! These are the same endp
 - **nansenTransactions**: Transaction history for addresses
 - **nansenCounterparties**: Who an address interacts with most
 - **nansenRelatedWallets**: Find related/connected wallet addresses
-- **nansenLabels**: Get Nansen's famous labels for addresses (e.g., "Smart Money", "Fund")
 - **nansenPortfolio**: Complete portfolio analysis
 
 **Smart Money Intelligence:**
 - **nansenSmartMoneyNetflows**: What tokens are smart money buying/selling
 - **nansenSmartMoneyHoldings**: What smart money wallets are holding
-- **nansenSmartMoneyDexTrades**: DEX trading activity by smart money
-- **nansenSmartMoneyJupiterDcas**: Jupiter DCA strategies used by smart money
 
 **Token Analysis:**
 - **nansenTokenScreener**: Screen and filter tokens by various metrics

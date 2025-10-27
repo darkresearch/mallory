@@ -96,7 +96,7 @@ export const MessageList: React.FC<MessageListProps> = ({
             return (
               <View
                 key={message.id}
-                style={[styles.messageRow, styles.userRow]}
+                style={styles.userMessageContainer}
               >
                 <View style={[styles.messageBubble, styles.userBubble]}>
                   <Text style={[styles.messageText, styles.userText]}>
@@ -121,20 +121,18 @@ export const MessageList: React.FC<MessageListProps> = ({
             });
             
             return (
-              <View key={message.id} style={[styles.messageRow, styles.assistantColumn]}>
-                <View style={styles.assistantContent}>
-                  <SimpleMessageRenderer
-                    message={message}
-                    isStreaming={isStreamingMessage}
-                    isLastMessage={isLastMessage}
-                    liveReasoningText={isStreamingMessage ? liveReasoningText : ''}
-                    deviceInfo={deviceInfo}
-                    onRegenerate={regenerateMessage}
-                    onComponentError={(error) => {
-                      console.warn('SimpleMessageRenderer component error:', error);
-                    }}
-                  />
-                </View>
+              <View key={message.id} style={styles.assistantMessageContainer}>
+                <SimpleMessageRenderer
+                  message={message}
+                  isStreaming={isStreamingMessage}
+                  isLastMessage={isLastMessage}
+                  liveReasoningText={isStreamingMessage ? liveReasoningText : ''}
+                  deviceInfo={deviceInfo}
+                  onRegenerate={regenerateMessage}
+                  onComponentError={(error) => {
+                    console.warn('SimpleMessageRenderer component error:', error);
+                  }}
+                />
               </View>
             );
           }

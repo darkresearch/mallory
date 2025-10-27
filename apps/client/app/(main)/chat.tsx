@@ -48,6 +48,7 @@ export default function ChatScreen() {
     aiStatus,
     regenerateMessage,
     handleSendMessage,
+    stopStreaming,
   } = useChatState({ 
     currentConversationId,
     userId: user?.id,  // Pass userId for Supermemory memory management
@@ -131,6 +132,7 @@ export default function ChatScreen() {
           {currentConversationId && (
             <ChatInput
               onSend={handleSendMessage}
+              onStop={stopStreaming}
               onVoiceStart={() => {
                 console.log('🎤 Voice recording started');
                 // TODO: Implement voice recording
@@ -141,6 +143,7 @@ export default function ChatScreen() {
               }}
               disabled={false} // No loading state needed - useChat handles it
               hasMessages={aiMessages.length > 0}
+              isStreaming={aiStatus === 'streaming'}
             />
           )}
         </KeyboardAvoidingView>
@@ -234,46 +237,15 @@ const styles = StyleSheet.create({
     paddingTop: 16, // Add top padding for first message
     width: '100%', // Ensure it respects container width
   },
-  messageRow: {
+  userMessageContainer: {
+    width: '100%',
     flexDirection: 'row',
-    marginBottom: 12,
-    paddingHorizontal: 0, // Removed extra padding to align with chat input
-  },
-  userRow: {
     justifyContent: 'flex-end',
+    marginBottom: 12,
   },
-  assistantRow: {
-    justifyContent: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingRight: 40, // Give more space for content
-  },
-  assistantColumn: {
-    justifyContent: 'flex-start',
-    flexDirection: 'column', // Stack star above content
-    alignItems: 'flex-start',
-    flex: 1, // Allow it to take available width
-    maxWidth: '100%', // But don't overflow
-    minWidth: 0, // Allow flex shrinking
-  },
-  assistantHeader: {
-    marginBottom: 8, // Space between star and content
-    alignSelf: 'flex-start',
-  },
-  assistantHandle: {
-    marginRight: 12,
-    marginTop: 4, // Align with first line of text
-  },
-  assistantIcon: {
-    width: 48, // Doubled from 24
-    height: 44, // Doubled from 22
-  },
-  assistantContent: {
-    width: '100%', // Full width since star is above
-    maxWidth: '100%', // Prevent overflow
-    minWidth: 0, // Allow flex shrinking
-    alignSelf: 'stretch', // Stretch to full available width
-    // No background - freeform content
+  assistantMessageContainer: {
+    width: '100%',
+    marginBottom: 12,
   },
   messageBubble: {
     maxWidth: '80%',
@@ -293,7 +265,12 @@ const styles = StyleSheet.create({
   },
   userText: {
     color: '#000000',
-  },
+    // Web-specific: wrap long strings (e.g., Solana addresses)
+    // Using overflowWrap instead of word-break to avoid layout issues
+    ...(Platform.OS === 'web' && {
+      overflowWrap: 'break-word',
+    }),
+  } as any,
   assistantText: {
     color: '#000000',
   },

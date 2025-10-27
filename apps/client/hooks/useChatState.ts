@@ -40,6 +40,7 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
   const aiError = currentConversationId ? aiChatResult.error : null;
   const aiStatus = currentConversationId ? aiChatResult.status : 'ready';
   const isLoadingHistory = currentConversationId ? aiChatResult.isLoadingHistory : false;
+  const stopStreaming = currentConversationId ? aiChatResult.stop : undefined;
 
   // Create enhanced messages with placeholder when reasoning starts
   // Filter out system messages (they're triggers, never displayed)
@@ -197,5 +198,6 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
     
     // Actions
     handleSendMessage,
+    stopStreaming,
   };
 }
