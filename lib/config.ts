@@ -1,19 +1,20 @@
 import Constants from 'expo-constants';
 
 /**
- * Runtime configuration values from app.config.js
- * These work consistently across all platforms (web, iOS, Android)
+ * Runtime configuration values
+ * Tries Constants.expoConfig.extra first (works on native), 
+ * falls back to process.env (works on web with Metro)
  */
 export const config = {
-  webOAuthRedirectUrl: Constants.expoConfig?.extra?.webOAuthRedirectUrl as string,
-  backendApiUrl: Constants.expoConfig?.extra?.backendApiUrl as string,
-  solanaRpcUrl: Constants.expoConfig?.extra?.solanaRpcUrl as string,
-  supabaseUrl: Constants.expoConfig?.extra?.supabaseUrl as string,
-  supabaseAnonKey: Constants.expoConfig?.extra?.supabaseAnonKey as string,
-  googleAndroidClientId: Constants.expoConfig?.extra?.googleAndroidClientId as string,
-  googleIosClientId: Constants.expoConfig?.extra?.googleIosClientId as string,
-  termsUrl: Constants.expoConfig?.extra?.termsUrl as string,
-  privacyUrl: Constants.expoConfig?.extra?.privacyUrl as string,
+  webOAuthRedirectUrl: (Constants.expoConfig?.extra?.webOAuthRedirectUrl || process.env.EXPO_PUBLIC_WEB_OAUTH_REDIRECT_URL) as string,
+  backendApiUrl: (Constants.expoConfig?.extra?.backendApiUrl || process.env.EXPO_PUBLIC_BACKEND_API_URL) as string,
+  solanaRpcUrl: (Constants.expoConfig?.extra?.solanaRpcUrl || process.env.EXPO_PUBLIC_SOLANA_RPC_URL) as string,
+  supabaseUrl: (Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL) as string,
+  supabaseAnonKey: (Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) as string,
+  googleAndroidClientId: (Constants.expoConfig?.extra?.googleAndroidClientId || process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID) as string,
+  googleIosClientId: (Constants.expoConfig?.extra?.googleIosClientId || process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID) as string,
+  termsUrl: (Constants.expoConfig?.extra?.termsUrl || process.env.EXPO_PUBLIC_TERMS_URL) as string,
+  privacyUrl: (Constants.expoConfig?.extra?.privacyUrl || process.env.EXPO_PUBLIC_PRIVACY_URL) as string,
 };
 
 // Debug log on load

@@ -1,0 +1,39 @@
+{
+  "name": "@darkresearch/mallory-server",
+  "version": "0.1.0",
+  "description": "Backend API server for Mallory - AI chat and wallet data enrichment",
+  "main": "src/server.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.16",
+    "@darkresearch/mallory-shared": "workspace:*",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.95.8",
+    "@sqds/grid": "^0.1.0",
+    "@supabase/supabase-js": "^2.51.0",
+    "@supermemory/tools": "latest",
+    "ai": "^5.0.50",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "exa-js": "^1.0.14",
+    "express": "^4.18.2",
+    "supermemory": "latest",
+    "uuid": "^13.0.0",
+    "zod": "^4.1.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.0",
+    "tsx": "^4.19.2",
+    "typescript": "~5.9.2"
+  },
+  "private": true
+}
+
