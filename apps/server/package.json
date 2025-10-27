@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "bun --watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node dist/apps/server/src/server.js",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
