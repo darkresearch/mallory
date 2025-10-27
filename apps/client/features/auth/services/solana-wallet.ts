@@ -152,18 +152,23 @@ export const signInWithSolanaWallet = async (wallet?: SolanaWallet) => {
   try {
     console.log('🔐 Starting Solana wallet authentication...');
 
-    // Connect wallet if not already connected
-    if (!selectedWallet.isConnected) {
-      console.log('🔐 Connecting to wallet...');
-      await selectedWallet.connect();
+    // ALWAYS disconnect and reconnect to ensure we get the currently active account
+    // This is critical when users switch accounts within their wallet app
+    if (selectedWallet.isConnected) {
+      console.log('🔐 Disconnecting to refresh active account...');
+      await selectedWallet.disconnect();
     }
 
+    console.log('🔐 Connecting to wallet (will get active account)...');
+    await selectedWallet.connect();
+
+    // Read publicKey FRESH after connection to get the active account
     if (!selectedWallet.publicKey) {
       throw new Error('No wallet public key available');
     }
 
     const publicKeyString = selectedWallet.publicKey.toString();
-    console.log('🔐 Wallet connected:', publicKeyString);
+    console.log('🔐 Wallet connected with ACTIVE account:', publicKeyString);
 
     // Use Supabase's Web3 sign-in
     console.log('🔐 Requesting signature from Supabase...');

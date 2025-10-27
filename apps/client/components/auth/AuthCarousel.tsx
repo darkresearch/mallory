@@ -53,18 +53,19 @@ export default function AuthCarousel({ onGoogleLogin, onWalletLogin, isLoading, 
     ];
 
     // Add detected wallets (web only)
-    if (Platform.OS === 'web') {
-      const wallets = getAllWallets();
-      wallets.forEach((wallet) => {
-        authOptions.push({
-          id: wallet.name.toLowerCase(),
-          name: wallet.name,
-          icon: wallet.icon,
-          color: '#FFFFFF', // White background for all options
-          onPress: async () => onWalletLogin(wallet.name),
-        });
-      });
-    }
+    // COMMENTED OUT: Wallet auth temporarily disabled
+    // if (Platform.OS === 'web') {
+    //   const wallets = getAllWallets();
+    //   wallets.forEach((wallet) => {
+    //     authOptions.push({
+    //       id: wallet.name.toLowerCase(),
+    //       name: wallet.name,
+    //       icon: wallet.icon,
+    //       color: '#FFFFFF', // White background for all options
+    //       onPress: async () => onWalletLogin(wallet.name),
+    //     });
+    //   });
+    // }
 
     setOptions(authOptions);
   }, []);

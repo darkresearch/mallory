@@ -57,11 +57,20 @@ export default function OtpVerificationModal({
         ? await gridClientService.completeReauthentication(user, otp)
         : await gridClientService.verifyAccount(user, otp);
       
+      console.log('🔐 [OTP Verification] Auth result:', {
+        success: authResult.success,
+        hasData: !!authResult.data,
+        address: authResult.data?.address,
+      });
+      
       if (authResult.success && authResult.data) {
         console.log('✅ Grid account verified:', authResult.data.address);
+        console.log('🔐 [OTP Verification] Calling onClose(true)...');
         // Signal success - AuthContext will handle sync to server
         onClose(true);
+        console.log('🔐 [OTP Verification] onClose(true) called');
       } else {
+        console.log('❌ [OTP Verification] Verification failed - showing error');
         setError('Verification failed. Please check your code and try again.');
       }
     } catch (error) {
