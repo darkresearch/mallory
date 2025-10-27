@@ -117,13 +117,13 @@ export const MessageActions: React.FC<MessageActionsData> = ({
       <Ionicons name="copy-outline" size={14} color="#C95900" />
     </Action>
 
-    {/* Share */}
-    <Action
+    {/* Share - Commented out for now as it duplicates copy functionality */}
+    {/* <Action
       label="Share"
       onPress={handleShare}
     >
       <Ionicons name="share-outline" size={14} color="#C95900" />
-      </Action>
+      </Action> */}
     </Actions>
   );
 };

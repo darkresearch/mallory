@@ -15,7 +15,7 @@ const SOLANA_CLUSTER = 'mainnet-beta';
 
 // Ephemeral wallet funding amounts (minimal for testing)
 const EPHEMERAL_FUNDING_USDC = '0.01';   // 0.01 USDC (enough for ~10 Nansen calls)
-const EPHEMERAL_FUNDING_SOL = '0.002';   // 0.002 SOL (enough for transaction fees)
+const EPHEMERAL_FUNDING_SOL = '0.001';   // 0.001 SOL (enough for transaction fees)
 
 export interface X402PaymentRequirement {
   needsPayment: true;
