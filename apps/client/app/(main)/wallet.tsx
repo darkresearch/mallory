@@ -586,7 +586,7 @@ const styles = StyleSheet.create({
   emptyHoldingsTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#EDEDED',
+    color: '#212121',
     marginTop: 16,
     marginBottom: 8,
     fontFamily: 'Satoshi',
