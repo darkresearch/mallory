@@ -16,6 +16,7 @@ export const ChainOfThought: React.FC<ChainOfThoughtProps> = ({
   defaultOpen = false,
   onOpenChange,
   style,
+  thinkingText,
 }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
@@ -42,7 +43,9 @@ export const ChainOfThought: React.FC<ChainOfThoughtProps> = ({
         onPress={handleToggle}
         isStreaming={isStreaming}
         totalDuration={totalDuration}
-      />
+      >
+        {thinkingText}
+      </ChainOfThoughtHeader>
       
       <ChainOfThoughtContent isOpen={isOpen}>
         {data.steps?.map((step, index) => (

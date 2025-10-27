@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image } from 'react-native';
-import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { ModernMenuIcon } from '../ui/ModernMenuIcon';
 
 interface ChatHeaderProps {
   user: any;
@@ -21,7 +21,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ user, styles }) => {
           router.push('/(main)/chat-history');
         }}
       >
-        <Feather name="menu" size={24} color="#FBAA69" />
+        <ModernMenuIcon size={24} color="#FBAA69" strokeWidth={2} />
       </TouchableOpacity>
 
       {/* App logo */}

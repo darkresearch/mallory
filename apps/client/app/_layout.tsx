@@ -12,6 +12,8 @@ import { WalletProvider } from '../contexts/WalletContext';
 import AuthGate from '../components/auth/AuthGate';
 import { initializeComponentRegistry } from '../components/registry';
 import 'react-native-url-polyfill/auto';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -27,6 +29,8 @@ export default function RootLayout() {
     'Satoshi-Bold': require('../assets/fonts/Satoshi-Bold.ttf'),
     'Satoshi': require('../assets/fonts/Satoshi-Regular.ttf'), // Default weight
     'Belwe-Medium': require('../assets/fonts/BelweMediumBT.ttf'),
+    'Belwe-Bold': require('../assets/fonts/BelweBoldBT.ttf'),
+    'Belwe-Light': require('../assets/fonts/BelweLightBT.ttf'),
   });
 
   useEffect(() => {
@@ -67,6 +71,12 @@ export default function RootLayout() {
                       animation: 'fade',
                     }}
                   />
+                  {Platform.OS === 'web' && (
+                    <>
+                      <Analytics />
+                      <SpeedInsights />
+                    </>
+                  )}
                 </View>
               </WalletProvider>
             </ConversationsProvider>

@@ -232,6 +232,12 @@ export async function createNewConversation(userId?: string, metadata?: Record<s
   }
 }
 
+// Create an onboarding conversation for first-time users
+export async function createOnboardingConversation(userId?: string): Promise<ConversationData> {
+  console.log('📝 Creating onboarding conversation');
+  return createNewConversation(userId, { is_onboarding: true });
+}
+
 // Get current conversation or load most recent from history (only auto-create if no history exists)
 export async function getCurrentOrCreateConversation(
   userId?: string,
