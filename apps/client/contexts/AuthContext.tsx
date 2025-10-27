@@ -611,19 +611,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             
             console.log('🔐 [OTP Modal] Success! Refreshing Grid account...');
             
+            // Safety net: Ensure modal closes within 2 seconds even if refresh hangs
+            // This fixes mobile Safari issues where refreshGridAccount can stall
+            const timeoutId = setTimeout(() => {
+              console.warn('🔐 [OTP Modal] Force closing modal after timeout');
+              setShowGridOtpModal(false);
+              setGridUserForOtp(null);
+            }, 2000);
+            
             // Success - Grid address already synced by backend
             // Refresh auth context to update user state from database
             try {
-              await refreshGridAccount();
-              console.log('🔐 [OTP Modal] Grid account refreshed');
+              console.log('🔐 [OTP Modal] Starting refreshGridAccount...');
+              
+              // Race the refresh against a 1.8s timeout to detect hangs early
+              await Promise.race([
+                refreshGridAccount(),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Refresh timeout')), 1800)
+                )
+              ]);
+              
+              console.log('🔐 [OTP Modal] Grid account refreshed successfully');
             } catch (error) {
+              // Log the error but don't prevent modal from closing
+              // The Grid account is already created and synced - refresh is just nice-to-have
               console.error('🔐 [OTP Modal] Error refreshing Grid account:', error);
+            } finally {
+              // Always clean up: cancel timeout and close modal
+              clearTimeout(timeoutId);
+              setShowGridOtpModal(false);
+              setGridUserForOtp(null);
+              console.log('🔐 [OTP Modal] Modal closed');
             }
-            
-            console.log('🔐 [OTP Modal] Closing modal...');
-            setShowGridOtpModal(false);
-            setGridUserForOtp(null);
-            console.log('🔐 [OTP Modal] Modal closed');
           }}
           userEmail={user?.email || ''}
           gridUser={gridUserForOtp}
