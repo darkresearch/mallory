@@ -55,8 +55,3 @@ export function validateRegistry(): boolean {
   console.log('✅ Component registry validation passed');
   return true;
 }
-
-// Auto-initialize in development
-if (__DEV__) {
-  initializeComponentRegistry();
-}
