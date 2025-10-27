@@ -12,30 +12,31 @@ import Animated, {
 
 interface AnimatedPlaceholderProps {
   isVisible: boolean;
+  hasMessages?: boolean;
 }
 
-// Translations for "Ask anything about your money" in 20 languages
+// Translations for "Ask anything" in 20 languages
 const translations = [
-  { lang: 'English', text: 'Ask anything about your money' },
-  { lang: 'Turkish', text: 'Paranız hakkında her şeyi sorun' },
-  { lang: 'Chinese', text: '询问关于您的资金的任何问题' },
-  { lang: 'Spanish', text: 'Pregunta cualquier cosa sobre tu dinero' },
-  { lang: 'French', text: 'Posez toute question sur votre argent' },
-  { lang: 'German', text: 'Fragen Sie alles über Ihr Geld' },
-  { lang: 'Japanese', text: 'お金について何でも聞いてください' },
-  { lang: 'Korean', text: '돈에 대해 무엇이든 물어보세요' },
-  { lang: 'Arabic', text: 'اسأل أي شيء عن أموالك' },
-  { lang: 'Portuguese', text: 'Pergunte qualquer coisa sobre seu dinheiro' },
-  { lang: 'Russian', text: 'Спросите что угодно о ваших деньгах' },
-  { lang: 'Italian', text: 'Chiedi qualsiasi cosa sui tuoi soldi' },
-  { lang: 'Dutch', text: 'Vraag alles over je geld' },
-  { lang: 'Hindi', text: 'अपने पैसे के बारे में कुछ भी पूछें' },
-  { lang: 'Indonesian', text: 'Tanyakan apa saja tentang uang Anda' },
-  { lang: 'Thai', text: 'ถามอะไรก็ได้เกี่ยวกับเงินของคุณ' },
-  { lang: 'Vietnamese', text: 'Hỏi bất cứ điều gì về tiền của bạn' },
-  { lang: 'Polish', text: 'Zapytaj o cokolwiek dotyczącego twoich pieniędzy' },
-  { lang: 'Swedish', text: 'Fråga vad som helst om dina pengar' },
-  { lang: 'Greek', text: 'Ρωτήστε οτιδήποτε για τα χρήματά σας' },
+  { lang: 'English', text: 'Ask anything' },
+  { lang: 'Turkish', text: 'Her şeyi sorun' },
+  { lang: 'Chinese', text: '询问任何问题' },
+  { lang: 'Spanish', text: 'Pregunta cualquier cosa' },
+  { lang: 'French', text: 'Posez toute question' },
+  { lang: 'German', text: 'Fragen Sie alles' },
+  { lang: 'Japanese', text: '何でも聞いてください' },
+  { lang: 'Korean', text: '무엇이든 물어보세요' },
+  { lang: 'Arabic', text: 'اسأل أي شيء' },
+  { lang: 'Portuguese', text: 'Pergunte qualquer coisa' },
+  { lang: 'Russian', text: 'Спросите что угодно' },
+  { lang: 'Italian', text: 'Chiedi qualsiasi cosa' },
+  { lang: 'Dutch', text: 'Vraag alles' },
+  { lang: 'Hindi', text: 'कुछ भी पूछें' },
+  { lang: 'Indonesian', text: 'Tanyakan apa saja' },
+  { lang: 'Thai', text: 'ถามอะไรก็ได้' },
+  { lang: 'Vietnamese', text: 'Hỏi bất cứ điều gì' },
+  { lang: 'Polish', text: 'Zapytaj o cokolwiek' },
+  { lang: 'Swedish', text: 'Fråga vad som helst' },
+  { lang: 'Greek', text: 'Ρωτήστε οτιδήποτε' },
 ];
 
 // Create pattern: English every 5 rotations
@@ -68,10 +69,10 @@ const createLanguagePattern = () => {
 
 const languagePattern = createLanguagePattern();
 
-export function AnimatedPlaceholder({ isVisible }: AnimatedPlaceholderProps) {
+export function AnimatedPlaceholder({ isVisible, hasMessages = false }: AnimatedPlaceholderProps) {
   const opacity = useSharedValue(1);
   const currentIndex = useSharedValue(0);
-  const [displayText, setDisplayText] = React.useState(languagePattern[0].text);
+  const [displayText, setDisplayText] = React.useState(hasMessages ? 'Reply...' : languagePattern[0].text);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -83,7 +84,14 @@ export function AnimatedPlaceholder({ isVisible }: AnimatedPlaceholderProps) {
     if (!isVisible) {
       // Reset to first item when hidden
       currentIndex.value = 0;
-      setDisplayText(languagePattern[0].text);
+      setDisplayText(hasMessages ? 'Reply...' : languagePattern[0].text);
+      opacity.value = 1;
+      return;
+    }
+
+    // If there are messages, show static "Reply..." instead of animating
+    if (hasMessages) {
+      setDisplayText('Reply...');
       opacity.value = 1;
       return;
     }
@@ -135,7 +143,7 @@ export function AnimatedPlaceholder({ isVisible }: AnimatedPlaceholderProps) {
       // Cleanup: reset animation
       opacity.value = 1;
     };
-  }, [isVisible]);
+  }, [isVisible, hasMessages]);
 
   if (!isVisible) {
     return null;
@@ -151,9 +159,9 @@ export function AnimatedPlaceholder({ isVisible }: AnimatedPlaceholderProps) {
 const styles = StyleSheet.create({
   placeholder: {
     position: 'absolute',
-    left: 52, // Account for plus button (32) + padding (12) + text input padding (8)
-    right: 100, // Account for right actions (mic + send buttons)
-    color: 'rgba(167, 190, 230, 0.8)',
+    left: 20, // Account for padding (12) + text input padding (8) - plus button now hidden
+    right: 60, // Account for right actions (send button only - mic hidden)
+    color: '#E0CBB9',
     fontFamily: 'Satoshi',
     fontSize: 16,
     lineHeight: 20,

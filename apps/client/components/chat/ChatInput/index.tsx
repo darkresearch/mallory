@@ -9,6 +9,7 @@ interface ChatInputProps {
   onAttachmentPress?: () => void;
   placeholder?: string;
   disabled?: boolean;
+  hasMessages?: boolean;
 }
 
 export function ChatInput({
@@ -16,7 +17,8 @@ export function ChatInput({
   onVoiceStart,
   onAttachmentPress,
   placeholder = "Ask me anything",
-  disabled = false
+  disabled = false,
+  hasMessages = false
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [height, setHeight] = useState(44); // Starting height as specified
@@ -86,8 +88,8 @@ export function ChatInput({
       {...(Platform.OS === 'web' && { className: 'chat-input-fixed' })}
     >
       <View style={[styles.inputBar, { height }]}>
-        {/* Plus button for attachments */}
-        <TouchableOpacity 
+        {/* Plus button for attachments - COMMENTED OUT */}
+        {/* <TouchableOpacity 
           style={styles.actionButton}
           onPress={onAttachmentPress}
           disabled={disabled}
@@ -97,10 +99,10 @@ export function ChatInput({
             size={20} 
             color="rgba(255, 255, 255, 0.6)" 
           />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         {/* Animated multilingual placeholder */}
-        <AnimatedPlaceholder isVisible={text.length === 0} />
+        <AnimatedPlaceholder isVisible={text.length === 0} hasMessages={hasMessages} />
 
         {/* Text input */}
         <TextInput
@@ -109,19 +111,19 @@ export function ChatInput({
             styles.textInput,
             { 
               height: Math.max(28, height - 16), // Account for container padding
-              color: text ? 'rgba(167, 190, 230, 1.0)' : 'rgba(167, 190, 230, 0.8)'
+              color: text ? '#FFF2E8' : '#E0CBB9'
             }
           ]}
           value={text}
           onChangeText={handleTextChange}
           onKeyPress={handleKeyPress}
-          placeholderTextColor="rgba(167, 190, 230, 0.8)"
+          placeholderTextColor="#E0CBB9"
           multiline={true}
           onContentSizeChange={handleContentSizeChange}
           editable={!disabled}
           textAlignVertical="top"
           scrollEnabled={false}
-          selectionColor="rgba(167, 190, 230, 0.3)"
+          selectionColor="rgba(0, 0, 0, 0.3)"
           underlineColorAndroid="transparent"
           blurOnSubmit={false}
           returnKeyType="default"
@@ -131,8 +133,8 @@ export function ChatInput({
 
         {/* Action buttons - Microphone and Send */}
         <View style={styles.rightActions}>
-          {/* Microphone button */}
-          <TouchableOpacity 
+          {/* Microphone button - COMMENTED OUT */}
+          {/* <TouchableOpacity 
             style={styles.actionButton}
             onPress={onVoiceStart}
             disabled={disabled}
@@ -142,7 +144,7 @@ export function ChatInput({
               size={20} 
               color="rgba(255, 255, 255, 0.6)" 
             />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           {/* Send button */}
           <TouchableOpacity 
@@ -172,7 +174,7 @@ const styles = StyleSheet.create({
     // Horizontal padding removed to match original layout
   },
   inputBar: {
-    backgroundColor: '#101A29',
+    backgroundColor: '#984400',
     borderRadius: 28,
     flexDirection: 'row',
     alignItems: 'center',
@@ -211,7 +213,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sendButton: {
-    backgroundColor: '#4E81D9',
+    backgroundColor: '#FBAA69',
     width: 28,
     height: 28,
     borderRadius: 14,

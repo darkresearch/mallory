@@ -71,8 +71,8 @@ export const STEP_ICONS = {
 
 // Status colors for different states
 export const STEP_COLORS = {
-  complete: '#DCE9FF', // 80% opacity applied in component
+  complete: '#C95900', // 80% opacity applied in component
   active: '#3b82f6',   // Blue
-  pending: '#DCE9FF',  // 40% opacity applied in component
+  pending: '#C95900',  // 40% opacity applied in component
   error: '#ef4444',    // Red
 } as const;
