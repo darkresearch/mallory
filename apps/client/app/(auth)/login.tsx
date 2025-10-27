@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, ActivityIndicator, Image, StyleSheet, Platform, useWindowDimensions, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import AuthCarousel from '@/components/auth/AuthCarousel';
 import { useState, useEffect } from 'react';
 import Animated, { 
   useSharedValue, 
@@ -53,6 +54,25 @@ export default function LoginScreen() {
     termsTranslateY.value = withDelay(300, withTiming(0, fadeInConfig));
   }, []);
 
+  // Fix background color for mobile Safari (and other web browsers)
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    // Save original background colors
+    const originalHtmlBg = document.documentElement.style.backgroundColor;
+    const originalBodyBg = document.body.style.backgroundColor;
+
+    // Set to dark orange to match login screen
+    document.documentElement.style.backgroundColor = '#E67B25';
+    document.body.style.backgroundColor = '#E67B25';
+
+    // Restore original colors on unmount (when navigating away)
+    return () => {
+      document.documentElement.style.backgroundColor = originalHtmlBg;
+      document.body.style.backgroundColor = originalBodyBg;
+    };
+  }, []);
+
   // Animated styles
   const textAnimatedStyle = useAnimatedStyle(() => ({
     opacity: textOpacity.value,
@@ -86,10 +106,6 @@ export default function LoginScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleComingSoon = (provider: string) => {
-    console.log(`${provider} login coming soon`);
   };
 
   const handleOpenLink = (url: string) => {
@@ -130,26 +146,13 @@ export default function LoginScreen() {
 
         {/* Bottom section - Button + Footer anchored to bottom on mobile */}
         <Animated.View style={[isMobile && styles.bottomSectionMobile, buttonsAnimatedStyle]}>
-          {/* Auth Button - Google */}
+          {/* Auth Carousel - Google */}
           <View style={[styles.authSection, isMobile && styles.authSectionMobile]}>
-            <TouchableOpacity
-              style={[styles.googleButton, isMobile && styles.googleButtonMobile]}
-              onPress={handleLogin}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color="#666" />
-              ) : (
-                <>
-                  <Image
-                    source={{ uri: 'https://www.google.com/favicon.ico' }}
-                    style={styles.googleIcon}
-                    resizeMode="contain"
-                  />
-                  <Text style={styles.googleButtonText}>Continue with Google</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <AuthCarousel
+              onGoogleLogin={handleLogin}
+              isLoading={isLoading}
+              isMobile={isMobile}
+            />
 
             {/* Error Message */}
             {error && (

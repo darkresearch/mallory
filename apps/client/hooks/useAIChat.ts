@@ -14,13 +14,18 @@ interface UseAIChatProps {
   userId: string; // Required for Supermemory user-scoped memory
   onImmediateReasoning?: (text: string) => void;
   onImmediateToolCall?: (toolName: string) => void;
+  walletBalance?: {
+    sol?: number;
+    usdc?: number;
+    totalUsd?: number;
+  };
 }
 
 /**
  * AI Chat hook with required context
  * Server needs conversationId and clientContext for proper functionality
  */
-export function useAIChat({ conversationId, userId, onImmediateReasoning, onImmediateToolCall }: UseAIChatProps) {
+export function useAIChat({ conversationId, userId, onImmediateReasoning, onImmediateToolCall, walletBalance }: UseAIChatProps) {
   const previousStatusRef = useRef<string>('ready');
   const [initialMessages, setInitialMessages] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -121,7 +126,8 @@ export function useAIChat({ conversationId, userId, onImmediateReasoning, onImme
         // userId removed - now comes from authenticated token on server
         clientContext: buildClientContext({
           viewportWidth: viewportWidth || undefined,
-          getDeviceInfo: () => getDeviceInfo(viewportWidth)
+          getDeviceInfo: () => getDeviceInfo(viewportWidth),
+          walletBalance: walletBalance
         })
       },
     }),

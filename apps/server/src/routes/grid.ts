@@ -165,6 +165,8 @@ router.post('/verify-otp', authenticateUser, async (req: AuthenticatedRequest, r
       .upsert({
         id: req.user!.id,
         solana_wallet_address: authResult.data.address,
+        account_type: 'email',
+        grid_account_status: 'active',
         updated_at: new Date().toISOString()
       });
     

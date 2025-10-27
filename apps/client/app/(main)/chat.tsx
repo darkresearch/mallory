@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWallet } from '@/contexts/WalletContext';
 import { ChatInput } from '../../components/chat/ChatInput';
 import { useSmartScroll } from '../../hooks/useSmartScroll';
 import { ChatHeader } from '../../components/chat/ChatHeader';
@@ -15,11 +16,26 @@ export default function ChatScreen() {
   const router = useRouter();
   const auth = useAuth(); // Must call hooks unconditionally
   const { user, isLoading } = auth;
+  const { walletData } = useWallet(); // Get wallet data for balance context
 
   // Load conversation
   const { currentConversationId, conversationParam } = useConversationLoader({ 
     userId: user?.id 
   });
+
+  // Extract SOL and USDC balances from wallet holdings
+  const walletBalance = React.useMemo(() => {
+    if (!walletData?.holdings) return undefined;
+    
+    const solHolding = walletData.holdings.find(h => h.tokenSymbol === 'SOL');
+    const usdcHolding = walletData.holdings.find(h => h.tokenSymbol === 'USDC');
+    
+    return {
+      sol: solHolding?.holdings,
+      usdc: usdcHolding?.holdings,
+      totalUsd: walletData.totalBalance
+    };
+  }, [walletData]);
 
   // Chat state management
   const {
@@ -34,7 +50,8 @@ export default function ChatScreen() {
     handleSendMessage,
   } = useChatState({ 
     currentConversationId,
-    userId: user?.id  // Pass userId for Supermemory memory management
+    userId: user?.id,  // Pass userId for Supermemory memory management
+    walletBalance: walletBalance  // Pass wallet balance for x402 threshold checking
   });
 
   // Smart scroll behavior for chat messages

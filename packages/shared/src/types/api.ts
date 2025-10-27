@@ -3,6 +3,8 @@
  * Shared between client and server
  */
 
+import type { ClientContext } from '../chat/clientContext';
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -12,12 +14,7 @@ export interface ChatRequest {
   messages: ChatMessage[];
   conversationId: string;
   userId: string;
-  clientContext?: {
-    timezone?: string;
-    currentTime?: string;
-    currentDate?: string;
-    device?: string;
-  };
+  clientContext?: ClientContext;
 }
 
 export interface HoldingsRequest {
