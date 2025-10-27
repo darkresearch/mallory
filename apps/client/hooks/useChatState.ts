@@ -5,9 +5,14 @@ import { supabase } from '../lib';
 interface UseChatStateProps {
   currentConversationId: string | null;
   userId: string | undefined; // Required for Supermemory
+  walletBalance?: {
+    sol?: number;
+    usdc?: number;
+    totalUsd?: number;
+  };
 }
 
-export function useChatState({ currentConversationId, userId }: UseChatStateProps) {
+export function useChatState({ currentConversationId, userId, walletBalance }: UseChatStateProps) {
   // State for immediate reasoning feedback
   const [showImmediateReasoning, setShowImmediateReasoning] = useState(false);
   const [liveReasoningText, setLiveReasoningText] = useState('');
@@ -18,6 +23,7 @@ export function useChatState({ currentConversationId, userId }: UseChatStateProp
   const aiChatResult = useAIChat({
     conversationId: currentConversationId || 'temp-loading',
     userId: userId || 'unknown', // Pass userId for Supermemory
+    walletBalance: walletBalance, // Pass wallet balance for x402 threshold checking
     onImmediateReasoning: (text) => {
       console.log('⚡ IMMEDIATE reasoning callback triggered');
       setShowImmediateReasoning(true);

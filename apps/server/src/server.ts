@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { chatRouter } from './routes/chat/index.js';
 import { holdingsRouter } from './routes/wallet/holdings.js';
 import gridRouter from './routes/grid.js';
+import authRouter from './routes/auth.js';
 
 // Load environment variables
 dotenv.config();
@@ -59,6 +60,7 @@ app.get('/health', (req, res) => {
 app.use('/api/chat', chatRouter);
 app.use('/api/wallet/holdings', holdingsRouter);
 app.use('/api/grid', gridRouter);
+app.use('/api/auth', authRouter);
 
 // 404 handler
 app.use((req, res) => {

@@ -54,7 +54,7 @@ export default function RootLayout() {
           <AuthGate>
             <ConversationsProvider>
               <WalletProvider>
-                <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' }}>
+                <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any }}>
                   <Stack
                     screenOptions={{
                       headerShown: false,

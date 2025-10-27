@@ -1,3 +1,3 @@
-export { buildFullSystemPrompt } from './base.js';
-export { buildComponentsPrompt } from './components.js';
+export { MALLORY_BASE_PROMPT, buildContextSection, buildVerbosityGuidelines } from './base.js';
+export { buildComponentsGuidelines } from './components.js';
 

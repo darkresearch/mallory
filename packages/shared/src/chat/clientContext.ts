@@ -7,6 +7,11 @@ export interface ClientContextOptions {
   viewportWidth?: number;
   getDeviceInfo?: () => string | Record<string, any> | undefined;
   getTimezone?: () => string;
+  walletBalance?: {
+    sol?: number;
+    usdc?: number;
+    totalUsd?: number;
+  };
 }
 
 export interface ClientContext {
@@ -15,6 +20,11 @@ export interface ClientContext {
   currentDate: string;
   viewportWidth?: number;
   device?: string | Record<string, any>;
+  walletBalance?: {
+    sol?: number;
+    usdc?: number;
+    totalUsd?: number;
+  };
 }
 
 /**
@@ -47,6 +57,10 @@ export function buildClientContext(options?: ClientContextOptions): ClientContex
 
   if (deviceInfo) {
     context.device = deviceInfo;
+  }
+
+  if (options?.walletBalance) {
+    context.walletBalance = options.walletBalance;
   }
 
   return context;
