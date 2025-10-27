@@ -4,6 +4,7 @@ import { useState } from 'react';
 interface EmailCollectionModalProps {
   visible: boolean;
   onSubmit: (email: string) => Promise<void>;
+  onSignOut?: () => void; // Sign out callback
   walletAddress?: string;
 }
 
@@ -11,26 +12,36 @@ interface EmailCollectionModalProps {
  * Email Collection Modal for Wallet Users
  * Asks wallet-authenticated users to provide email for Grid account creation
  */
-export default function EmailCollectionModal({ visible, onSubmit, walletAddress }: EmailCollectionModalProps) {
+export default function EmailCollectionModal({ visible, onSubmit, onSignOut, walletAddress }: EmailCollectionModalProps) {
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
+    console.log('📧 [Modal] handleSubmit called');
+    
     // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email)) {
+      console.log('📧 [Modal] Invalid email format');
       setError('Please enter a valid email address');
       return;
     }
 
     try {
+      console.log('📧 [Modal] Validation passed, calling onSubmit...');
       setIsSubmitting(true);
       setError(null);
+      
       await onSubmit(email);
-      // Don't close - parent will handle navigation
+      
+      console.log('📧 [Modal] ✅ onSubmit completed successfully');
+      // Modal will be closed by parent changing visible prop
     } catch (err: any) {
+      console.error('📧 [Modal] ❌ onSubmit failed:', err);
       setError(err.message || 'Failed to set up account');
+    } finally {
+      console.log('📧 [Modal] Setting isSubmitting to false');
       setIsSubmitting(false);
     }
   };
@@ -97,6 +108,17 @@ export default function EmailCollectionModal({ visible, onSubmit, walletAddress 
               <Text style={styles.buttonText}>Continue</Text>
             )}
           </TouchableOpacity>
+
+          {/* Sign Out Button */}
+          {onSignOut && (
+            <TouchableOpacity
+              style={styles.signOutButton}
+              onPress={onSignOut}
+              disabled={isSubmitting}
+            >
+              <Text style={styles.signOutText}>Sign out</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -194,6 +216,15 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Satoshi',
+  },
+  signOutButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  signOutText: {
+    color: '#F8CEAC',
+    fontSize: 14,
     fontFamily: 'Satoshi',
   },
 });
