@@ -26,23 +26,11 @@ export default function LoadingScreen() {
         });
         
         if (isAuthenticated) {
-          // Check if user has completed onboarding
-          if (user?.hasCompletedOnboarding) {
-            console.log('📱 [LoadingScreen] User has completed onboarding → main chat');
-            router.replace('/(main)/chat');
-          } else {
-            console.log('📱 [LoadingScreen] User needs onboarding → creating onboarding conversation');
-            // Create onboarding conversation and redirect to chat
-            try {
-              await createOnboardingConversation(user?.id);
-              console.log('✅ Onboarding conversation created, redirecting to chat');
-              router.replace('/(main)/chat');
-            } catch (error) {
-              console.error('❌ Error creating onboarding conversation:', error);
-              // Fallback to regular chat on error
-              router.replace('/(main)/chat');
-            }
-          }
+          // TEMPORARILY DISABLED: Skip onboarding conversation creation
+          // TODO: Re-enable after investigating infinite loop issue
+          // All users go directly to regular chat
+          console.log('📱 [LoadingScreen] User → main chat (onboarding disabled)');
+          router.replace('/(main)/chat');
         } else {
           router.replace('/(auth)/login');
         }
