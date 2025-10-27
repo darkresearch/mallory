@@ -32,9 +32,7 @@
     "test:x402:full": "bun test __tests__/e2e/x402-full-flow.test.ts",
     "test:x402:nansen": "bun test __tests__/e2e/x402-nansen-true-e2e.test.ts --timeout 300000",
     "test:x402:nansen:all": "bun test __tests__/e2e/x402-nansen-all-endpoints.test.ts --timeout 900000",
-    "test:e2e:all": "bun run test:validate:all && bun run test:x402 && bun run test:x402:nansen",
-    "maestro:test": "maestro test .maestro/flows/x402-payment-flow.yaml",
-    "maestro:studio": "maestro studio"
+    "test:e2e:all": "bun run test:validate:all && bun run test:x402 && bun run test:x402:nansen"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.16",

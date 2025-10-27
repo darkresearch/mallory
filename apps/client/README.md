@@ -96,15 +96,21 @@ Every dependency was selected for a reason:
 - Syntax highlighting, math equations, tables
 - **Why StreamdownRN?** Vercel's streamdown is web-only. We ported it to React Native with native optimizations
 
-### **x402 Payment Protocol (Backend Feature)**
-When connected to an x402-enabled backend, Mallory visualizes autonomous AI payments:
-- Backend implements [x402 protocol](https://x402.org) for micropayments
-- AI agents pay for premium APIs (Nansen, Dune, etc.) automatically
-- Client displays payment activity in Chain of Thought UI
+### **x402 Payment Protocol**
+Mallory implements the [x402 protocol](https://x402.org) for autonomous AI payments:
+- Server-side implementation for security (in `packages/shared/src/x402/`)
+- AI agents pay for premium APIs (Nansen) automatically
+- Ephemeral wallet pattern for single-use transactions
+- Auto-approval for micro-payments (< $0.01 USD)
 - Uses Grid wallet for sub-cent USDC payments on Solana
+- Client sends Grid session secrets when payment is needed
 - **Why x402?** Unlocks premium data sources without manual payment UX
 
-**Note:** x402 implementation lives on the backend for security. Mallory provides the UI to display tool usage and payment activity.
+**Implementation:**
+- `X402PaymentService`: Handles payment flow with ephemeral wallets
+- `EphemeralWalletManager`: Creates and manages single-use wallets
+- Faremeter integration: Uses `@faremeter/*` packages for protocol compliance
+- Nansen integration: 20+ blockchain analytics endpoints
 
 ## Features
 
@@ -174,16 +180,25 @@ Mallory ships with **production-ready implementations** of complex features:
 
 ### **Tool & Payment Visualization**
 - Chain of thought UI shows backend tool execution
-- Tool display names mapping ("searchWeb" → "Exa Search")
-- x402 payment activity display (when using compatible backend)
+- Tool display names mapping ("searchWeb" → "Exa Search", "nansenHistoricalBalances" → "Nansen Historical Balances")
+- x402 payment activity display (server-side execution)
+- Automatic Grid session secret passing for payments
 - No tool execution in client (security best practice)
+
+### **Nansen Integration**
+- 20+ blockchain analytics endpoints
+- Auto-payment via x402 protocol
+- Wallet analytics, smart money tracking, PnL analysis
+- Token screening and flow intelligence
+- All handled server-side with client providing Grid context
 
 ### **Developer Experience**
 - Full TypeScript coverage with strict mode
 - Feature module architecture (easy to add/remove features)
 - Bun for 3-10x faster installs
 - Hot reload that actually works
-- Component registry unit tests
+- Comprehensive E2E testing suite with Mailosaur integration
+- Test scripts for Grid, x402, and Nansen integration
 
 ## Architectural Principles
 
@@ -401,11 +416,64 @@ Supabase realtime subscriptions for:
 
 #### **Grid Wallet Integration**
 - Embedded Solana wallets (no seed phrases for users)
-- KYC verification flow (OTP-based)
-- Backend proxies all Grid API calls
-- Transaction signing via Grid API
+- Email-based OTP verification flow
+- Session secrets generated and stored client-side
+- Transaction signing via server (with secrets sent securely)
+- x402 payment integration for premium API access
+- Ephemeral wallet pattern for single-use transactions
 
-## Deployment
+## 🧪 Testing
+
+Mallory includes comprehensive E2E testing infrastructure:
+
+### Quick Start
+
+```bash
+# One-time setup (creates test accounts with Mailosaur)
+bun run test:setup
+
+# Fund the test wallet (address shown in setup output)
+# Send: 0.1 SOL + 5 USDC to mainnet address
+
+# Check wallet balance
+bun run test:balance
+
+# Run all validation tests
+bun run test:validate:all
+
+# Run E2E tests
+bun run test:e2e
+```
+
+### Test Suites
+
+```bash
+# Validation tests (no wallet funding needed)
+bun run test:validate:storage      # Storage system
+bun run test:validate:mailosaur    # Email/OTP integration
+bun run test:validate:auth         # Supabase auth
+bun run test:validate:grid         # Grid wallet
+bun run test:validate:conversation # Conversations
+bun run test:validate:chat         # Chat API
+
+# E2E tests (requires funded wallet)
+bun run test:grid                  # Grid payment flow
+bun run test:x402                  # x402 payments
+bun run test:x402:nansen           # Nansen integration
+bun run test:x402:nansen:all       # All Nansen endpoints
+```
+
+### Key Features
+
+- **Mailosaur Integration**: Automated OTP retrieval for Grid wallet
+- **Test Accounts**: Persistent test accounts (setup once, use forever)
+- **Real Transactions**: Tests use real Solana mainnet
+- **Cost Efficient**: ~$0.01-0.05 per test run
+- **Comprehensive**: Tests Grid, x402, Nansen, chat API, and more
+
+See [__tests__/README.md](./__tests__/README.md) for complete testing documentation.
+
+## 📱 Deployment
 
 ### Native Builds
 
@@ -462,57 +530,40 @@ eas build --platform all
 - Automatic code signing
 - Perfect for CI/CD
 
-## Backend Requirements
+## 🔧 Backend
 
-Mallory requires a backend API that implements the contract in [docs/API.md](docs/API.md). You have three options:
+Mallory includes a complete backend implementation in `apps/server/`:
 
-### Option 1: Dark Hosted Backend (Production-Ready)
+### Features
 
-Get instant access to a fully managed backend:
+- **AI Chat Streaming**: Claude with extended thinking (up to 15K tokens)
+- **AI Tools**: Exa search, Supermemory, 20+ Nansen endpoints
+- **x402 Payments**: Server-side implementation with ephemeral wallets
+- **Grid Integration**: Wallet balance lookups and transaction signing
+- **Authentication**: Supabase JWT validation
 
-**Included:**
-- ✅ Streaming chat API with Claude integration
-- ✅ AI tool implementations (web search, memory, data APIs)
-- ✅ x402 payment protocol (autonomous API payments)
-- ✅ Managed Supabase instance (PostgreSQL + Realtime)
-- ✅ Grid wallet API integration
-- ✅ Production monitoring and uptime SLA
-- ✅ Regular security updates
+### Running the Backend
 
-**Contact:** hello@darkresearch.ai
+```bash
+# From monorepo root
+bun run dev    # Runs both client + server
 
-**Best for:** Production apps, MVPs, teams that want to focus on product not infrastructure.
+# Or separately
+cd apps/server
+bun run dev    # http://localhost:3001
+```
 
-### Option 2: Self-Hosted Backend
+### Configuration
 
-Build your own backend using the provided API specification.
+See [apps/server/README.md](../server/README.md) for:
+- Environment variable setup
+- AI tool configuration
+- x402 payment setup
+- Deployment guides
 
-**Required:**
-- Supabase instance (cloud or self-hosted)
-- Streaming chat API endpoint (`/api/chat`)
-- Grid API integration (for wallet features)
-- Authentication middleware
-- **Optional:** AI tools (search, data APIs) and x402 payment protocol
+### API Documentation
 
-**Reference Implementation:** Contact Dark for access to the reference backend codebase.
-
-**Best for:** Teams with backend expertise, custom requirements, or self-hosting needs.
-
-### Option 3: Minimal Backend (Web Only)
-
-For web-only deployments without wallet features:
-
-**Required:**
-- Supabase instance
-- API route for streaming chat (`/api/chat`)
-- Authentication validation
-
-**Skip:**
-- Grid integration
-- Wallet endpoints
-- AI tools and x402 payment protocol
-
-**Best for:** Simple chat apps, prototypes, or web-only deployments.
+Complete API reference: [apps/server/docs/API.md](../server/docs/API.md)
 
 ## Licensing & Support
 

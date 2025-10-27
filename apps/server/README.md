@@ -4,11 +4,14 @@ Backend API for Mallory - provides AI chat streaming and wallet data enrichment.
 
 ## 📋 Features
 
-- 🤖 **AI Chat Streaming**: Claude integration with Server-Sent Events
-- 💰 **Wallet Holdings**: Fetch and enrich wallet balances with market data
+- 🤖 **AI Chat Streaming**: Claude integration with Server-Sent Events and extended thinking
+- 🔧 **AI Tools**: Web search (Exa), user memory (Supermemory), 20+ Nansen endpoints
+- 💰 **x402 Payments**: Server-side payment handling for premium data APIs
+- 💎 **Wallet Data**: Fetch and enrich wallet balances with market data
 - 🔒 **Authentication**: Supabase JWT validation
 - 🌐 **CORS**: Configurable cross-origin support
 - 📝 **TypeScript**: Full type safety
+- 🧪 **Production Ready**: Comprehensive testing infrastructure
 
 ## 🚀 Quick Start
 
@@ -54,14 +57,58 @@ The backend supports AI tool calling for enhanced chat capabilities:
 - **Optional**: Set `SUPERMEMORY_API_KEY` to enable
 - **Scoping**: Memories tagged with userId for privacy
 
+### Nansen Blockchain Analytics (20+ Endpoints)
+- **Purpose**: Premium blockchain analytics and on-chain data
+- **Payment**: Requires x402 micropayments (~$0.001 per request)
+- **Required**: `NANSEN_API_KEY` environment variable
+- **Categories**:
+  - **Wallet Analytics**: Historical balances, current balances, transactions
+  - **Smart Money**: Netflows, holdings, DEX trades, Jupiter DCAs
+  - **Token Analytics**: Screener, flows, holders, transfers, DEX trades
+  - **PnL**: Summary, detailed PnL, leaderboard
+  - **Relationships**: Counterparties, related wallets, labels
+  - **Intelligence**: Flow intelligence, who bought/sold analysis
+
 ### How It Works
 
 When a user sends a chat message, Claude can autonomously:
 1. Call `searchWeb` to find current information
 2. Call `addMemory` to remember user preferences
-3. Use tool results to provide better responses
+3. Call Nansen tools for blockchain analytics (auto-payment via x402)
+4. Use tool results to provide better responses
 
 Tool calls appear in the SSE stream for the client to display.
+
+## 💰 x402 Payment Protocol
+
+The server implements server-side x402 payment handling for premium data APIs:
+
+### How It Works
+1. Client sends Grid session secrets with chat request (optional)
+2. Server detects when a Nansen tool is called
+3. Server creates ephemeral wallet and funds it from Grid wallet
+4. Server executes x402 payment using Faremeter protocol
+5. Server fetches data and returns to AI
+6. AI incorporates data into response
+7. Server sweeps remaining funds back to Grid wallet
+
+### Configuration
+```bash
+# Required for x402
+NANSEN_API_KEY=your-nansen-key
+GRID_API_KEY=your-grid-key
+GRID_ENV=sandbox
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+
+# Auto-approval threshold
+# Payments < $0.01 are auto-approved
+```
+
+### Security
+- Ephemeral wallets are single-use
+- Grid session secrets only sent when needed for payment
+- All payments logged for audit trail
+- Configurable spending limits
 
 ### Environment Setup
 
@@ -87,12 +134,18 @@ ANTHROPIC_API_KEY=sk-ant-your-key
 EXA_API_KEY=your-exa-key
 SUPERMEMORY_API_KEY=your-supermemory-key
 
+# Nansen (optional - for blockchain analytics)
+NANSEN_API_KEY=your-nansen-key
+
 # Wallet Data
 BIRDEYE_API_KEY=your-birdeye-key
 
 # Grid API
 GRID_API_KEY=your-grid-api-key
 GRID_ENV=sandbox
+
+# Solana (for x402 payments)
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 
 # CORS (optional)
 ALLOWED_ORIGINS=http://localhost:8081,http://localhost:19006
@@ -251,10 +304,48 @@ Server logs include:
 - `💬` Chat requests
 - `💰` Wallet operations
 - `🔒` Auth events
+- `🤖` AI agent steps
+- `🔧` Tool calls
+- `💸` x402 payments
+- `🧠` Extended thinking
+
+### Debugging x402 Payments
+
+Enable verbose x402 logging:
+```bash
+NODE_ENV=development
+```
+
+Check logs for:
+- `🔄 [x402] Starting payment flow`
+- `💰 [x402] Funding ephemeral wallet`
+- `✅ [x402] Payment transaction built`
+- `🌐 [x402] Retrying request with payment header`
+
+### Testing Grid Integration
+
+Test Grid signing without the full app:
+```bash
+cd apps/server
+bun test-grid-signing.ts
+```
 
 ## 📚 API Documentation
 
 See [docs/API.md](./docs/API.md) for complete API reference.
+
+## 🧪 Testing
+
+The server can be tested using the comprehensive E2E test suite in the client:
+
+```bash
+# From apps/client
+bun run test:validate:chat    # Test chat API
+bun run test:x402             # Test x402 payments
+bun run test:x402:nansen      # Test Nansen integration
+```
+
+See [../client/__tests__/README.md](../client/__tests__/README.md) for full testing documentation.
 
 ## 🔧 Development
 
