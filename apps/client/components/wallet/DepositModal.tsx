@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Clipboard } from 'react-native';
+import { PressableButton } from '../ui/PressableButton';
 
 interface DepositModalProps {
   visible: boolean;
@@ -73,20 +74,22 @@ export default function DepositModal({
               <Text style={styles.addressText}>
                 {formatAddress(solanaAddress)}
               </Text>
-              <TouchableOpacity 
-                style={styles.copyButton}
+              <PressableButton 
+                variant="ghost"
+                size="small"
                 onPress={handleCopyAddress}
-                activeOpacity={0.7}
+                icon={
+                  <Ionicons 
+                    name={addressCopied ? "checkmark" : "copy-outline"} 
+                    size={16} 
+                    color={addressCopied ? "#00D4AA" : "#4A9EFF"} 
+                  />
+                }
+                style={styles.copyButton}
+                textStyle={addressCopied ? styles.copiedText : styles.copyButtonText}
               >
-                <Ionicons 
-                  name={addressCopied ? "checkmark" : "copy-outline"} 
-                  size={16} 
-                  color={addressCopied ? "#00D4AA" : "#4A9EFF"} 
-                />
-                <Text style={[styles.copyButtonText, addressCopied && styles.copiedText]}>
-                  {addressCopied ? "Copied!" : "Copy Address"}
-                </Text>
-              </TouchableOpacity>
+                {addressCopied ? "Copied!" : "Copy Address"}
+              </PressableButton>
             </View>
           </View>
 
@@ -97,12 +100,14 @@ export default function DepositModal({
             </Text>
           </View>
 
-          <TouchableOpacity 
-            style={styles.doneButton}
+          <PressableButton 
+            fullWidth
             onPress={onClose}
+            style={styles.doneButton}
+            textStyle={styles.doneButtonText}
           >
-            <Text style={styles.doneButtonText}>Done</Text>
-          </TouchableOpacity>
+            Done
+          </PressableButton>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -184,11 +189,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   copyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     backgroundColor: 'rgba(74, 158, 255, 0.1)',
     borderRadius: 8,
   },
@@ -217,9 +217,7 @@ const styles = StyleSheet.create({
   },
   doneButton: {
     backgroundColor: '#4A9EFF',
-    paddingVertical: 16,
     borderRadius: 12,
-    alignItems: 'center',
   },
   doneButtonText: {
     color: '#fff',

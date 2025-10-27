@@ -25,20 +25,27 @@ export const ChainOfThought: React.FC<ChainOfThoughtProps> = ({
     onOpenChange?.(newOpen);
   };
 
-  // Don't render if no steps
-  if (!data.steps || data.steps.length === 0) {
+  // Don't render if no steps and not streaming
+  // Allow rendering when streaming to show immediate "Thinking" feedback
+  if ((!data.steps || data.steps.length === 0) && !isStreaming) {
     return null;
   }
+
+  // Calculate total duration from steps if not provided
+  const totalDuration = data.totalDuration || 
+    (data.steps?.reduce((sum, step) => sum + (step.duration || 0), 0) || 0);
 
   return (
     <View style={[styles.container, style]}>
       <ChainOfThoughtHeader
         isOpen={isOpen}
         onPress={handleToggle}
+        isStreaming={isStreaming}
+        totalDuration={totalDuration}
       />
       
       <ChainOfThoughtContent isOpen={isOpen}>
-        {data.steps.map((step, index) => (
+        {data.steps?.map((step, index) => (
           <ChainOfThoughtStep
             key={step.id}
             step={step}
