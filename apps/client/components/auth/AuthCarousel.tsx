@@ -9,7 +9,6 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { getAllWallets } from '@/features/auth/services/solana-wallet';
 
 interface AuthOption {
   id: string;
@@ -21,17 +20,15 @@ interface AuthOption {
 
 interface AuthCarouselProps {
   onGoogleLogin: () => Promise<void>;
-  onWalletLogin: (walletName: string) => Promise<void>;
   isLoading: boolean;
   isMobile?: boolean;
 }
 
 /**
  * Auth Carousel
- * Elegant carousel of auth options (Google + detected wallets)
- * Auto-rotates through options or user can tap dots to switch
+ * Simplified to only show Google login
  */
-export default function AuthCarousel({ onGoogleLogin, onWalletLogin, isLoading, isMobile }: AuthCarouselProps) {
+export default function AuthCarousel({ onGoogleLogin, isLoading, isMobile }: AuthCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [displayIndex, setDisplayIndex] = useState(0); // What's actually shown during animation
   const [options, setOptions] = useState<AuthOption[]>([]);
@@ -40,32 +37,17 @@ export default function AuthCarousel({ onGoogleLogin, onWalletLogin, isLoading, 
   const arrowOpacity = useSharedValue(0);
   const autoRotateRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Build auth options list
+  // Build auth options list (only Google now)
   useEffect(() => {
     const authOptions: AuthOption[] = [
       {
         id: 'google',
         name: 'Google',
         icon: 'https://www.google.com/favicon.ico',
-        color: '#FFFFFF', // White background for all options
+        color: '#FFFFFF',
         onPress: onGoogleLogin,
       },
     ];
-
-    // Add detected wallets (web only)
-    // COMMENTED OUT: Wallet auth temporarily disabled
-    // if (Platform.OS === 'web') {
-    //   const wallets = getAllWallets();
-    //   wallets.forEach((wallet) => {
-    //     authOptions.push({
-    //       id: wallet.name.toLowerCase(),
-    //       name: wallet.name,
-    //       icon: wallet.icon,
-    //       color: '#FFFFFF', // White background for all options
-    //       onPress: async () => onWalletLogin(wallet.name),
-    //     });
-    //   });
-    // }
 
     setOptions(authOptions);
   }, []);
