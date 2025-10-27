@@ -28,6 +28,41 @@ export default function OtpVerificationModal({
   const [otp, setOtp] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState('');
+  const [verificationSuccess, setVerificationSuccess] = useState(false);
+
+  const handleResendOtp = async () => {
+    setIsVerifying(true);
+    setError('');
+    setOtp('');
+    
+    try {
+      // If we have gridUser, it means account already exists
+      if (gridUser) {
+        const isReauth = gridUser.isReauth === true;
+        console.log('🔄 Resending OTP:', isReauth ? 'Re-auth flow' : 'New account flow');
+        
+        // For re-authentication, trigger a new login
+        if (isReauth) {
+          await gridClientService.reauthenticateAccount(userEmail);
+        } else {
+          // For new accounts, create account again (which sends new OTP)
+          await gridClientService.createAccount(userEmail);
+        }
+      } else {
+        // No gridUser, create account which sends OTP
+        console.log('🔄 Sending initial OTP for:', userEmail);
+        await gridClientService.createAccount(userEmail);
+      }
+      
+      console.log('✅ OTP resent successfully');
+      setError(''); // Clear any previous errors
+    } catch (error) {
+      console.error('❌ Failed to resend OTP:', error);
+      setError(error instanceof Error ? error.message : 'Failed to resend code. Please try again.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const handleVerify = async () => {
     if (otp.length !== 6) {
@@ -65,19 +100,43 @@ export default function OtpVerificationModal({
       
       if (authResult.success && authResult.data) {
         console.log('✅ Grid account verified:', authResult.data.address);
-        console.log('🔐 [OTP Verification] Calling onClose(true)...');
+        console.log('🔐 [OTP Verification] Setting verification success...');
+        setVerificationSuccess(true);
         // Signal success - AuthContext will handle sync to server
         onClose(true);
         console.log('🔐 [OTP Verification] onClose(true) called');
       } else {
         console.log('❌ [OTP Verification] Verification failed - showing error');
-        setError('Verification failed. Please check your code and try again.');
+        setError('Verification failed. Invalid email and code combination.');
       }
     } catch (error) {
       console.error('❌ OTP verification error:', error);
       setError(error instanceof Error ? error.message : 'An error occurred. Please try again.');
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleButtonPress = () => {
+    if (verificationSuccess) {
+      // Manual close when user clicks "Done"
+      onClose(true);
+    } else if (error) {
+      // Resend OTP if there was an error
+      handleResendOtp();
+    } else {
+      // Normal verification flow
+      handleVerify();
+    }
+  };
+
+  const getButtonText = () => {
+    if (verificationSuccess) {
+      return 'Done';
+    } else if (error) {
+      return 'Resend Code';
+    } else {
+      return 'Continue';
     }
   };
 
@@ -122,13 +181,13 @@ export default function OtpVerificationModal({
 
           <TouchableOpacity
             style={[styles.button, isVerifying && styles.buttonDisabled]}
-            onPress={handleVerify}
+            onPress={handleButtonPress}
             disabled={isVerifying}
           >
             {isVerifying ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Verify</Text>
+              <Text style={styles.buttonText}>{getButtonText()}</Text>
             )}
           </TouchableOpacity>
         </View>
