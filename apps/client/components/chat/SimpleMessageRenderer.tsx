@@ -22,6 +22,8 @@ interface SimpleMessageRendererProps {
   persistentReasoningText?: string; // The reasoning text shown in persistent block
   deviceInfo: DeviceInfo; // Device info for adaptive behavior
   onRegenerate?: () => void;
+  thinkingText?: string; // Custom thinking text (e.g. "Mallory wants to say hello")
+  isOnboardingMessage?: boolean; // True if this is the onboarding greeting message
   onComponentError?: (error: any) => void;
 }
 
@@ -37,8 +39,28 @@ export const SimpleMessageRenderer: React.FC<SimpleMessageRendererProps> = ({
   persistentReasoningText = '',
   deviceInfo,
   onRegenerate,
+  thinkingText,
+  isOnboardingMessage = false,
   onComponentError,
 }) => {
+  // Create style overrides for onboarding message
+  const styleOverrides = isOnboardingMessage ? {
+    heading1: {
+      fontFamily: 'Belwe-Medium',
+      fontSize: 32,
+      fontWeight: 'bold' as const,
+      color: '#C95900',
+      marginTop: 0,
+      marginBottom: 12,
+    },
+    heading2: {
+      fontFamily: 'Belwe-Light',
+      fontSize: 32,
+      color: '#E67B25',
+      marginTop: 0,
+      marginBottom: 12,
+    }
+  } : undefined;
   // Check if this is the persistent reasoning block
   const isPersistentReasoningBlock = message.id === 'persistent-reasoning';
   console.log('🎭 SimpleMessageRenderer RECEIVED:', {
@@ -120,14 +142,17 @@ export const SimpleMessageRenderer: React.FC<SimpleMessageRendererProps> = ({
           // For live reasoning block, pass the live text; for others, pass empty string to avoid duplication
           const isLiveBlock = block.id === 'live-reasoning-block';
           const reasoningText = isLiveBlock ? liveReasoningText : '';
-          return renderChainOfThoughtBlock(key, block, blockIndex, isStreaming && isLiveBlock, reasoningText, deviceInfo);
+          return renderChainOfThoughtBlock(key, block, blockIndex, isStreaming && isLiveBlock, reasoningText, deviceInfo, thinkingText);
         }
 
         // Render text response blocks
         if (block.type === 'text') {
           return (
             <View key={key} style={{ width: '100%', maxWidth: '100%', flexShrink: 1, minWidth: 0, alignSelf: 'stretch' }}>
-              <AssistantResponse onComponentError={onComponentError}>
+              <AssistantResponse 
+                styleOverrides={styleOverrides}
+                onComponentError={onComponentError}
+              >
                 {block.text}
               </AssistantResponse>
             </View>
@@ -239,7 +264,8 @@ function renderChainOfThoughtBlock(
   blockIndex: number, 
   isStreaming: boolean, 
   liveReasoningText: string = '',
-  deviceInfo: DeviceInfo
+  deviceInfo: DeviceInfo,
+  thinkingText?: string
 ) {
   const steps: any[] = [];
   let searchResults: any[] = [];
@@ -341,6 +367,7 @@ function renderChainOfThoughtBlock(
         }}
         isStreaming={isStreaming || steps.some(s => s.status === 'active')}
         defaultOpen={defaultOpen}
+        thinkingText={thinkingText}
       />
       
       {/* Show search results if we have them */}

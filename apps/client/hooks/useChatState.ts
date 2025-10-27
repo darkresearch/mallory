@@ -20,6 +20,7 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
   const [thinkingDuration, setThinkingDuration] = useState<number>(0);
   const [isThinking, setIsThinking] = useState(false); // Simple flag: true from send to done
   const [hasStreamStarted, setHasStreamStarted] = useState(false); // True when first stream data arrives
+  const [isOnboardingGreeting, setIsOnboardingGreeting] = useState(false); // Track if showing onboarding greeting
   const thinkingStartTime = useRef<number | null>(null);
   const hasTriggeredProactiveMessage = useRef(false);
 
@@ -126,6 +127,7 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
       setHasStreamStarted(false); // Reset for next message
       setShowImmediateReasoning(false);
       setHasInitialReasoning(false); // Reset for next message
+      setIsOnboardingGreeting(false); // Clear onboarding greeting flag
     }
   }, [aiStatus]);
 
@@ -190,6 +192,16 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
         console.log('🤖 [Proactive] Detected onboarding conversation - triggering greeting');
         hasTriggeredProactiveMessage.current = true;
         
+        // Show placeholder immediately (just like when user sends a message)
+        setLiveReasoningText('');
+        setThinkingDuration(0);
+        setHasStreamStarted(false);
+        thinkingStartTime.current = Date.now();
+        setIsThinking(true);
+        setShowImmediateReasoning(true);
+        setHasInitialReasoning(true); // Create placeholder immediately
+        setIsOnboardingGreeting(true); // Track that this is onboarding greeting
+        
         // Send system message to trigger Scout's streaming greeting
         sendAIMessage({
           role: 'system',
@@ -227,6 +239,7 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
     thinkingDuration,
     isThinking, // Simple flag for immediate UI
     hasStreamStarted, // True when first stream data arrives
+    isOnboardingGreeting, // True when showing onboarding greeting message
     
     // AI Chat results
     aiMessages,

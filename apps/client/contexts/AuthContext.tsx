@@ -280,11 +280,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearAuthState = async () => {
     console.log('🚪 [clearAuthState] Clearing all auth state');
     
-    // Clear our tokens
+    // STEP 1: Close modals FIRST (before any state changes)
+    // This prevents modals from blocking navigation
+    setShowGridOtpModal(false);
+    setGridUserForOtp(null);
+    console.log('🚪 [clearAuthState] Modals closed');
+    
+    // STEP 2: Clear our tokens
     await secureStorage.removeItem(AUTH_TOKEN_KEY);
     await secureStorage.removeItem(REFRESH_TOKEN_KEY);
     
-    // CRITICAL: Clear Supabase's persisted session from AsyncStorage
+    // STEP 3: Clear Supabase's persisted session from AsyncStorage
     // This prevents session re-hydration on hard refresh
     try {
       const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
@@ -302,17 +308,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🚪 [clearAuthState] Could not clear Supabase storage:', error);
     }
     
-    // Clear state
-    setUser(null);
-    setNeedsReauth(false);
-    hasCheckedReauth.current = false;
-    
-    // Clear modal states
-    setShowGridOtpModal(false);
-    setGridUserForOtp(null);
-    console.log('🚪 [clearAuthState] Modals cleared');
-    
-    // Clear wallet cache
+    // STEP 4: Clear wallet cache
     try {
       const { walletDataService } = await import('../features/wallet');
       walletDataService.clearCache();
@@ -321,7 +317,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🚪 [clearAuthState] Could not clear wallet cache:', error);
     }
     
-    // Redirect to login
+    // STEP 5: Clear auth state
+    setUser(null);
+    setNeedsReauth(false);
+    hasCheckedReauth.current = false;
+    console.log('🚪 [clearAuthState] Auth state cleared');
+    
+    // STEP 6: Clear navigation stack and redirect to login
+    // dismissAll() ensures we clear any stacked screens that might interfere
+    try {
+      if (router.canDismiss()) {
+        router.dismissAll();
+        console.log('🚪 [clearAuthState] Navigation stack dismissed');
+      }
+    } catch (error) {
+      console.log('🚪 [clearAuthState] Could not dismiss navigation stack:', error);
+    }
+    
+    // Final redirect to login
     router.replace('/(auth)/login');
     console.log('🚪 [clearAuthState] Redirected to login');
   };

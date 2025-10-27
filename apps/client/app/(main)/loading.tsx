@@ -3,25 +3,46 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { createOnboardingConversation } from '@/features/chat';
 
 export default function LoadingScreen() {
   const router = useRouter();
-  const { isLoading, isAuthenticated, isCheckingReauth } = useAuth();
+  const { isLoading, isAuthenticated, isCheckingReauth, user } = useAuth();
 
   console.log('📱 [LoadingScreen] State:', { 
     isLoading, 
     isAuthenticated, 
-    isCheckingReauth
+    isCheckingReauth,
+    hasCompletedOnboarding: user?.hasCompletedOnboarding
   });
 
   useEffect(() => {
     const checkAuthAndRedirect = async () => {
       // Once AuthProvider finishes loading and re-auth checking, redirect based on auth state
       if (!isLoading && !isCheckingReauth) {
-        console.log('📱 [LoadingScreen] Redirecting...', { isAuthenticated });
+        console.log('📱 [LoadingScreen] Redirecting...', { 
+          isAuthenticated,
+          hasCompletedOnboarding: user?.hasCompletedOnboarding
+        });
         
         if (isAuthenticated) {
-          router.replace('/(main)/chat');
+          // Check if user has completed onboarding
+          if (user?.hasCompletedOnboarding) {
+            console.log('📱 [LoadingScreen] User has completed onboarding → main chat');
+            router.replace('/(main)/chat');
+          } else {
+            console.log('📱 [LoadingScreen] User needs onboarding → creating onboarding conversation');
+            // Create onboarding conversation and redirect to chat
+            try {
+              await createOnboardingConversation(user?.id);
+              console.log('✅ Onboarding conversation created, redirecting to chat');
+              router.replace('/(main)/chat');
+            } catch (error) {
+              console.error('❌ Error creating onboarding conversation:', error);
+              // Fallback to regular chat on error
+              router.replace('/(main)/chat');
+            }
+          }
         } else {
           router.replace('/(auth)/login');
         }
@@ -29,7 +50,7 @@ export default function LoadingScreen() {
     };
 
     checkAuthAndRedirect();
-  }, [isLoading, isAuthenticated, isCheckingReauth]);
+  }, [isLoading, isAuthenticated, isCheckingReauth, user?.hasCompletedOnboarding]);
 
   return (
     <SafeAreaView style={styles.container}>
