@@ -17,9 +17,6 @@ export interface WalletItemProps {
   // Price data
   tokenPrice: number; // Current price per token in USD
   
-  // Actions
-  onInstabuyPress: () => void; // Callback for Instabuy button
-  
   // Optional styling
   style?: any;
 }
@@ -32,7 +29,6 @@ export function WalletItem({
   holdings,
   holdingsValue,
   tokenPrice,
-  onInstabuyPress,
   style
 }: WalletItemProps) {
   
@@ -130,7 +126,7 @@ export function WalletItem({
         </View>
       </View>
 
-      {/* Right Side: Values + Instabuy Button */}
+      {/* Right Side: Values */}
       <View style={styles.rightSection}>
         {/* Holdings USD Value */}
         <Text style={styles.holdingsValue}>
@@ -147,15 +143,6 @@ export function WalletItem({
           </Text>
         </View>
       </View>
-
-      {/* Instabuy Button */}
-      <TouchableOpacity 
-        style={styles.instabuyButton}
-        onPress={onInstabuyPress}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="flash" size={16} color="#000" />
-      </TouchableOpacity>
     </View>
   );
 }
@@ -166,7 +153,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: 348,
     height: 69,
-    backgroundColor: 'rgba(21, 24, 32, 0.6)',
+    backgroundColor: '#F8CEAC',
     borderRadius: 8.5,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -213,7 +200,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi-Bold',
     fontSize: 16,
     lineHeight: 19,
-    color: '#FFFFFF',
+    color: '#000000',
     marginBottom: 2,
   },
   
@@ -222,20 +209,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '400',
     lineHeight: 14,
-    color: '#6A7580',
+    color: '#C95900',
   },
   
   // Right section: Values
   rightSection: {
     alignItems: 'flex-end',
-    marginRight: 12,
   },
   
   holdingsValue: {
     fontFamily: 'Satoshi-Bold',
     fontSize: 16,
     lineHeight: 19,
-    color: '#FFFFFF',
+    color: '#000000',
     textAlign: 'right',
     marginBottom: 2,
   },
@@ -248,7 +234,7 @@ const styles = StyleSheet.create({
   },
   
   priceLabelPill: {
-    backgroundColor: 'rgba(171, 171, 171, 0.2)', // 20% opacity background
+    backgroundColor: '#E67B25',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -256,9 +242,9 @@ const styles = StyleSheet.create({
   
   priceLabel: {
     fontFamily: 'Satoshi-Medium',
-    fontSize: 10, // Smaller font size as per Figma
+    fontSize: 10,
     lineHeight: 12,
-    color: '#ABABAB', // Exact color from Figma
+    color: '#FFEFE3',
   },
   
   priceValue: {
@@ -266,15 +252,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 14,
     // Color is set dynamically based on price change
-  },
-  
-  // Instabuy button
-  instabuyButton: {
-    width: 32,
-    height: 32,
-    backgroundColor: '#FFB800',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });

@@ -108,14 +108,22 @@ export default function LoginScreen() {
       ]}
     >
       <View style={[styles.content, isMobile && styles.contentMobile]}>
-        {/* Hero container - Centers text on mobile */}
+        {/* Hero container - Centers lockup on mobile */}
         <View style={isMobile && styles.heroContainerMobile}>
           {/* Hero Section */}
           <View style={[styles.hero, isMobile && styles.heroMobile]}>
-            <Animated.View style={textAnimatedStyle}>
-              <Text style={[styles.heroText, isMobile && styles.heroTextMobile]}>
-                Mallory is an opinionated way to build an on-chain AI app.
-              </Text>
+            <Animated.View style={[textAnimatedStyle, isMobile && { width: '100%' }]}>
+              <Image 
+                source={require('../../assets/lockup.png')}
+                style={[styles.lockupImage, isMobile && styles.lockupImageMobile]}
+                resizeMode="contain"
+              />
+              {/* Tagline - Only show on mobile, under lockup */}
+              {isMobile && (
+                <Text style={[styles.tagline, styles.taglineMobile]}>
+                  Experience the magic of x402.
+                </Text>
+              )}
             </Animated.View>
           </View>
         </View>
@@ -171,23 +179,31 @@ export default function LoginScreen() {
         </Animated.View>
       </View>
 
-      {/* Terms & Footer - Fixed at bottom on web */}
-      {!isMobile && (config.termsUrl || config.privacyUrl) && (
+      {/* Tagline & Footer - Fixed at bottom on web */}
+      {!isMobile && (
         <Animated.View style={[styles.footer, styles.footerWeb, termsAnimatedStyle]}>
-          <Text style={styles.disclaimer}>
-            By continuing, you agree to our{' '}
-            {config.termsUrl && (
-              <Text style={styles.termsLink} onPress={() => handleOpenLink(config.termsUrl)}>
-              Terms
-              </Text>
-            )}
-            {config.termsUrl && config.privacyUrl && ' and '}
-            {config.privacyUrl && (
-              <Text style={styles.termsLink} onPress={() => handleOpenLink(config.privacyUrl)}>
-              Privacy Policy
-            </Text>
-            )}
+          {/* Tagline on web */}
+          <Text style={[styles.tagline, styles.taglineWeb]}>
+            Experience the magic of x402.
           </Text>
+          
+          {/* Terms - only if URLs are configured */}
+          {(config.termsUrl || config.privacyUrl) && (
+            <Text style={styles.disclaimer}>
+              By continuing, you agree to our{' '}
+              {config.termsUrl && (
+                <Text style={styles.termsLink} onPress={() => handleOpenLink(config.termsUrl)}>
+                Terms
+                </Text>
+              )}
+              {config.termsUrl && config.privacyUrl && ' and '}
+              {config.privacyUrl && (
+                <Text style={styles.termsLink} onPress={() => handleOpenLink(config.privacyUrl)}>
+                Privacy Policy
+              </Text>
+              )}
+            </Text>
+          )}
         </Animated.View>
       )}
     </View>
@@ -197,7 +213,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#05080C',
+    backgroundColor: '#E67B25',
   },
   content: {
     flex: 1,
@@ -219,24 +235,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   
-  // Hero section - Text with two-stage transition
+  // Hero section - Lockup with two-stage transition
   hero: {
-    marginBottom: 32,
+    marginBottom: 26, // 20% less spacing (80% of 32 ≈ 26)
     alignItems: 'center',
   },
   heroMobile: {
     alignItems: 'flex-start', // Left-align on mobile
     marginBottom: 0, // Remove margin on mobile since container handles spacing
   },
-  heroText: {
-    fontSize: 32,
-    color: '#EDEDED',
-    lineHeight: 40,
+  lockupImage: {
+    width: 205,
+    height: 73,
+    alignSelf: 'center',
+  },
+  lockupImageMobile: {
+    alignSelf: 'flex-start',
+    marginLeft: -5, // Compensate for internal padding in lockup image
+  },
+  tagline: {
+    fontSize: 20,
+    color: '#F8CEAC',
     fontFamily: 'Satoshi',
     textAlign: 'center',
+    marginTop: 24,
   },
-  heroTextMobile: {
-    textAlign: 'left', // Left-align text on mobile
+  taglineMobile: {
+    textAlign: 'left',
+    marginTop: 11, // 30% less spacing (70% of 16 ≈ 11)
+  },
+  taglineWeb: {
+    fontWeight: '700',
   },
   
   // Bottom section - Button + Footer (mobile only)
@@ -263,7 +292,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 28,
+    width: '23%',
     minWidth: 250,
+    maxWidth: 345,
   },
   googleButtonMobile: {
     borderRadius: 28, // Same pill shape on mobile
@@ -307,7 +338,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#05080C',
+    backgroundColor: '#E67B25',
     paddingBottom: 32,
   },
   termsLink: {

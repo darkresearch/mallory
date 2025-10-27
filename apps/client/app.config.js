@@ -11,17 +11,17 @@ export default {
     slug: "mallory",
     version: "0.1.0",
     orientation: "portrait",
-    icon: "./assets/icon.png",
-    userInterfaceStyle: "dark",
+    icon: "./assets/mallory-logo.png",
+    userInterfaceStyle: "light",
     scheme: "mallory",
     newArchEnabled: true,
     experiments: {
       typedRoutes: true
     },
     splash: {
-      image: "./assets/splash-icon.png",
+      image: "./assets/mallory-logo.png",
       resizeMode: "contain",
-      backgroundColor: "#05080C"
+      backgroundColor: "#FFEFE3"
     },
     ios: {
       supportsTablet: true,
@@ -42,8 +42,8 @@ export default {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: "./assets/adaptive-icon.png",
-        backgroundColor: "#05080C"
+        foregroundImage: "./assets/mallory-logo.png",
+        backgroundColor: "#FFEFE3"
       },
       package: "com.yourcompany.mallory",
       permissions: [
@@ -67,7 +67,7 @@ export default {
       ]
     },
     web: {
-      favicon: "./assets/favicon.png",
+      favicon: "./assets/mallory-favicon.png",
       bundler: "metro"
     },
     assetBundlePatterns: [

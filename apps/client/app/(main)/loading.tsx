@@ -34,7 +34,7 @@ export default function LoadingScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <ActivityIndicator size="large" color="#4A9EFF" />
+        <ActivityIndicator size="large" color="#E67B25" />
         <Text style={styles.text}>
           {isCheckingReauth ? 'Verifying wallet access...' : 'Loading...'}
         </Text>
@@ -46,7 +46,7 @@ export default function LoadingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#05080C', // Dark theme background color from memory
+    backgroundColor: '#FFEFE3', // Light theme background color
   },
   content: {
     flex: 1,
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   text: {
-    color: '#DCE9FF', // Text/foreground color from memory
+    color: '#000000', // Light theme text color
     fontSize: 16,
     marginTop: 16,
     fontFamily: 'Satoshi',
