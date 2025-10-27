@@ -37,9 +37,40 @@ app.use(cors({
   credentials: true
 }));
 
-// Body parsing middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+/**
+ * TODO: LONG-TERM ARCHITECTURE IMPROVEMENT
+ * 
+ * Current State:
+ * - Client loads full conversation history from Supabase
+ * - Client sends entire history + new message to server on every request
+ * - As conversations grow, request payload grows (currently mitigated with 10MB limit)
+ * 
+ * Better Architecture:
+ * 1. Client sends ONLY: new user message + conversationId
+ * 2. Server loads conversation history from Supabase using conversationId
+ * 3. Server appends new user message to loaded history
+ * 4. Server applies existing smart context strategy (Supermemory/windowing)
+ * 5. Server sends to Claude
+ * 
+ * Benefits:
+ * - Eliminates body size concerns (new messages are ~1KB vs entire history ~1-10MB)
+ * - Reduces network payload by ~99% for long conversations
+ * - Centralizes conversation management on server (single source of truth)
+ * - More scalable and efficient architecture
+ * - Existing smart context windowing still works identically
+ * 
+ * Implementation Steps:
+ * 1. Add Supabase client to server (already available via auth middleware)
+ * 2. Modify /api/chat route to load history if not provided in request
+ * 3. Update client to send only new message (keep history loading as fallback)
+ * 4. Test thoroughly to ensure message ordering and metadata preservation
+ * 5. Remove client-side history loading once server-side loading is stable
+ */
+
+// Body parsing middleware - increased limit for large conversation histories
+// TODO: Long-term fix - refactor to server-side history loading
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging middleware
 app.use((req, res, next) => {
