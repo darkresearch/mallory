@@ -50,7 +50,7 @@ export default function AuthCarousel({ onGoogleLogin, isLoading, isMobile }: Aut
     ];
 
     setOptions(authOptions);
-  }, []);
+  }, [onGoogleLogin]); // Include onGoogleLogin to avoid stale closure
 
   // Auto-rotate every 4 seconds
   useEffect(() => {
