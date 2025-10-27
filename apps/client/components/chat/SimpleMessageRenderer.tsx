@@ -106,7 +106,7 @@ export const SimpleMessageRenderer: React.FC<SimpleMessageRendererProps> = ({
   })));
 
   return (
-    <View>
+    <View style={{ width: '100%', maxWidth: '100%', alignSelf: 'stretch' }}>
       {groupedBlocks.map((block: any, blockIndex: number) => {
         const key = `${message.id}-block-${blockIndex}`;
         
@@ -126,7 +126,7 @@ export const SimpleMessageRenderer: React.FC<SimpleMessageRendererProps> = ({
         // Render text response blocks
         if (block.type === 'text') {
           return (
-            <View key={key} style={{ width: '100%' }}>
+            <View key={key} style={{ width: '100%', maxWidth: '100%', flexShrink: 1, minWidth: 0, alignSelf: 'stretch' }}>
               <AssistantResponse onComponentError={onComponentError}>
                 {block.text}
               </AssistantResponse>
