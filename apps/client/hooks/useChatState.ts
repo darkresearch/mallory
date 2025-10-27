@@ -161,6 +161,10 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
   // Trigger proactive message for empty onboarding conversations
   useEffect(() => {
     const triggerProactiveMessage = async () => {
+      // TEMPORARILY DISABLED: Proactive welcome message causing infinite loop
+      // TODO: Re-enable after investigating the issue
+      return;
+      
       // Only run once per conversation, after history is loaded, when ready
       if (
         isLoadingHistory || 
