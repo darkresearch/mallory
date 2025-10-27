@@ -20,7 +20,7 @@ export function createTestX402Service(): X402PaymentService {
     solanaCluster: 'mainnet-beta',
     usdcMint: USDC_MINT,
     ephemeralFundingUsdc: '0.01',
-    ephemeralFundingSol: '0.002'
+    ephemeralFundingSol: '0.001'
   });
 }
 

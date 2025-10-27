@@ -20,7 +20,7 @@ export const X402_CONSTANTS = {
   
   // Ephemeral wallet funding (same as Researcher)
   EPHEMERAL_FUNDING_USDC: '0.01', // Enough for ~10 API calls
-  EPHEMERAL_FUNDING_SOL: '0.01',  // For transaction fees
+  EPHEMERAL_FUNDING_SOL: '0.001',  // For transaction fees
   
   // Nansen API (runtime from env)
   getNansenApiBase: () => (typeof process !== 'undefined' && process.env?.NANSEN_API_URL) || 'https://nansen.api.corbits.dev',
