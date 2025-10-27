@@ -1,6 +1,6 @@
 import { searchWeb } from './searchWeb.js';
 import { createSupermemoryTools } from './supermemory.js';
-import { createNansenTool } from './nansen.js';
+import { createNansenTool, createNansenSmartMoneyNetflowsTool, createNansenSmartMoneyHoldingsTool, createNansenSmartMoneyDexTradesTool, createNansenSmartMoneyJupiterDcasTool, createNansenCurrentBalanceTool, createNansenTransactionsTool, createNansenCounterpartiesTool, createNansenRelatedWalletsTool, createNansenPnlSummaryTool, createNansenPnlTool, createNansenLabelsTool, createNansenTokenScreenerTool, createNansenFlowIntelligenceTool, createNansenHoldersTool, createNansenFlowsTool, createNansenWhoBoughtSoldTool, createNansenTokenDexTradesTool, createNansenTokenTransfersTool, createNansenTokenJupiterDcasTool, createNansenPnlLeaderboardTool, createNansenPortfolioTool } from './nansen.js';
 
 /**
  * Tool registry for Mallory AI assistant
@@ -10,9 +10,30 @@ import { createNansenTool } from './nansen.js';
 export const toolRegistry = {
   searchWeb,
   createSupermemoryTools,
-  createNansenTool
+  createNansenTool,
+  createNansenSmartMoneyNetflowsTool,
+  createNansenSmartMoneyHoldingsTool,
+  createNansenSmartMoneyDexTradesTool,
+  createNansenSmartMoneyJupiterDcasTool,
+  createNansenCurrentBalanceTool,
+  createNansenTransactionsTool,
+  createNansenCounterpartiesTool,
+  createNansenRelatedWalletsTool,
+  createNansenPnlSummaryTool,
+  createNansenPnlTool,
+  createNansenLabelsTool,
+  createNansenTokenScreenerTool,
+  createNansenFlowIntelligenceTool,
+  createNansenHoldersTool,
+  createNansenFlowsTool,
+  createNansenWhoBoughtSoldTool,
+  createNansenTokenDexTradesTool,
+  createNansenTokenTransfersTool,
+  createNansenTokenJupiterDcasTool,
+  createNansenPnlLeaderboardTool,
+  createNansenPortfolioTool
 };
 
 // Export individual tools for easier imports
-export { searchWeb, createSupermemoryTools, createNansenTool };
+export { searchWeb, createSupermemoryTools, createNansenTool, createNansenSmartMoneyNetflowsTool, createNansenSmartMoneyHoldingsTool, createNansenSmartMoneyDexTradesTool, createNansenSmartMoneyJupiterDcasTool, createNansenCurrentBalanceTool, createNansenTransactionsTool, createNansenCounterpartiesTool, createNansenRelatedWalletsTool, createNansenPnlSummaryTool, createNansenPnlTool, createNansenLabelsTool, createNansenTokenScreenerTool, createNansenFlowIntelligenceTool, createNansenHoldersTool, createNansenFlowsTool, createNansenWhoBoughtSoldTool, createNansenTokenDexTradesTool, createNansenTokenTransfersTool, createNansenTokenJupiterDcasTool, createNansenPnlLeaderboardTool, createNansenPortfolioTool };
 
