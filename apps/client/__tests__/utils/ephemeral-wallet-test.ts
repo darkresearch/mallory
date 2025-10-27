@@ -27,7 +27,7 @@ const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // Mainnet USD
 
 // Ephemeral wallet funding amounts
 const EPHEMERAL_FUNDING_USDC = '0.10';  // 0.10 USDC
-const EPHEMERAL_FUNDING_SOL = '0.002';  // 0.002 SOL for fees
+const EPHEMERAL_FUNDING_SOL = '0.001';  // 0.001 SOL for fees
 
 /**
  * Ephemeral Wallet Manager for Tests
