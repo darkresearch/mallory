@@ -24,6 +24,18 @@ describe('X402 Nansen Transactions', () => {
     console.log('✅ Test passed\n');
   }, 120000); // Test timeout: 2 minutes
 
+  test('Should handle Solana address transactions request', async () => {
+    const data = await testNansenEndpoint({
+      name: 'Transactions - Solana Address',
+      query: 'Show me transactions for AWgfUQi2Z4HFbn7FtcqBc7UjZAF9H7HqYwnYBJbFbZ1p',
+      expectedToolName: 'nansenTransactions',
+      urlFragment: 'transactions'
+    }, context);
+
+    expect(data).toBeDefined();
+    console.log('✅ Test passed\n');
+  }, 120000);
+
 });
 
 

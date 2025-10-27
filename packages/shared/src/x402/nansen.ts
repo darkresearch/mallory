@@ -146,7 +146,12 @@ export const NansenUtils = {
   },
 
   formatCurrentBalanceRequest(params: { address: string; chain?: string }): NansenCurrentBalanceRequest {
-    return { wallet_address: params.address, chain: params.chain || 'ethereum' };
+    return { 
+      address: params.address, 
+      chain: params.chain || 'ethereum',
+      hide_spam_token: true,
+      pagination: { page: 1, per_page: 100 }
+    };
   },
   getCurrentBalanceUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/profiler/address/current-balance`;
@@ -154,7 +159,13 @@ export const NansenUtils = {
 
   formatTransactionsRequest(params: { address: string; chain?: string }): NansenTransactionsRequest {
     const dateRange = this.getDefaultDateRange();
-    return { wallet_address: params.address, chain: params.chain || 'ethereum', date: dateRange, pagination: { page: 1, per_page: 100 } };
+    return { 
+      address: params.address, 
+      chain: params.chain || 'ethereum', 
+      date: dateRange, 
+      hide_spam_token: true,
+      pagination: { page: 1, per_page: 100 } 
+    };
   },
   getTransactionsUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/profiler/address/transactions`;
@@ -175,7 +186,12 @@ export const NansenUtils = {
   },
 
   formatPnlSummaryRequest(params: { address: string; chain?: string }): NansenPnlSummaryRequest {
-    return { wallet_address: params.address, chain: params.chain || 'ethereum' };
+    const dateRange = this.getDefaultDateRange();
+    return { 
+      address: params.address, 
+      chain: params.chain || 'ethereum',
+      date: dateRange
+    };
   },
   getPnlSummaryUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/profiler/address/pnl-summary`;
@@ -188,8 +204,8 @@ export const NansenUtils = {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/profiler/address/pnl`;
   },
 
-  formatLabelsRequest(params: { address: string }): NansenLabelsRequest {
-    return { wallet_address: params.address };
+  formatLabelsRequest(params: { address: string; chain?: string }): NansenLabelsRequest {
+    return { wallet_address: params.address, chain: params.chain || 'ethereum' };
   },
   getLabelsUrl(): string {
     return `${X402_CONSTANTS.getNansenApiBase()}/api/v1/profiler/address/labels`;

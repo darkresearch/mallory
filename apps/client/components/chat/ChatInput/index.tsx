@@ -5,20 +5,24 @@ import { AnimatedPlaceholder } from './AnimatedPlaceholder';
 
 interface ChatInputProps {
   onSend?: (message: string) => void;
+  onStop?: () => void;
   onVoiceStart?: () => void;
   onAttachmentPress?: () => void;
   placeholder?: string;
   disabled?: boolean;
   hasMessages?: boolean;
+  isStreaming?: boolean;
 }
 
 export function ChatInput({
   onSend,
+  onStop,
   onVoiceStart,
   onAttachmentPress,
   placeholder = "Ask me anything",
   disabled = false,
-  hasMessages = false
+  hasMessages = false,
+  isStreaming = false
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [height, setHeight] = useState(44); // Starting height as specified
@@ -34,6 +38,10 @@ export function ChatInput({
 
     // Send to parent - server handles all storage
     onSend?.(messageText);
+  };
+
+  const handleStop = () => {
+    onStop?.();
   };
 
   const handleContentSizeChange = (event: any) => {
@@ -146,21 +154,35 @@ export function ChatInput({
             />
           </TouchableOpacity> */}
 
-          {/* Send button */}
-          <TouchableOpacity 
-            style={[
-              styles.sendButton,
-              { opacity: canSend ? 1 : 0.5 }
-            ]}
-            onPress={handleSend}
-            disabled={disabled || !canSend}
-          >
-            <Ionicons 
-              name="arrow-forward" 
-              size={16} 
-              color="#D6D6D6" 
-            />
-          </TouchableOpacity>
+          {/* Send/Stop button */}
+          {isStreaming ? (
+            <TouchableOpacity 
+              style={styles.stopButton}
+              onPress={handleStop}
+              disabled={disabled}
+            >
+              <Ionicons 
+                name="square" 
+                size={14} 
+                color="#D6D6D6" 
+              />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={[
+                styles.sendButton,
+                { opacity: canSend ? 1 : 0.5 }
+              ]}
+              onPress={handleSend}
+              disabled={disabled || !canSend}
+            >
+              <Ionicons 
+                name="arrow-forward" 
+                size={16} 
+                color="#D6D6D6" 
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
@@ -217,6 +239,15 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  stopButton: {
+    backgroundColor: '#FBAA69',
+    width: 28,
+    height: 28,
+    borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
