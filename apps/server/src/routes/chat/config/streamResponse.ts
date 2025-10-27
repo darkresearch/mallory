@@ -5,6 +5,7 @@
 
 import { UIMessage } from 'ai';
 import { v4 as uuidv4 } from 'uuid';
+import { supabase } from '../../../lib/supabase.js';
 
 /**
  * Build UI message stream response configuration
@@ -12,12 +13,17 @@ import { v4 as uuidv4 } from 'uuid';
  * @param result - StreamText result object
  * @param originalMessages - Original messages (for preservation)
  * @param conversationId - Conversation ID for logging
+ * @param onboardingContext - Optional context for onboarding completion
  * @returns Configured stream response
  */
 export function buildStreamResponse(
   result: any,
   originalMessages: UIMessage[],
-  conversationId: string
+  conversationId: string,
+  onboardingContext?: {
+    userId: string;
+    isOnboarding: boolean;
+  }
 ) {
   // Track stream progress
   let partCount = 0;
@@ -109,8 +115,29 @@ export function buildStreamResponse(
         conversationId,
         totalParts: partCount,
         textParts: textParts,
-        lastTextDelta: lastTextDelta.substring(0, 50) + '...'
+        lastTextDelta: lastTextDelta.substring(0, 50) + '...',
+        isOnboarding: onboardingContext?.isOnboarding
       });
+      
+      // Mark onboarding complete if this was an onboarding conversation
+      if (onboardingContext?.isOnboarding && !isAborted && onboardingContext?.userId) {
+        console.log('🎉 Marking onboarding complete for user:', onboardingContext.userId);
+        try {
+          const { error } = await supabase
+            .from('users')
+            .update({ has_completed_onboarding: true })
+            .eq('id', onboardingContext.userId);
+          
+          if (error) {
+            console.error('❌ Error marking onboarding complete:', error);
+          } else {
+            console.log('✅ Onboarding marked complete successfully!');
+          }
+        } catch (error) {
+          console.error('❌ Exception marking onboarding complete:', error);
+        }
+      }
+      
       // Client-side will handle message persistence
     },
     

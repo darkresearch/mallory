@@ -46,6 +46,7 @@ export default function ChatScreen() {
     thinkingDuration,
     isThinking,
     hasStreamStarted,
+    isOnboardingGreeting,
     aiMessages,
     aiError,
     aiStatus,
@@ -114,6 +115,7 @@ export default function ChatScreen() {
             thinkingDuration={thinkingDuration}
             isThinking={isThinking}
             hasStreamStarted={hasStreamStarted}
+            isOnboardingGreeting={isOnboardingGreeting}
             isLoadingHistory={isLoadingHistory}
             regenerateMessage={regenerateMessage}
             scrollViewRef={scrollViewRef}
@@ -199,6 +201,7 @@ const styles = StyleSheet.create({
   wordmarkContainer: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   wordmarkImage: {
     height: 20,
@@ -206,6 +209,8 @@ const styles = StyleSheet.create({
   },
   profileButton: {
     padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   profileGradientBorder: {
     width: 38,

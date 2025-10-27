@@ -1,5 +1,6 @@
 import express, { Router } from 'express';
 import { streamText, UIMessage } from 'ai';
+import { v4 as uuidv4 } from 'uuid';
 import { authenticateUser, AuthenticatedRequest } from '../../middleware/auth.js';
 import { toolRegistry } from './tools/registry.js';
 import { setupModelProvider } from './config/modelProvider.js';
@@ -7,8 +8,9 @@ import { buildStreamConfig } from './config/streamConfig.js';
 import { buildStreamResponse } from './config/streamResponse.js';
 import { logIncomingMessages, logConversationState, logModelConfiguration } from './debug.js';
 import type { ChatRequest } from '@darkresearch/mallory-shared';
-import { MALLORY_BASE_PROMPT, buildContextSection, buildVerbosityGuidelines } from '../../../prompts/index.js';
+import { MALLORY_BASE_PROMPT, buildContextSection, buildVerbosityGuidelines, ONBOARDING_GUIDELINES, ONBOARDING_GREETING_SYSTEM_MESSAGE, ONBOARDING_OPENING_MESSAGE_TEMPLATE } from '../../../prompts/index.js';
 import { buildComponentsGuidelines } from '../../../prompts/components.js';
+import { supabase } from '../../lib/supabase.js';
 
 const router: Router = express.Router();
 
@@ -45,13 +47,61 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
 
     logConversationState(conversationId, [], clientContext);
 
+    // Check for onboarding context
+    const systemMessages = messages.filter((msg: any) => msg.role === 'system');
+    const isOnboardingGreeting = systemMessages.some((msg: any) => 
+      msg.content === 'onboarding_greeting'
+    );
+    
+    // Fetch conversation metadata to check if this is an onboarding conversation
+    let conversationMetadata: any = null;
+    let isOnboardingConversation = false;
+    
+    if (isOnboardingGreeting) {
+      console.log('🎉 Detected onboarding greeting system message');
+      try {
+        const { data: conversation, error } = await supabase
+          .from('conversations')
+          .select('metadata')
+          .eq('id', conversationId)
+          .single();
+        
+        if (!error && conversation?.metadata?.is_onboarding) {
+          isOnboardingConversation = true;
+          conversationMetadata = conversation.metadata;
+          console.log('✅ Confirmed onboarding conversation from metadata');
+        }
+      } catch (error) {
+        console.error('⚠️ Error fetching conversation metadata:', error);
+      }
+    }
+
+    // Save original messages (before synthetic message) for client response
+    const originalMessages = messages.filter((msg: UIMessage) => msg.role !== 'system');
+    
     // Filter out system messages (they're triggers, not conversation history)
     const conversationMessages = messages.filter((msg: UIMessage) => msg.role !== 'system');
     console.log('💬 Message processing:', {
       totalMessages: messages.length,
       systemMessages: messages.length - conversationMessages.length,
-      conversationMessages: conversationMessages.length
+      conversationMessages: conversationMessages.length,
+      isOnboardingGreeting,
+      isOnboardingConversation
     });
+
+    // If system-initiated (proactive) and no messages, add synthetic user prompt
+    // AI SDK requires at least one message - can't have just system prompt
+    if (isOnboardingGreeting && conversationMessages.length === 0) {
+      console.log('🤖 [Proactive] Adding synthetic user message for AI to respond to');
+      conversationMessages.push({
+        id: uuidv4(),
+        role: 'user',
+        parts: [{
+          type: 'text',
+          text: 'Please proceed as instructed, accounting for what you know about me and how I would most prefer your response. Do not mention that you saw this user message of mine or reference it in any way.',
+        }],
+      } as any);
+    }
 
     // Setup model provider with smart strategy
     const { model, processedMessages, strategy } = setupModelProvider(
@@ -101,8 +151,16 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     // Log model configuration with actual enabled tools
     logModelConfiguration(messages, tools, getClaudeModel());
 
+    // Prepare onboarding context if applicable
+    const onboardingContext = (isOnboardingGreeting && isOnboardingConversation) ? {
+      isOnboarding: true,
+      isSystemMessage: true,
+      systemTriggerContent: 'onboarding_greeting',
+      walletAddress: gridSession?.address || 'N/A'
+    } : undefined;
+
     // Build system prompt
-    const systemPrompt = buildSystemPrompt(clientContext);
+    const systemPrompt = buildSystemPrompt(clientContext, onboardingContext);
 
     // Build stream configuration
     const streamConfig = buildStreamConfig({
@@ -120,7 +178,12 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
 
     // Build UI message stream response
     console.log('🌊 Creating UI message stream response');
-    const { streamResponse } = buildStreamResponse(result, messages, conversationId);
+    const { streamResponse } = buildStreamResponse(
+      result, 
+      originalMessages,  // Use original messages (without synthetic message)
+      conversationId, 
+      isOnboardingConversation ? { userId, isOnboarding: true } : undefined
+    );
     console.log('🚀 Stream response created');
 
     // Monitor client connection
@@ -195,10 +258,36 @@ function isDeviceInfo(device: any): device is { platform: 'ios' | 'android' | 'w
 }
 
 /**
- * Build system prompt with client context
+ * Build system prompt with client context and optional onboarding context
  */
-function buildSystemPrompt(clientContext?: ChatRequest['clientContext']): string {
+function buildSystemPrompt(
+  clientContext?: ChatRequest['clientContext'], 
+  onboardingContext?: {
+    isOnboarding: boolean;
+    isSystemMessage?: boolean;
+    systemTriggerContent?: string;
+    walletAddress?: string;
+  }
+): string {
   const sections: string[] = [];
+  
+  // Handle onboarding greeting if this is a system-initiated onboarding message
+  if (onboardingContext?.isOnboarding && onboardingContext?.isSystemMessage && 
+      onboardingContext?.systemTriggerContent === 'onboarding_greeting') {
+    console.log('🎉 Building onboarding system prompt with wallet address:', onboardingContext.walletAddress);
+    
+    // Inject the onboarding greeting instructions
+    sections.push(ONBOARDING_GREETING_SYSTEM_MESSAGE);
+    sections.push(`\n---\n`);
+    sections.push(ONBOARDING_GUIDELINES);
+    sections.push(`\n---\n`);
+    
+    // Add the opening message template with wallet address
+    const walletAddress = onboardingContext.walletAddress || 'N/A';
+    const openingMessage = ONBOARDING_OPENING_MESSAGE_TEMPLATE.replace('{WALLET_ADDRESS}', walletAddress);
+    sections.push(`\n## Your Opening Message\n\nUse this as your greeting (customize slightly if you want, but keep the key information):\n\n${openingMessage}`);
+    sections.push(`\n---\n`);
+  }
   
   // 1. Core Mallory identity and personality
   sections.push(MALLORY_BASE_PROMPT);

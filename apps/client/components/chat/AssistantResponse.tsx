@@ -16,11 +16,12 @@ import { componentRegistry } from '@/components/registry';
 interface AssistantResponseProps {
   children: string;
   style?: ViewStyle;
+  styleOverrides?: Partial<Record<string, any>>;
   onComponentError?: (error: any) => void;
 }
 
 export const AssistantResponse = React.memo(
-  ({ children, style, onComponentError, ...props }: AssistantResponseProps) => (
+  ({ children, style, styleOverrides, onComponentError, ...props }: AssistantResponseProps) => (
     // @ts-ignore - Type mismatch due to different React/RN versions in monorepo packages
     <StreamdownRN
       style={{ 
@@ -34,6 +35,7 @@ export const AssistantResponse = React.memo(
         ...style 
       } as any}
       theme="light"
+      styleOverrides={styleOverrides}
       componentRegistry={componentRegistry}
       onComponentError={onComponentError}
       {...props}
@@ -42,8 +44,9 @@ export const AssistantResponse = React.memo(
     </StreamdownRN>
   ),
   (prevProps, nextProps) => {
-    // Only re-render if children change
-    return prevProps.children === nextProps.children;
+    // Only re-render if children or styleOverrides change
+    return prevProps.children === nextProps.children &&
+           prevProps.styleOverrides === nextProps.styleOverrides;
   }
 );
 

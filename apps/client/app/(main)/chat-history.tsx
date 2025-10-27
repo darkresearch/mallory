@@ -63,6 +63,15 @@ export default function ChatHistoryScreen() {
     
     return () => subscription?.remove();
   }, []);
+
+  // Redirect guard: if user is logged out, redirect to login
+  // This provides a safety net if AuthContext navigation fails
+  useEffect(() => {
+    if (!user) {
+      console.log('🚪 [ChatHistoryScreen] User is null, redirecting to login');
+      router.replace('/(auth)/login');
+    }
+  }, [user]);
   
   console.log('📜 ChatHistoryScreen rendered, initialized:', isInitialized, 'conversations:', conversations.length);
   console.log('📜 ChatHistoryScreen conversations metadata:', conversations.map(c => ({ 
