@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -29,6 +29,15 @@ export default function OtpVerificationModal({
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState('');
   const [verificationSuccess, setVerificationSuccess] = useState(false);
+
+  // Reset local state when modal visibility changes
+  useEffect(() => {
+    if (!visible) {
+      setVerificationSuccess(false);
+      setOtp('');
+      setError('');
+    }
+  }, [visible]);
 
   const handleResendOtp = async () => {
     setIsVerifying(true);

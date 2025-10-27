@@ -21,6 +21,7 @@ import SendModal from '../../components/wallet/SendModal';
 import OtpVerificationModal from '../../components/grid/OtpVerificationModal';
 import { sendToken } from '../../features/wallet';
 import { walletService } from '../../features/wallet';
+import { gridClientService } from '../../features/grid/services/gridClient';
 
 
 export default function WalletScreen() {
@@ -31,6 +32,7 @@ export default function WalletScreen() {
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [showOtpModal, setShowOtpModal] = useState(false);
+  const [gridUserForOtp, setGridUserForOtp] = useState<any>(null);
   const [pendingSend, setPendingSend] = useState<{ recipientAddress: string; amount: string; tokenAddress?: string } | null>(null);
   
   console.log('🏠 [WalletScreen] Component rendering', {
@@ -91,9 +93,18 @@ export default function WalletScreen() {
         // Save pending send for retry after OTP
         setPendingSend({ recipientAddress, amount, tokenAddress });
         
-        // Close send modal and show OTP modal
-        setShowSendModal(false);
-        setShowOtpModal(true);
+        // Initiate re-authentication to get gridUser
+        try {
+          const { user: gridUser } = await gridClientService.reauthenticateAccount(user?.email || '');
+          setGridUserForOtp({ ...gridUser, isReauth: true });
+          
+          // Close send modal and show OTP modal
+          setShowSendModal(false);
+          setShowOtpModal(true);
+        } catch (reauthError) {
+          console.error('❌ [WalletScreen] Re-authentication failed:', reauthError);
+          throw new Error('Session expired. Please try again.');
+        }
       } else {
         throw new Error(result.error || 'Transfer failed');
       }
@@ -106,6 +117,7 @@ export default function WalletScreen() {
   const handleOtpVerified = async () => {
     console.log('✅ [WalletScreen] OTP verified, retrying pending send');
     setShowOtpModal(false);
+    setGridUserForOtp(null);
     
     // Retry the pending send if one exists
     if (pendingSend) {
@@ -377,6 +389,7 @@ export default function WalletScreen() {
           visible={showOtpModal}
           onClose={handleOtpVerified}
           userEmail={user?.email || ''}
+          gridUser={gridUserForOtp}
         />
 
       </SafeAreaView>
