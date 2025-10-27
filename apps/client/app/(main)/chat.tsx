@@ -123,6 +123,7 @@ export default function ChatScreen() {
                 // TODO: Implement attachment handling
               }}
               disabled={false} // No loading state needed - useChat handles it
+              hasMessages={aiMessages.length > 0}
             />
           )}
         </KeyboardAvoidingView>
@@ -134,7 +135,7 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#05080C',
+    backgroundColor: '#FFEFE3',
   },
   wideContainer: {
     flex: 1,
@@ -160,7 +161,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 12,
-    backgroundColor: '#05080C',
+    backgroundColor: '#FFEFE3',
   },
   headerButton: {
     padding: 8,
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
   profileInitial: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#EDEDED',
+    color: '#000000',
   },
   messagesContainer: {
     flex: 1,
@@ -257,7 +258,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   userBubble: {
-    backgroundColor: '#1F4A95',
+    backgroundColor: '#F6C69F',
     borderTopRightRadius: 6,
   },
   // assistantBubble removed - using StreamdownRN for rich content
@@ -267,10 +268,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi',
   },
   userText: {
-    color: '#FFFFFF',
+    color: '#000000',
   },
   assistantText: {
-    color: '#E3ECFF',
+    color: '#000000',
   },
   errorContainer: {
     padding: 12,
@@ -302,20 +303,20 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#EDEDED',
+    color: '#000000',
     marginBottom: 8,
     fontFamily: 'Satoshi',
   },
   emptyStateSubtitle: {
     fontSize: 16,
-    color: '#8C8C8C',
+    color: '#000000',
     textAlign: 'center',
     marginBottom: 32,
     fontFamily: 'Satoshi',
   },
   conversationInfo: {
     fontSize: 12,
-    color: '#4A9EFF',
+    color: '#E67B25',
     textAlign: 'center',
     fontFamily: 'Satoshi',
   },
@@ -327,7 +328,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#4E81D9',
+    backgroundColor: '#E67B25',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -346,7 +347,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   loadingText: {
-    color: '#8C8C8C',
+    color: '#000000',
     fontSize: 16,
     fontFamily: 'Satoshi',
   },

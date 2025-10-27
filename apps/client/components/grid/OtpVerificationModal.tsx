@@ -99,7 +99,7 @@ export default function OtpVerificationModal({
           <TextInput
             style={styles.input}
             placeholder="000000"
-            placeholderTextColor="#666"
+            placeholderTextColor="#C95900"
             value={otp}
             onChangeText={setOtp}
             keyboardType="number-pad"
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   },
   // Mobile content (bottom sheet style)
   mobileContent: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#E67B25',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 24,
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   },
   // Web content (center modal style)
   webContent: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#E67B25',
     borderRadius: 16,
     padding: 32,
     width: '100%',
@@ -169,25 +169,28 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '600',
-    color: '#DCE9FF',
+    color: '#FFEFE3',
     marginBottom: 8,
     textAlign: 'center',
+    fontFamily: 'Belwe-Medium',
   },
   description: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: '#F8CEAC',
     marginBottom: 24,
     textAlign: 'center',
+    fontFamily: 'Satoshi',
   },
   input: {
-    backgroundColor: '#2a2a2a',
+    backgroundColor: '#FFEFE3',
     borderRadius: 12,
     padding: 16,
     fontSize: 24,
-    color: '#DCE9FF',
+    color: '#000000',
     textAlign: 'center',
     letterSpacing: 8,
     marginBottom: 16,
+    fontFamily: 'Satoshi',
   },
   error: {
     color: '#FF3B30',
@@ -196,7 +199,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   button: {
-    backgroundColor: '#4A9EFF',
+    backgroundColor: '#FBAA69',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -206,8 +209,9 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   buttonText: {
-    color: '#fff',
+    color: '#000000',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Satoshi',
   },
 });

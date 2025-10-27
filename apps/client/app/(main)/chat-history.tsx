@@ -279,22 +279,22 @@ export default function ChatHistoryScreen() {
           <View style={styles.mobileHeader}>
             {/* Search bar takes remaining space */}
             <View style={styles.mobileSearchContainer}>
-              <Ionicons name="search" size={20} color="rgba(167, 190, 230, 0.8)" style={styles.searchIcon} />
+              <Ionicons name="search" size={20} color="#E0CBB9" style={styles.searchIcon} />
               <TextInput
                 style={[
                   styles.searchInput,
                   Platform.OS === 'web' && ({ outline: 'none' } as any)
                 ]}
                 placeholder="Search for chats"
-                placeholderTextColor="rgba(167, 190, 230, 0.8)"
+                placeholderTextColor="#E0CBB9"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 returnKeyType="search"
-                selectionColor="rgba(167, 190, 230, 0.3)"
+                selectionColor="rgba(0, 0, 0, 0.3)"
                 underlineColorAndroid="transparent"
               />
               {!isInitialized && (
-                <ActivityIndicator size="small" color="#4A9EFF" style={styles.searchSpinner} />
+                <ActivityIndicator size="small" color="#E67B25" style={styles.searchSpinner} />
               )}
             </View>
             
@@ -303,7 +303,7 @@ export default function ChatHistoryScreen() {
               style={styles.mobileBackButton}
               onPress={handleBack}
             >
-              <Ionicons name="arrow-forward" size={24} color="#EDEDED" />
+              <Ionicons name="arrow-forward" size={24} color="#FBAA69" />
             </TouchableOpacity>
           </View>
         ) : (
@@ -314,7 +314,7 @@ export default function ChatHistoryScreen() {
                 style={styles.backButton}
                 onPress={handleBack}
               >
-                <Ionicons name="arrow-forward" size={24} color="#EDEDED" />
+                <Ionicons name="arrow-forward" size={24} color="#FBAA69" />
               </TouchableOpacity>
             </View>
           </>
@@ -325,22 +325,22 @@ export default function ChatHistoryScreen() {
           {/* Search bar - only shown for desktop/tablet since mobile has it in header */}
           {!isMobile && (
             <View style={styles.searchContainer}>
-              <Ionicons name="search" size={20} color="rgba(167, 190, 230, 0.8)" style={styles.searchIcon} />
+              <Ionicons name="search" size={20} color="#E0CBB9" style={styles.searchIcon} />
               <TextInput
                 style={[
                   styles.searchInput,
                   Platform.OS === 'web' && ({ outline: 'none' } as any)
                 ]}
                 placeholder="Search for chats"
-                placeholderTextColor="rgba(167, 190, 230, 0.8)"
+                placeholderTextColor="#E0CBB9"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 returnKeyType="search"
-                selectionColor="rgba(167, 190, 230, 0.3)"
+                selectionColor="rgba(0, 0, 0, 0.3)"
                 underlineColorAndroid="transparent"
               />
               {!isInitialized && (
-                <ActivityIndicator size="small" color="#4A9EFF" style={styles.searchSpinner} />
+                <ActivityIndicator size="small" color="#E67B25" style={styles.searchSpinner} />
               )}
             </View>
           )}
@@ -351,7 +351,7 @@ export default function ChatHistoryScreen() {
             onPress={handleNewChat}
             activeOpacity={0.7}
           >
-            <Ionicons name="create-outline" size={20} color="#EDEDED" />
+            <Ionicons name="create-outline" size={20} color="#FBAA69" />
             <Text style={styles.newChatText}>New chat</Text>
           </TouchableOpacity>
 
@@ -359,12 +359,12 @@ export default function ChatHistoryScreen() {
           <View style={styles.content}>
           {!isInitialized && filteredConversations.length === 0 ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#4A9EFF" />
+              <ActivityIndicator size="large" color="#E67B25" />
               <Text style={styles.loadingText}>Loading conversations...</Text>
             </View>
           ) : filteredConversations.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="chatbubbles-outline" size={48} color="#4A9EFF" />
+              <Ionicons name="chatbubbles-outline" size={48} color="#E67B25" />
               <Text style={styles.emptyStateTitle}>
                 {searchQuery ? 'No matching conversations' : 'No conversations yet'}
               </Text>
@@ -384,8 +384,8 @@ export default function ChatHistoryScreen() {
                 <RefreshControl
                   refreshing={isRefreshing}
                   onRefresh={handleRefresh}
-                  tintColor="#4A9EFF"
-                  colors={["#4A9EFF"]}
+                  tintColor="#E67B25"
+                  colors={["#E67B25"]}
                 />
               }
             >
@@ -412,7 +412,7 @@ export default function ChatHistoryScreen() {
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#05080C',
+    backgroundColor: '#FFEFE3',
   },
   wideContainer: {
     flex: 1,
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingVertical: 12,
-    backgroundColor: '#05080C',
+    backgroundColor: '#FFEFE3',
   },
   backButton: {
     padding: 8,
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    backgroundColor: '#05080C',
+    backgroundColor: '#FFEFE3',
     gap: 12,
   },
   mobileBackButton: {
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#101A29',
+    backgroundColor: '#984400',
     borderRadius: 28,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#101A29',
+    backgroundColor: '#984400',
     borderRadius: 28,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: 'rgba(167, 190, 230, 0.8)',
+    color: '#000000',
     padding: 0,
     fontFamily: 'Satoshi',
   },
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
   },
   newChatText: {
     fontSize: 16,
-    color: '#EDEDED',
+    color: '#000000',
     marginLeft: 8,
     fontFamily: 'Satoshi',
   },
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#8C8C8C',
+    color: '#000000',
     marginTop: 16,
     fontFamily: 'Satoshi',
   },
@@ -533,14 +533,14 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#EDEDED',
+    color: '#000000',
     marginTop: 24,
     marginBottom: 8,
     fontFamily: 'Satoshi',
   },
   emptyStateSubtitle: {
     fontSize: 16,
-    color: '#8C8C8C',
+    color: '#000000',
     textAlign: 'center',
     marginBottom: 32,
     paddingHorizontal: 32,
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#8C8C8C',
+    color: '#000000',
     marginBottom: 16,
     paddingHorizontal: 8, // Additional 8px padding to create 14px total from screen edge (6+8)
     fontFamily: 'Satoshi',
@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, // Additional 8px padding to create 14px total from screen edge (6+8)
   },
   conversationItemActive: {
-    backgroundColor: '#182232',
+    backgroundColor: '#F6C69F',
     borderRadius: 14,
     paddingHorizontal: 10, // Active conversation gets less additional padding - closer to screen edge
     paddingVertical: 4, // Add some vertical padding for the pill
@@ -584,13 +584,13 @@ const styles = StyleSheet.create({
   conversationTitle: {
     fontSize: 16,
     fontWeight: '400',
-    color: '#EDEDED',
+    color: '#000000',
     flex: 1,
     fontFamily: 'Satoshi',
   },
   conversationDate: {
     fontSize: 14,
-    color: '#8C8C8C',
+    color: '#000000',
     fontFamily: 'Satoshi',
   },
 });

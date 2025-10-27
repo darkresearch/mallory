@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     bottom: -12,
     left: '50%',
     width: 1,
-    backgroundColor: '#DCE9FF',
+    backgroundColor: '#C95900',
     marginLeft: -0.5, // Center the line
   },
   content: {
@@ -113,17 +113,15 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 12,
-    color: '#DCE9FF',
+    color: '#C95900',
     lineHeight: 16,
-    fontStyle: 'italic',
   },
   toolDetails: {
     marginTop: 2,
   },
   toolName: {
     fontSize: 11,
-    color: '#DCE9FF',
-    fontStyle: 'italic',
+    color: '#C95900',
   },
   error: {
     fontSize: 12,
@@ -132,7 +130,7 @@ const styles = StyleSheet.create({
   },
   duration: {
     fontSize: 10,
-    color: '#DCE9FF',
+    color: '#C95900',
     marginTop: 2,
   },
 });

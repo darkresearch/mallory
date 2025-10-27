@@ -73,56 +73,56 @@ export const MessageActions: React.FC<MessageActionsData> = ({
     <Actions>
       {/* Retry/Regenerate - only show for last message */}
       {isLastMessage && onRegenerate && (
-        <Action
-          label="Retry"
-          onPress={handleRegenerate}
-        >
-          <Ionicons name="refresh" size={14} color="#DCE9FF" />
-        </Action>
-      )}
-      
-      {/* Like */}
       <Action
-        label="Like"
-        onPress={handleLike}
-        isToggle={true}
-        isActive={likeState === 'liked'}
+        label="Retry"
+        onPress={handleRegenerate}
       >
-        <Ionicons 
-          name={likeState === 'liked' ? "thumbs-up" : "thumbs-up-outline"} 
-          size={14} 
-          color={likeState === 'liked' ? "#3b82f6" : "#DCE9FF"} 
-        />
+        <Ionicons name="refresh" size={14} color="#C95900" />
       </Action>
+    )}
+    
+    {/* Like */}
+    <Action
+      label="Like"
+      onPress={handleLike}
+      isToggle={true}
+      isActive={likeState === 'liked'}
+    >
+      <Ionicons 
+        name={likeState === 'liked' ? "thumbs-up" : "thumbs-up-outline"} 
+        size={14} 
+        color={likeState === 'liked' ? "#3b82f6" : "#C95900"} 
+      />
+    </Action>
 
-      {/* Dislike */}
-      <Action
-        label="Dislike"
-        onPress={handleDislike}
-        isToggle={true}
-        isActive={likeState === 'disliked'}
-      >
-        <Ionicons 
-          name={likeState === 'disliked' ? "thumbs-down" : "thumbs-down-outline"} 
-          size={14} 
-          color={likeState === 'disliked' ? "#ef4444" : "#DCE9FF"} 
-        />
-      </Action>
+    {/* Dislike */}
+    <Action
+      label="Dislike"
+      onPress={handleDislike}
+      isToggle={true}
+      isActive={likeState === 'disliked'}
+    >
+      <Ionicons 
+        name={likeState === 'disliked' ? "thumbs-down" : "thumbs-down-outline"} 
+        size={14} 
+        color={likeState === 'disliked' ? "#ef4444" : "#C95900"} 
+      />
+    </Action>
 
-      {/* Copy */}
-      <Action
-        label="Copy"
-        onPress={handleCopy}
-      >
-        <Ionicons name="copy-outline" size={14} color="#DCE9FF" />
-      </Action>
+    {/* Copy */}
+    <Action
+      label="Copy"
+      onPress={handleCopy}
+    >
+      <Ionicons name="copy-outline" size={14} color="#C95900" />
+    </Action>
 
-      {/* Share */}
-      <Action
-        label="Share"
-        onPress={handleShare}
-      >
-        <Ionicons name="share-outline" size={14} color="#DCE9FF" />
+    {/* Share */}
+    <Action
+      label="Share"
+      onPress={handleShare}
+    >
+      <Ionicons name="share-outline" size={14} color="#C95900" />
       </Action>
     </Actions>
   );

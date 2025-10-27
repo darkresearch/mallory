@@ -21,7 +21,7 @@ export const AssistantResponse = React.memo(
     // @ts-ignore - Type mismatch due to different React/RN versions in monorepo packages
     <StreamdownRN
       style={{ width: '100%', ...style }}
-      theme="dark"
+      theme="light"
       componentRegistry={componentRegistry}
       onComponentError={onComponentError}
       {...props}

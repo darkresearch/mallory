@@ -128,13 +128,13 @@ const styles = StyleSheet.create({
   },
   resultTitle: {
     fontSize: 11,
-    color: '#DCE9FF',
+    color: '#C95900',
     fontWeight: '500',
     marginBottom: 2,
   },
   resultDomain: {
     fontSize: 10,
-    color: '#DCE9FF',
+    color: '#C95900',
     opacity: 0.6,
   },
   moreResults: {
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   },
   moreText: {
     fontSize: 11,
-    color: '#DCE9FF',
+    color: '#C95900',
     opacity: 0.7,
   },
 });
