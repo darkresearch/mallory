@@ -57,7 +57,7 @@ export function useAIChat({ conversationId, userId, onImmediateReasoning, onImme
     loadHistory();
   }, [conversationId]);
   
-  const { messages, error, sendMessage, regenerate, status, setMessages } = useChat({
+  const { messages, error, sendMessage, regenerate, status, setMessages, stop } = useChat({
     // Use DefaultChatTransport with API URL inside - required for Expo streaming
     transport: new DefaultChatTransport({
       fetch: async (url, options) => {
@@ -214,6 +214,7 @@ export function useAIChat({ conversationId, userId, onImmediateReasoning, onImme
     sendMessage,
     regenerate,
     status,
-    isLoadingHistory
+    isLoadingHistory,
+    stop
   };
 }

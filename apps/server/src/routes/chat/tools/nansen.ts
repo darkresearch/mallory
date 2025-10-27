@@ -506,7 +506,11 @@ The data shows real-time token balances.`,
     }),
 
     execute: async ({ address, chain }: { address: string; chain: string }) => {
+      console.log('🔧 [nansenCurrentBalance] AI chose parameters:', { address, chain });
+      
       const requestBody = NansenUtils.formatCurrentBalanceRequest({ address, chain });
+      console.log('📝 [nansenCurrentBalance] Request body:', JSON.stringify(requestBody, null, 2));
+      
       const headers = { 'Accept': 'application/json', 'Content-Type': 'application/json' };
       const apiUrl = NansenUtils.getCurrentBalanceUrl();
       
@@ -540,10 +544,15 @@ export function createNansenTransactionsTool(x402Context?: X402Context) {
       endDate: z.string().optional().describe('End date in ISO 8601 format. Defaults to now.'),
     }),
     execute: async ({ address, chain, startDate, endDate }: { address: string; chain: string; startDate?: string; endDate?: string }) => {
+      console.log('🔧 [nansenTransactions] AI chose parameters:', { address, chain, startDate, endDate });
+      
+      const requestBody = NansenUtils.formatTransactionsRequest({ address, chain });
+      console.log('📝 [nansenTransactions] Request body:', JSON.stringify(requestBody, null, 2));
+      
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenTransactions', apiUrl: NansenUtils.getTransactionsUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatTransactionsRequest({ address, chain }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: requestBody, estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }
@@ -610,10 +619,15 @@ export function createNansenPnlSummaryTool(x402Context?: X402Context) {
       endDate: z.string().optional().describe('End date in ISO 8601 format. Defaults to now.'),
     }),
     execute: async ({ address, chain, startDate, endDate }: { address: string; chain: string; startDate?: string; endDate?: string }) => {
+      console.log('🔧 [nansenPnlSummary] AI chose parameters:', { address, chain, startDate, endDate });
+      
+      const requestBody = NansenUtils.formatPnlSummaryRequest({ address, chain });
+      console.log('📝 [nansenPnlSummary] Request body:', JSON.stringify(requestBody, null, 2));
+      
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenPnlSummary', apiUrl: NansenUtils.getPnlSummaryUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatPnlSummaryRequest({ address, chain }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: requestBody, estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }
@@ -656,10 +670,15 @@ export function createNansenLabelsTool(x402Context?: X402Context) {
       chain: z.string().default('ethereum').describe('Blockchain network (ethereum, solana, etc.)'),
     }),
     execute: async ({ address, chain }: { address: string; chain: string }) => {
+      console.log('🔧 [nansenLabels] AI chose parameters:', { address, chain });
+      
+      const requestBody = NansenUtils.formatLabelsRequest({ address, chain });
+      console.log('📝 [nansenLabels] Request body:', JSON.stringify(requestBody, null, 2));
+      
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenLabels', apiUrl: NansenUtils.getLabelsUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatLabelsRequest({ address }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: requestBody, estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }

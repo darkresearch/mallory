@@ -78,11 +78,8 @@
     }
     
     /* Ensure long strings wrap properly on web */
-    /* Force text wrapping in all text-containing elements */
-    p, span, div, a, li {
-      word-break: break-word;
-      overflow-wrap: anywhere;
-    }
+    /* Only apply text wrapping to actual text content, not layout containers */
+    /* Components will apply word-break inline where needed (see AssistantResponse.tsx) */
     
     /* Ensure pre and code blocks wrap - these often contain long strings */
     pre {
@@ -91,10 +88,22 @@
       overflow-wrap: anywhere !important;
     }
     
-    code {
+    /* Code wrapping - but NOT in tables (tables need nowrap for clean cells) */
+    code:not(td code):not(th code) {
       white-space: pre-wrap !important;
       word-break: break-all !important;
       overflow-wrap: anywhere !important;
+    }
+    
+    /* Table cells: never wrap, let table scroll instead */
+    /* More specific selectors to override React Native Web inline styles */
+    table td,
+    table th,
+    td *,
+    th * {
+      white-space: nowrap !important;
+      word-break: normal !important;
+      overflow-wrap: normal !important;
     }
     
     /* Exception for input fields - allow normal text input behavior */
