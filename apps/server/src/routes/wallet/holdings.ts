@@ -1,9 +1,9 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, Router } from 'express';
 import { authenticateUser, AuthenticatedRequest } from '../../middleware/auth.js';
 import { supabase } from '../../lib/supabase.js';
 import type { HoldingsResponse, TokenHolding } from '@darkresearch/mallory-shared';
 
-const router = express.Router();
+const router: Router = express.Router();
 
 interface GridBalanceResponse {
   data: {
@@ -67,7 +67,7 @@ async function fetchBirdeyeMarketData(tokenAddresses: string[]): Promise<Map<str
 
     if (!response.ok) return resultMap;
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     if (data.success && data.data) {
       for (const [address, tokenData] of Object.entries(data.data)) {
@@ -115,7 +115,7 @@ async function fetchBirdeyeMetadata(tokenAddresses: string[]): Promise<Map<strin
 
     if (!response.ok) return resultMap;
 
-    const data = await response.json();
+    const data = await response.json() as any;
     
     if (data.success && data.data) {
       for (const [address, tokenData] of Object.entries(data.data)) {
@@ -192,7 +192,7 @@ router.get('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       throw new Error(`Grid API error: ${gridResponse.status} - ${errorText}`);
     }
 
-    const gridData: GridBalanceResponse = await gridResponse.json();
+    const gridData = await gridResponse.json() as GridBalanceResponse;
     console.log('💰 Grid API response data:', JSON.stringify(gridData, null, 2));
 
     if (!gridData.data) {
@@ -238,7 +238,7 @@ router.get('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       return {
         tokenAddress: token.address,
         symbol: metadata?.symbol || token.symbol,
-        balance: token.balance,
+        balance: token.balance.toString(),
         decimals: token.decimals,
         uiAmount: token.holdings,
         price,

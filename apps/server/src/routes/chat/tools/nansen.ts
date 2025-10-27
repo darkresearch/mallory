@@ -543,7 +543,7 @@ export function createNansenTransactionsTool(x402Context?: X402Context) {
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenTransactions', apiUrl: NansenUtils.getTransactionsUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatTransactionsRequest({ address, chain, startDate, endDate }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: NansenUtils.formatTransactionsRequest({ address, chain }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }
@@ -567,7 +567,7 @@ export function createNansenCounterpartiesTool(x402Context?: X402Context) {
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenCounterparties', apiUrl: NansenUtils.getCounterpartiesUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatCounterpartiesRequest({ address, chain, startDate, endDate }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: NansenUtils.formatCounterpartiesRequest({ address, chain }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }
@@ -613,7 +613,7 @@ export function createNansenPnlSummaryTool(x402Context?: X402Context) {
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenPnlSummary', apiUrl: NansenUtils.getPnlSummaryUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatPnlSummaryRequest({ address, chain, startDate, endDate }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: NansenUtils.formatPnlSummaryRequest({ address, chain }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }
@@ -637,7 +637,7 @@ export function createNansenPnlTool(x402Context?: X402Context) {
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenPnl', apiUrl: NansenUtils.getPnlUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatPnlRequest({ address, chain, startDate, endDate }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: NansenUtils.formatPnlRequest({ address, chain }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }
@@ -659,7 +659,7 @@ export function createNansenLabelsTool(x402Context?: X402Context) {
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenLabels', apiUrl: NansenUtils.getLabelsUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatLabelsRequest({ address, chain }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: NansenUtils.formatLabelsRequest({ address }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }
@@ -740,7 +740,7 @@ export function createNansenFlowsTool(x402Context?: X402Context) {
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenFlows', apiUrl: NansenUtils.getFlowsUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatFlowsRequest({ token_address, chain, startDate, endDate }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: NansenUtils.formatFlowsRequest({ token_address, chain }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }
@@ -764,7 +764,7 @@ export function createNansenWhoBoughtSoldTool(x402Context?: X402Context) {
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenWhoBoughtSold', apiUrl: NansenUtils.getWhoBoughtSoldUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatWhoBoughtSoldRequest({ token_address, chain, startDate, endDate }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: NansenUtils.formatWhoBoughtSoldRequest({ token_address, chain }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }
@@ -788,7 +788,7 @@ export function createNansenTokenDexTradesTool(x402Context?: X402Context) {
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenTokenDexTrades', apiUrl: NansenUtils.getTokenDexTradesUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatTokenDexTradesRequest({ token_address, chain, startDate, endDate }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: NansenUtils.formatTokenDexTradesRequest({ token_address, chain }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }
@@ -812,7 +812,7 @@ export function createNansenTokenTransfersTool(x402Context?: X402Context) {
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenTokenTransfers', apiUrl: NansenUtils.getTokenTransfersUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatTokenTransfersRequest({ token_address, chain, startDate, endDate }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: NansenUtils.formatTokenTransfersRequest({ token_address, chain }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }
@@ -855,7 +855,7 @@ export function createNansenPnlLeaderboardTool(x402Context?: X402Context) {
       const paymentReq: X402PaymentRequirement = {
         needsPayment: true, toolName: 'nansenPnlLeaderboard', apiUrl: NansenUtils.getPnlLeaderboardUrl(), method: 'POST',
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: NansenUtils.formatPnlLeaderboardRequest({ token_address, chain, startDate, endDate }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
+        body: NansenUtils.formatPnlLeaderboardRequest({ token_address, chain }), estimatedCost: X402_CONSTANTS.NANSEN_ESTIMATED_COST
       };
       return handleX402OrReturnRequirement(x402Context, paymentReq);
     }

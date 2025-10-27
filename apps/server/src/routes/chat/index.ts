@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Router } from 'express';
 import { streamText, UIMessage } from 'ai';
 import { authenticateUser, AuthenticatedRequest } from '../../middleware/auth.js';
 import { toolRegistry } from './tools/registry.js';
@@ -8,7 +8,7 @@ import { buildStreamResponse } from './config/streamResponse.js';
 import { logIncomingMessages, logConversationState, logModelConfiguration } from './debug.js';
 import type { ChatRequest } from '@darkresearch/mallory-shared';
 
-const router = express.Router();
+const router: Router = express.Router();
 
 const getClaudeModel = () => {
   return process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
