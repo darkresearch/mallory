@@ -3,7 +3,13 @@
 // Safe for both Node and browser environments
 export const X402_CONSTANTS = {
   // Solana network (runtime values from env)
-  getSolanaRpcUrl: () => (typeof process !== 'undefined' && process.env?.SOLANA_RPC_URL) || 'https://api.mainnet-beta.solana.com',
+  // Check both SOLANA_RPC_URL (server) and EXPO_PUBLIC_SOLANA_RPC_URL (client/tests)
+  getSolanaRpcUrl: () => {
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env.SOLANA_RPC_URL || process.env.EXPO_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    }
+    return 'https://api.mainnet-beta.solana.com';
+  },
   SOLANA_CLUSTER: 'mainnet-beta' as const, // Hardcoded like Researcher
   
   // Tokens

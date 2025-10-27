@@ -13,6 +13,9 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.16",
     "@darkresearch/mallory-shared": "workspace:*",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.95.8",
+    "@sqds/grid": "^0.1.0",
     "@supabase/supabase-js": "^2.51.0",
     "@supermemory/tools": "latest",
     "ai": "^5.0.50",

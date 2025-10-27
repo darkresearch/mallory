@@ -11,11 +11,10 @@ import {
   Platform
 } from 'react-native';
 import { gridClientService } from '../../features/grid/services/gridClient';
-import { useAuth } from '../../contexts/AuthContext';
 
 interface OtpVerificationModalProps {
   visible: boolean;
-  onClose: () => void;
+  onClose: (success: boolean) => void;
   userEmail: string;
   gridUser?: any; // User object from Grid account creation
 }
@@ -29,7 +28,6 @@ export default function OtpVerificationModal({
   const [otp, setOtp] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState('');
-  const { refreshGridAccount } = useAuth();
 
   const handleVerify = async () => {
     if (otp.length !== 6) {
@@ -49,17 +47,20 @@ export default function OtpVerificationModal({
         user = createResult.user;
       }
 
-      // Verify OTP with Grid SDK (client-side only)
-      console.log('🔐 Verifying OTP with Grid SDK');
-      const authResult = await gridClientService.verifyAccount(user, otp);
+      // Determine if this is re-authentication or new account
+      const isReauth = user.isReauth === true;
       
-      if (authResult.success) {
-        console.log('✅ Grid account verified:', authResult.data?.address);
-        // Refresh auth context to update user state
-        if (refreshGridAccount) {
-          await refreshGridAccount();
-        }
-        onClose();
+      console.log('🔐 Verifying OTP:', isReauth ? 'Re-auth flow' : 'New account flow');
+      
+      // Use appropriate verification method
+      const authResult = isReauth 
+        ? await gridClientService.completeReauthentication(user, otp)
+        : await gridClientService.verifyAccount(user, otp);
+      
+      if (authResult.success && authResult.data) {
+        console.log('✅ Grid account verified:', authResult.data.address);
+        // Signal success - AuthContext will handle sync to server
+        onClose(true);
       } else {
         setError('Verification failed. Please check your code and try again.');
       }
@@ -72,13 +73,13 @@ export default function OtpVerificationModal({
   };
 
   const isWeb = Platform.OS === 'web';
+  const isReauth = gridUser?.isReauth === true;
 
   return (
     <Modal
       visible={visible}
       transparent
       animationType={isWeb ? "fade" : "slide"}
-      onRequestClose={onClose}
     >
       <KeyboardAvoidingView 
         style={isWeb ? styles.webContainer : styles.mobileContainer}
@@ -86,9 +87,13 @@ export default function OtpVerificationModal({
       >
         <View style={styles.backdrop} />
         <View style={isWeb ? styles.webContent : styles.mobileContent}>
-          <Text style={styles.title}>Verify Your Email</Text>
+          <Text style={styles.title}>
+            {isReauth ? 'Verify Your Wallet' : 'Set Up Your Wallet'}
+          </Text>
           <Text style={styles.description}>
-            We've sent a 6-digit code to {userEmail}
+            {isReauth 
+              ? `We've sent a verification code to ${userEmail}`
+              : `We've sent a 6-digit code to ${userEmail}`}
           </Text>
           
           <TextInput

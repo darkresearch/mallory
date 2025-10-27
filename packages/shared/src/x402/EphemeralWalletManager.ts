@@ -1,3 +1,10 @@
+/**
+ * Ephemeral Wallet Manager (Shared)
+ * 
+ * Used by both backend and tests
+ * Proven to work - originally from test implementation
+ */
+
 import {
   Keypair,
   Connection,
@@ -13,23 +20,36 @@ import {
   getAssociatedTokenAddress,
   TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
-import { gridClientService } from '../grid';
-import { X402_CONSTANTS } from '@darkresearch/mallory-shared';
 
 /**
- * Ephemeral Wallet Manager (Client-Side)
- * Copied from Researcher but adapted for client-side Grid integration
- * 
- * Creates temporary keypairs for x402 payments with ZERO DUST guarantee.
- * Lifecycle: create → fund from Grid → use for payment → sweep back to Grid
+ * Interface for Grid token sender
+ * This allows dependency injection - tests and backend provide their own implementation
+ */
+export interface GridTokenSender {
+  sendTokens(params: {
+    recipient: string;
+    amount: string;
+    tokenMint?: string;
+  }): Promise<string>;
+}
+
+/**
+ * Ephemeral Wallet Manager
+ * Creates temporary keypairs for x402 payments with ZERO DUST guarantee
  */
 export class EphemeralWalletManager {
-  private static connection = new Connection(X402_CONSTANTS.getSolanaRpcUrl(), 'confirmed');
+  private connection: Connection;
+  private gridSender: GridTokenSender;
+
+  constructor(solanaRpcUrl: string, gridSender: GridTokenSender) {
+    this.connection = new Connection(solanaRpcUrl, 'confirmed');
+    this.gridSender = gridSender;
+  }
 
   /**
    * Create ephemeral keypair (in-memory only, never persisted)
    */
-  static create(): { keypair: Keypair; address: string } {
+  create(): { keypair: Keypair; address: string } {
     const keypair = Keypair.generate();
     const address = keypair.publicKey.toBase58();
 
@@ -40,12 +60,12 @@ export class EphemeralWalletManager {
 
   /**
    * Fund ephemeral wallet from Grid
-   * Uses Grid's signAndSend to transfer USDC + SOL
    */
-  static async fund(
+  async fund(
     ephemeralAddress: string,
     usdcAmount: string,
-    solAmount: string
+    solAmount: string,
+    usdcMint: string
   ): Promise<{ usdcSignature: string; solSignature: string }> {
     try {
       console.log('💰 [Ephemeral] Funding from Grid:', {
@@ -54,26 +74,27 @@ export class EphemeralWalletManager {
         solAmount
       });
 
-      const account = await gridClientService.getAccount();
-      if (!account) {
-        throw new Error('Grid account not found');
-      }
-
       // Send USDC using Grid
-      // Grid will handle building the transaction internally
-      const usdcSignature = await gridClientService.sendTokens({
+      const usdcSignature = await this.gridSender.sendTokens({
         recipient: ephemeralAddress,
         amount: usdcAmount,
-        tokenMint: X402_CONSTANTS.USDC_MINT
+        tokenMint: usdcMint
       });
 
       // Send SOL using Grid
-      const solSignature = await gridClientService.sendTokens({
+      const solSignature = await this.gridSender.sendTokens({
         recipient: ephemeralAddress,
         amount: solAmount
         // No tokenMint = native SOL
       });
 
+      console.log('✅ [Ephemeral] Funding transactions submitted');
+      console.log('   USDC tx:', usdcSignature.substring(0, 20) + '...');
+      console.log('   SOL tx:', solSignature.substring(0, 20) + '...');
+      console.log('   Waiting 2s for settlement...');
+      
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       console.log('✅ [Ephemeral] Funding complete:', {
         usdcSignature,
         solSignature
@@ -90,9 +111,8 @@ export class EphemeralWalletManager {
   /**
    * Sweep ALL funds back to Grid wallet
    * ZERO DUST: Recovers all USDC + SOL + rent from closed accounts
-   * Copied exactly from Researcher's EphemeralWalletManager.sweepAll()
    */
-  static async sweepAll(
+  async sweepAll(
     ephemeralKeypair: Keypair,
     gridWalletAddress: string,
     tokenMint?: string
@@ -124,10 +144,18 @@ export class EphemeralWalletManager {
 
           const toTokenAccount = await getAssociatedTokenAddress(
             new PublicKey(tokenMint),
-            new PublicKey(gridWalletAddress)
+            new PublicKey(gridWalletAddress),
+            true  // allowOwnerOffCurve = true for Grid PDA
           );
 
-          const tokenBalance = await this.connection.getTokenAccountBalance(fromTokenAccount);
+          // Try to get token balance (might not exist if transfer failed)
+          let tokenBalance;
+          try {
+            tokenBalance = await this.connection.getTokenAccountBalance(fromTokenAccount);
+          } catch (error) {
+            console.log('🧹 [Ephemeral] Token account not found (transfer may have failed)');
+            throw new Error('No token account');  // Will be caught below
+          }
           const tokenAmount = parseInt(tokenBalance.value.amount);
 
           if (tokenAmount > 0) {
@@ -151,7 +179,7 @@ export class EphemeralWalletManager {
             tokensSwept = tokenAmount;
           }
 
-          // Step 2: Close token account to recover rent (~0.00203928 SOL)
+          // Step 2: Close token account to recover rent
           console.log('🧹 [Ephemeral] Closing token account to recover rent...');
           
           instructions.push(
