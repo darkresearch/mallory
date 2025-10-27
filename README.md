@@ -133,44 +133,24 @@ See [apps/server/README.md](./apps/server/README.md) for detailed server documen
 
 ## 🔑 Grid Wallet Integration
 
-Mallory uses [Grid](https://developers.squads.so) for embedded wallets. Key features:
+Mallory uses [Grid](https://developers.squads.so) for embedded wallets:
 
-- **Client-Side Signing**: Session secrets never leave the device
-- **Email-Based Auth**: Simple OTP verification
+- **Non-Custodial**: User private keys never exist - Grid uses secure enclaves and MPC
+- **Email-Based Auth**: Simple OTP verification flow
+- **Session Secrets**: Generated client-side, passed to backend only when needed for signing
 - **Smart Contract Wallets**: Spending limits and programmable transactions
 - **Production Ready**: Sandbox and production environments
 - **x402 Integration**: Automatic micropayments for premium data APIs
 
-**Flow:**
-1. User enters email → Grid sends OTP
-2. User verifies OTP → Grid account created
-3. Session secrets stored locally (encrypted)
-4. All transactions signed client-side or server-side (with secrets sent for signing only)
-5. x402 payments handled server-side using ephemeral wallets
-
-## 🏗️ Architecture
-
-### Client Architecture
-- **Framework**: React Native (Expo)
-- **Navigation**: Expo Router (file-based routing)
-- **State**: React Context + Hooks
-- **Storage**: Expo Secure Store
-- **Wallet**: Grid SDK (@sqds/grid)
-- **AI**: Vercel AI SDK
-
-### Server Architecture
-- **Framework**: Express.js
-- **AI**: Anthropic SDK (Claude)
-- **Auth**: Supabase
-- **Data Enrichment**: Birdeye API
-- **Deployment**: Node.js/Bun
+Grid's architecture means neither the client nor server ever has access to user private keys, making it truly non-custodial while still providing seamless transaction signing.
 
 ## 📦 Shared Package
 
-The `packages/shared` directory contains TypeScript types shared between client and server:
+The `packages/shared` directory contains TypeScript types and utilities shared between client and server:
 
 ```typescript
 import type { ChatRequest, HoldingsResponse } from '@darkresearch/mallory-shared';
+import { X402PaymentService } from '@darkresearch/mallory-shared';
 ```
 
 ## 🚢 Deployment
@@ -184,19 +164,9 @@ See [apps/client/README.md](./apps/client/README.md#deployment) for details.
 
 ### Server Deployment
 - **Recommended**: Railway, Render, Fly.io
-- **Docker**: Included Dockerfile (coming soon)
 - **Node.js**: Any Node.js 18+ hosting
 
 See [apps/server/README.md](./apps/server/README.md#deployment) for details.
-
-## 🔐 Security
-
-- ✅ Session secrets stored client-side only
-- ✅ All transactions signed on device
-- ✅ Backend validates Supabase JWTs
-- ✅ Environment variables for sensitive data
-- ✅ CORS configured for production
-- ⚠️ Review security before production use
 
 ## 🤝 Contributing
 
@@ -204,7 +174,7 @@ Contributions welcome! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) first.
 
 ## 📄 License
 
-MIT License - see [LICENSE](./LICENSE) for details.
+Apache License 2.0 - see [LICENSE](./LICENSE) for details.
 
 ## 🆘 Support
 
@@ -228,5 +198,5 @@ Built with:
 
 ---
 
-**Made by [Dark Research](https://darkresearch.ai)**
+**Made with ❤️ by [Dark](https://darkresearch.ai)**
 

@@ -168,7 +168,7 @@ Found a security issue? Please email hello@darkresearch.ai instead of creating a
 
 ## 📄 License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree that your contributions will be licensed under the Apache License 2.0.
 
 ## 🙏 Questions?
 

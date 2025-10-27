@@ -284,12 +284,6 @@ ALLOWED_ORIGINS=https://your-app.com,https://www.your-app.com
 4. Start command: `bun run start`
 5. Add environment variables
 
-### Docker (Coming Soon)
-
-```bash
-docker build -t mallory-server .
-docker run -p 3001:3001 --env-file .env mallory-server
-```
 
 ## 🐛 Debugging
 
@@ -367,5 +361,5 @@ See root [CONTRIBUTING.md](../../CONTRIBUTING.md) for contribution guidelines.
 
 ## 📄 License
 
-MIT License - see [LICENSE](../../LICENSE) for details.
+Apache License 2.0 - see [LICENSE](../../LICENSE) for details.
 
