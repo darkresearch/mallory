@@ -62,11 +62,12 @@ Every dependency was selected for a reason:
 
 ### **Embedded Wallet Infrastructure: [Squads Grid](https://www.squads.so/grid)**
 - Non-custodial Solana wallets managed via API
-- **Client-side signing**: Session secrets never leave the device
+- **Truly Non-Custodial**: User private keys never exist - Grid uses secure enclaves and MPC
+- Session secrets generated client-side, passed to backend only when needed
 - No private key management complexity
 - Built-in email-based auth with OTP
 - Production-ready transaction signing
-- **Why Grid?** An enterprise-grade embedded wallet solution that doesn't require you to become a custodian, with all signing happening securely on the client.
+- **Why Grid?** An enterprise-grade embedded wallet solution where neither the client nor server ever has access to user private keys.
 
 ### **Backend-as-a-Service: [Supabase](https://supabase.com)**
 - PostgreSQL database with automatic APIs
@@ -127,7 +128,7 @@ Mallory implements the [x402 protocol](https://x402.org) for autonomous AI payme
 - Row-level security
 
 💰 **Embedded Wallet**
-- Non-custodial Solana wallets via Grid
+- Truly non-custodial Solana wallets via Grid (keys never exist)
 - Deposit, send, and balance tracking
 - Real-time price updates
 - Transaction history
@@ -163,12 +164,13 @@ Mallory ships with **production-ready implementations** of complex features:
 - Smart scroll behavior (auto-scroll on new messages, preserve scroll on history load)
 
 ### **Wallet Features**
-- Grid embedded wallet creation and verification
+- Grid embedded wallet creation and verification (non-custodial)
 - Deposit modal with QR code and copy-to-clipboard
 - Send flow with validation and confirmation
 - Real-time balance updates via Supabase subscriptions
 - Transaction history
 - Price tracking for holdings
+- Session secrets managed client-side, sent to backend only for signing
 
 ### **Dynamic Components**
 - Powered by [streamdown-rn](https://www.npmjs.com/package/streamdown-rn) (Dark's React Native port of Vercel's streamdown)
@@ -415,10 +417,11 @@ Supabase realtime subscriptions for:
 - Transaction confirmations
 
 #### **Grid Wallet Integration**
-- Embedded Solana wallets (no seed phrases for users)
+- Truly non-custodial embedded Solana wallets
+- User private keys never exist - Grid uses secure enclaves and MPC
 - Email-based OTP verification flow
 - Session secrets generated and stored client-side
-- Transaction signing via server (with secrets sent securely)
+- Transaction signing via Grid API (with secrets sent to backend only when needed)
 - x402 payment integration for premium API access
 - Ephemeral wallet pattern for single-use transactions
 
@@ -612,7 +615,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ## Credits
 
-Built with ❤️ by [Dark Research](https://darkresearch.ai)
+Built with ❤️ by [Dark](https://darkresearch.ai)
 
 **About Dark:** We build AI-first financial infrastructure. Mallory powers Scout, our production AI financial assistant serving thousands of users.
 
@@ -624,8 +627,8 @@ Built with ❤️ by [Dark Research](https://darkresearch.ai)
 
 ## License
 
-Copyright 2025 Dark Research, LLC
+Copyright 2025 Dark
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
+Licensed under the Apache License, Version 2.0. See [LICENSE](../../LICENSE) for details.
 
 You are free to use Mallory commercially, modify it, and distribute it. No attribution required (but we'd love a star ⭐️).
