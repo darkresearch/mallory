@@ -317,6 +317,12 @@ router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequ
       console.log('🔄 [Grid Verify] Existing user flow: completeAuth()');
 
       try {
+        console.log('[Grid Verify] completeAuth request:', {
+          user,
+          otpCode,
+          sessionSecrets
+        });
+
         // Primary: Try completeAuth for existing user
         authResult = await gridClient.completeAuth({
           user,
