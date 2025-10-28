@@ -47,24 +47,9 @@ export default function OtpVerificationModal({
     setOtp('');
     
     try {
-      // If we have gridUser, it means account already exists
-      if (gridUser) {
-        const isReauth = gridUser.isReauth === true;
-        console.log('🔄 Resending OTP:', isReauth ? 'Re-auth flow' : 'New account flow');
-        
-        // For re-authentication, trigger a new login
-        if (isReauth) {
-          await gridClientService.reauthenticateAccount(userEmail);
-        } else {
-          // For new accounts, create account again (which sends new OTP)
-          await gridClientService.createAccount(userEmail);
-        }
-      } else {
-        // No gridUser, create account which sends OTP
-        console.log('🔄 Sending initial OTP for:', userEmail);
-        await gridClientService.createAccount(userEmail);
-      }
-      
+      // Resend OTP - backend handles whether to use beginner or advanced flow
+      console.log('🔄 Resending OTP for:', userEmail);
+      await gridClientService.startSignIn(userEmail);
       console.log('✅ OTP resent successfully');
       setError(''); // Clear any previous errors
     } catch (error) {
@@ -85,79 +70,33 @@ export default function OtpVerificationModal({
     setError('');
 
     try {
-      // If we don't have gridUser, create account first
+      // If we don't have gridUser, start sign-in first
       let user = gridUser;
       if (!user) {
-        console.log('🔐 Creating Grid account for:', userEmail);
-        const createResult = await gridClientService.createAccount(userEmail);
-        user = createResult.user;
+        console.log('🔐 Starting Grid sign-in for:', userEmail);
+        const signInResult = await gridClientService.startSignIn(userEmail);
+        user = signInResult.user;
       }
 
-      // Determine if this is re-authentication or new account
-      const isReauth = user.isReauth === true;
+      console.log('🔐 Completing sign-in with OTP - backend determines correct flow');
       
-      console.log('🔐 Verifying OTP (attempt 1):', isReauth ? 'Re-auth flow' : 'New account flow');
+      // Backend automatically uses the correct flow (beginner or advanced)
+      const authResult = await gridClientService.completeSignIn(user, otp);
       
-      // Try the initial flow based on isReauth flag
-      let authResult;
-      try {
-        authResult = isReauth 
-          ? await gridClientService.completeReauthentication(user, otp)
-          : await gridClientService.verifyAccount(user, otp);
-        
-        console.log('🔐 [OTP Verification] Auth result (attempt 1):', {
-          success: authResult.success,
-          hasData: !!authResult.data,
-          address: authResult.data?.address,
-        });
-        
-        if (authResult.success && authResult.data) {
-          console.log('✅ Grid account verified on first attempt:', authResult.data.address);
-          setVerificationSuccess(true);
-          onClose(true);
-          return;
-        }
-      } catch (firstError) {
-        const errorMessage = firstError instanceof Error ? firstError.message : String(firstError);
-        console.log('⚠️ [OTP Verification] First attempt failed:', errorMessage);
-        
-        // Check if error is "Invalid email and code combination" - likely wrong flow
-        if (errorMessage.toLowerCase().includes('invalid email and code combination')) {
-          console.log('🔄 [OTP Verification] Detected wrong flow, retrying with opposite method...');
-          
-          // Retry with the opposite flow
-          try {
-            const oppositeFlow = !isReauth;
-            console.log('🔐 Verifying OTP (attempt 2):', oppositeFlow ? 'Re-auth flow' : 'New account flow');
-            
-            authResult = oppositeFlow
-              ? await gridClientService.completeReauthentication(user, otp)
-              : await gridClientService.verifyAccount(user, otp);
-            
-            console.log('🔐 [OTP Verification] Auth result (attempt 2):', {
-              success: authResult.success,
-              hasData: !!authResult.data,
-              address: authResult.data?.address,
-            });
-            
-            if (authResult.success && authResult.data) {
-              console.log('✅ Grid account verified on second attempt (opposite flow):', authResult.data.address);
-              setVerificationSuccess(true);
-              onClose(true);
-              return;
-            }
-          } catch (secondError) {
-            console.error('❌ [OTP Verification] Both flows failed:', secondError);
-            // Fall through to show error
-          }
-        }
-        
-        // If we get here, either it wasn't a flow error or both flows failed
-        throw firstError;
+      console.log('🔐 [OTP Verification] Sign-in result:', {
+        success: authResult.success,
+        hasData: !!authResult.data,
+        address: authResult.data?.address,
+      });
+      
+      if (authResult.success && authResult.data) {
+        console.log('✅ Grid sign-in complete:', authResult.data.address);
+        setVerificationSuccess(true);
+        onClose(true);
+        return;
       }
       
       // If we reach here without returning, verification failed
-      console.log('❌ [OTP Verification] Verification failed - showing error');
       setError('Verification failed. Please check your code and try again.');
     } catch (error) {
       console.error('❌ OTP verification error:', error);
@@ -167,7 +106,7 @@ export default function OtpVerificationModal({
       if (errorMessage.toLowerCase().includes('session secrets not found')) {
         setError('Session expired. Please request a new code.');
       } else if (errorMessage.toLowerCase().includes('invalid email and code combination')) {
-        setError('Unable to verify code. Please request a new one.');
+        setError('Invalid code. Please check and try again.');
       } else {
         setError(errorMessage);
       }
@@ -200,7 +139,6 @@ export default function OtpVerificationModal({
   };
 
   const isWeb = Platform.OS === 'web';
-  const isReauth = gridUser?.isReauth === true;
 
   return (
     <Modal
@@ -215,12 +153,10 @@ export default function OtpVerificationModal({
         <View style={styles.backdrop} />
         <View style={isWeb ? styles.webContent : styles.mobileContent}>
           <Text style={styles.title}>
-            {isReauth ? 'Verify Your Wallet' : 'Set Up Your Wallet'}
+            Verify Your Wallet
           </Text>
           <Text style={styles.description}>
-            {isReauth 
-              ? `We've sent a verification code to ${userEmail}`
-              : `We've sent a 6-digit code to ${userEmail}`}
+            {`We've sent a 6-digit code to ${userEmail}`}
           </Text>
           
           <TextInput

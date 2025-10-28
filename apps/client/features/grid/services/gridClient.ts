@@ -2,26 +2,101 @@ import { secureStorage, config } from '@/lib';
 
 /**
  * Grid Client Service
- * Proxies all Grid operations through backend to avoid CORS and protect API key
- * - Account creation and verification (via backend proxy)
- * - Transaction signing (via backend proxy with session secrets)
- * - Session secrets generated and stored client-side, sent to backend only for signing
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * GRID'S TWO-TIER AUTHENTICATION MODEL (Client Perspective)
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * This service provides a simple, clean API for Grid authentication.
+ * ALL complexity is handled by the backend - the client just calls methods.
+ * 
+ * 🎯 KEY PRINCIPLE: Backend-Driven Authentication
+ * ───────────────────────────────────────────────
+ * - Client never needs to know if user is beginner or advanced
+ * - Client never needs to know which Grid API to call
+ * - Client just calls startSignIn() and completeSignIn()
+ * - Backend automatically:
+ *   • Detects user's auth level from app_metadata
+ *   • Chooses correct Grid API flow
+ *   • Handles migration for existing users
+ *   • Upgrades users after first successful sign-in
+ * 
+ * 📱 CLIENT API (Only 3 Methods!)
+ * ──────────────────────────────
+ * 1. startSignIn(email)
+ *    - Initiates sign-in for ANY user (first-time or returning)
+ *    - Backend sends OTP via email
+ *    - Returns user object for OTP verification
+ * 
+ * 2. completeSignIn(user, otpCode)
+ *    - Completes sign-in for ANY user
+ *    - Backend verifies OTP and creates/authenticates account
+ *    - Returns authentication data
+ * 
+ * 3. getAccount()
+ *    - Gets stored Grid account from secure storage
+ *    - Used to check if user is already signed in
+ * 
+ * 🔒 SECURITY ARCHITECTURE
+ * ───────────────────────
+ * - Session secrets generated client-side (never leave device until needed)
+ * - Backend proxies all Grid SDK calls (protects API key, avoids CORS)
+ * - Auth level tracked in Supabase app_metadata (server-side only)
+ * - Users cannot manipulate their auth level
+ * 
+ * 🔄 TYPICAL FLOW
+ * ──────────────
+ * 1. User opens app
+ * 2. Check getAccount() - if exists, user is signed in
+ * 3. If not signed in:
+ *    a. Call startSignIn(email) → OTP sent
+ *    b. User enters OTP
+ *    c. Call completeSignIn(user, otp) → Account ready
+ * 4. User can now make transactions
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
+
 class GridClientService {
   constructor() {
     console.log('🔐 Grid client service initialized (backend proxy mode)');
   }
 
   /**
-   * Create Grid account with email-based authentication
-   * Generates and stores session secrets locally (never sent to backend)
-   * Uses backend proxy to avoid CORS issues
+   * Start Grid sign-in process
+   * 
+   * Works for BOTH first-time users AND returning users.
+   * Backend automatically determines which flow to use.
+   * 
+   * BACKEND BEHAVIOR:
+   * ────────────────
+   * • First-time users: Uses gridClient.createAccount(email)
+   * • Returning users: Uses gridClient.initAuth(email)
+   * • Migration users: Detects existing account, upgrades, retries
+   * 
+   * WHAT HAPPENS:
+   * ────────────
+   * 1. Backend determines user's auth level
+   * 2. Backend calls appropriate Grid API
+   * 3. Grid sends OTP to user's email
+   * 4. Backend returns user object
+   * 5. Client generates session secrets (stored locally)
+   * 
+   * @param email - User's email address
+   * @returns Promise with { user, sessionSecrets }
+   * @throws Error if backend request fails
+   * 
+   * USAGE:
+   * ─────
+   * const { user } = await gridClientService.startSignIn('user@example.com');
+   * // User receives OTP via email
+   * // Show OTP input modal
    */
-  async createAccount(email: string) {
+  async startSignIn(email: string) {
     try {
-      console.log('🔐 Creating Grid account for:', email);
+      console.log('🔐 [Grid Client] Starting sign-in for:', email);
       
-      // Call backend proxy (avoids CORS)
+      // Call backend proxy (backend determines beginner vs advanced flow)
       const backendUrl = config.backendApiUrl || 'http://localhost:3001';
       const token = await secureStorage.getItem('mallory_auth_token');
       
@@ -31,15 +106,15 @@ class GridClientService {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email, isReauth: false })
+        body: JSON.stringify({ email })
       });
       
       const data = await response.json();
       
-      console.log('🔐 Backend proxy response:', data);
+      console.log('🔐 [Grid Client] Backend response:', data);
       
       if (!data.success || !data.user) {
-        throw new Error(`Grid account creation failed: ${data.error || 'Unknown error'}`);
+        throw new Error(`Sign-in failed: ${data.error || 'Unknown error'}`);
       }
       
       // Generate session secrets (client-side only, never sent to backend until needed for signing)
@@ -55,35 +130,73 @@ class GridClientService {
       // Store session secrets securely
       await secureStorage.setItem('grid_session_secrets', JSON.stringify(sessionSecrets));
       
-      console.log('✅ Grid account creation initiated, OTP sent');
+      console.log('✅ [Grid Client] Sign-in started, OTP sent to email');
       
       return { 
         user: data.user, 
         sessionSecrets 
       };
     } catch (error) {
-      console.error('❌ Grid account creation error:', error);
+      console.error('❌ [Grid Client] Sign-in start error:', error);
       throw error;
     }
   }
 
   /**
-   * Verify OTP code and complete account setup
-   * Uses backend proxy to avoid CORS issues
+   * Complete Grid sign-in with OTP code
+   * 
+   * Works for BOTH first-time users AND returning users.
+   * Backend automatically determines which flow to use.
+   * 
+   * BACKEND BEHAVIOR:
+   * ────────────────
+   * • First-time users: Uses gridClient.completeAuthAndCreateAccount()
+   *   - Creates Grid account
+   *   - Upgrades user to advanced level
+   * • Returning users: Uses gridClient.completeAuth()
+   *   - Re-authenticates existing account
+   * 
+   * WHAT HAPPENS:
+   * ────────────
+   * 1. Backend determines user's auth level
+   * 2. Backend calls appropriate Grid API with OTP
+   * 3. Grid verifies OTP and returns account data
+   * 4. Backend syncs Grid address to database
+   * 5. Client stores account data locally
+   * 6. User is now signed in and can make transactions
+   * 
+   * FOR FIRST-TIME USERS:
+   * ────────────────────
+   * After successful verification, backend automatically:
+   * • Sets app_metadata['grid-advanced'] = true
+   * • User is PERMANENTLY upgraded to advanced level
+   * • All future sign-ins will use advanced flow
+   * 
+   * @param user - Grid user object from startSignIn()
+   * @param otpCode - 6-digit OTP code from email
+   * @returns Promise with authentication result
+   * @throws Error if verification fails
+   * 
+   * USAGE:
+   * ─────
+   * const result = await gridClientService.completeSignIn(user, '123456');
+   * if (result.success) {
+   *   console.log('Signed in! Address:', result.data.address);
+   * }
    */
-  async verifyAccount(user: any, otpCode: string) {
+  async completeSignIn(user: any, otpCode: string) {
     try {
-      console.log('🔐 Verifying Grid account with OTP');
+      console.log('🔐 [Grid Client] Completing sign-in with OTP');
       
       // Retrieve session secrets from secure storage
       const sessionSecretsJson = await secureStorage.getItem('grid_session_secrets');
       if (!sessionSecretsJson) {
-        throw new Error('Session secrets not found. Please create account first.');
+        throw new Error('Session secrets not found. Please start sign-in first.');
       }
       
       const sessionSecrets = JSON.parse(sessionSecretsJson);
       
-      // Call backend proxy to complete auth (avoids CORS)
+      // Call backend proxy to complete auth (backend determines beginner vs advanced)
       const backendUrl = config.backendApiUrl || 'http://localhost:3001';
       const token = await secureStorage.getItem('mallory_auth_token');
       
@@ -96,27 +209,26 @@ class GridClientService {
         body: JSON.stringify({ 
           user, 
           otpCode, 
-          sessionSecrets,
-          isReauth: false 
+          sessionSecrets
         })
       });
       
       const authResult = await response.json();
       
-      console.log('🔐 Backend proxy verification response:', authResult);
+      console.log('🔐 [Grid Client] Sign-in completion response:', authResult);
       
       if (!authResult.success || !authResult.data) {
-        throw new Error(`Verification failed: ${authResult.error || 'Unknown error'}`);
+        throw new Error(`Sign-in completion failed: ${authResult.error || 'Unknown error'}`);
       }
       
       // Store account data
       await secureStorage.setItem('grid_account', JSON.stringify(authResult.data));
       
-      console.log('✅ Grid account verified:', authResult.data.address);
+      console.log('✅ [Grid Client] Sign-in complete:', authResult.data.address);
       
       return authResult;
     } catch (error) {
-      console.error('❌ Grid verification error:', error);
+      console.error('❌ [Grid Client] Sign-in completion error:', error);
       throw error;
     }
   }
@@ -127,170 +239,6 @@ class GridClientService {
   async getAccount() {
     const accountJson = await secureStorage.getItem('grid_account');
     return accountJson ? JSON.parse(accountJson) : null;
-  }
-
-  /**
-   * Re-authenticate to existing Grid account
-   * Used when logging in from a new device or when session expires
-   * Uses backend proxy to avoid CORS issues
-   */
-  async reauthenticateAccount(email: string) {
-    try {
-      console.log('🔄 Re-authenticating to existing Grid account:', email);
-      
-      // Call backend proxy (avoids CORS)
-      const backendUrl = config.backendApiUrl || 'http://localhost:3001';
-      const token = await secureStorage.getItem('mallory_auth_token');
-      
-      const response = await fetch(`${backendUrl}/api/grid/init-account`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, isReauth: true })
-      });
-      
-      const data = await response.json();
-      
-      console.log('🔄 Backend proxy response:', data);
-      
-      if (!data.success || !data.user) {
-        throw new Error(`Grid re-authentication failed: ${data.error || 'Unknown error'}`);
-      }
-      
-      // Generate NEW session secrets for this device/browser
-      const { GridClient } = await import('@sqds/grid');
-      const tempClient = new GridClient({
-        environment: (config.gridEnv || 'production') as 'sandbox' | 'production',
-        apiKey: 'temp',
-        baseUrl: 'https://grid.squads.xyz'
-      });
-      const sessionSecrets = await tempClient.generateSessionSecrets();
-      
-      // Store session secrets securely
-      await secureStorage.setItem('grid_session_secrets', JSON.stringify(sessionSecrets));
-      
-      console.log('✅ Grid re-authentication initiated, OTP sent');
-      
-      return {
-        user: data.user,
-        sessionSecrets
-      };
-    } catch (error) {
-      console.error('❌ Grid re-authentication error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Complete re-authentication with OTP
-   * Used for existing accounts (different from verifyAccount which is for new accounts)
-   * Uses backend proxy to avoid CORS issues
-   */
-  async completeReauthentication(user: any, otpCode: string) {
-    try {
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('🔄 GRID RE-AUTHENTICATION STARTED');
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('OTP Code:', otpCode);
-      console.log('User email:', user.email);
-      console.log();
-      
-      // Retrieve session secrets from secure storage
-      const sessionSecretsJson = await secureStorage.getItem('grid_session_secrets');
-      if (!sessionSecretsJson) {
-        throw new Error('Session secrets not found. Please re-authenticate.');
-      }
-      
-      const sessionSecrets = JSON.parse(sessionSecretsJson);
-      console.log('✅ Session secrets loaded from storage');
-      console.log();
-      
-      // Call backend proxy to complete auth (avoids CORS)
-      const backendUrl = config.backendApiUrl || 'http://localhost:3001';
-      const token = await secureStorage.getItem('mallory_auth_token');
-      
-      console.log('📤 Sending verification request to backend...');
-      const response = await fetch(`${backendUrl}/api/grid/verify-otp`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          user, 
-          otpCode, 
-          sessionSecrets,
-          isReauth: true 
-        })
-      });
-      
-      const authResult = await response.json();
-      
-      console.log('📥 Backend verification response:', {
-        success: authResult.success,
-        hasData: !!authResult.data,
-        address: authResult.data?.address,
-        error: authResult.error
-      });
-      
-      // DETAILED LOGGING FOR DEBUGGING
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('📥 CLIENT RECEIVED - FULL AUTHRESULT.DATA STRUCTURE:');
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('Data keys:', authResult.data ? Object.keys(authResult.data) : []);
-      console.log('Authentication type:', typeof authResult.data?.authentication);
-      console.log('Authentication is array:', Array.isArray(authResult.data?.authentication));
-      console.log('Authentication keys:', authResult.data?.authentication ? Object.keys(authResult.data.authentication) : []);
-      console.log('Authentication value:', authResult.data?.authentication);
-      console.log('Full structure:', JSON.stringify(authResult.data, null, 2));
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log();
-      
-      if (!authResult.success || !authResult.data) {
-        throw new Error(`Re-authentication failed: ${authResult.error || 'Unknown error'}`);
-      }
-      
-      // Store account data
-      await secureStorage.setItem('grid_account', JSON.stringify(authResult.data));
-      console.log('💾 Grid account data stored to secure storage');
-      console.log();
-      
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('✅ GRID RE-AUTHENTICATION SUCCESSFUL');
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('Grid Address:', authResult.data.address);
-      console.log('Account Keys:', Object.keys(authResult.data));
-      console.log();
-      console.log('Authentication Field Analysis:');
-      console.log('  Type:', typeof authResult.data.authentication);
-      console.log('  Is Array:', Array.isArray(authResult.data.authentication));
-      if (Array.isArray(authResult.data.authentication)) {
-        console.log('  Array Length:', authResult.data.authentication.length);
-        console.log('  First Element Keys:', authResult.data.authentication[0] ? Object.keys(authResult.data.authentication[0]) : 'N/A');
-        console.log('  First Element:', authResult.data.authentication[0]);
-      } else {
-        console.log('  Object Keys:', Object.keys(authResult.data.authentication || {}));
-        console.log('  Value:', authResult.data.authentication);
-      }
-      console.log();
-      console.log('🔍 SEARCH FOR THIS IN LOGS: "GRID RE-AUTHENTICATION SUCCESSFUL"');
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log();
-      
-      return authResult;
-    } catch (error) {
-      console.error('═══════════════════════════════════════════════════════════');
-      console.error('❌ GRID RE-AUTHENTICATION FAILED');
-      console.error('═══════════════════════════════════════════════════════════');
-      console.error('Error:', error);
-      console.error();
-      console.error('🔍 SEARCH FOR THIS IN LOGS: "GRID RE-AUTHENTICATION FAILED"');
-      console.error('═══════════════════════════════════════════════════════════');
-      console.error();
-      throw error;
-    }
   }
 
   /**
