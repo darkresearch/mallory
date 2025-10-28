@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import { supabase, secureStorage, config } from '../lib';
 import { configureGoogleSignIn, signInWithGoogle, signOutFromGoogle } from '../features/auth';
 import { gridClientService } from '../features/grid';
-import OtpVerificationModal from '../components/grid/OtpVerificationModal';
 
 interface User {
   id: string;
@@ -27,10 +26,11 @@ interface AuthContextType {
   isAuthenticated: boolean;
   needsReauth: boolean;
   isCheckingReauth: boolean;
+  isSigningIn: boolean; // Expose to prevent loading screen redirect during sign-in
   login: () => Promise<void>;
   logout: () => Promise<void>;
   refreshGridAccount: () => Promise<void>;
-  completeReauth: () => Promise<void>;
+  completeReauth: () => void;
   triggerReauth: () => Promise<void>;
 }
 
@@ -48,13 +48,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isCheckingReauth, setIsCheckingReauth] = useState(false);
   const hasCheckedReauth = useRef(false);
   
-  // Grid OTP modal state
-  const [showGridOtpModal, setShowGridOtpModal] = useState(false);
-  const [gridUserForOtp, setGridUserForOtp] = useState<any>(null);
+  // Grid OTP - now uses screen instead of modal
+  // No more modal state needed!
   
   // SIGN-IN STATE: Tracks when user is actively signing in
   // Set when user clicks "Continue with Google", cleared when sign-in completes or fails
   // Prevents premature logout during the sign-in flow
+  // ALSO prevents loading screen from redirecting to chat during Grid OTP flow
   const [isSigningIn, setIsSigningIn] = useState(false);
   
   // RACE CONDITION GUARD: Prevent concurrent Grid sign-in attempts
@@ -66,6 +66,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isLoggingOut = useRef(false);
 
   console.log('AuthProvider rendering, user:', user?.email || 'none', 'isLoading:', isLoading);
+
+  // RESTORE isSigningIn from sessionStorage on app init (after OAuth redirect)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const oauthInProgress = sessionStorage.getItem('mallory_oauth_in_progress') === 'true';
+      if (oauthInProgress) {
+        console.log('🔐 [Init] Restoring isSigningIn=true from sessionStorage');
+        setIsSigningIn(true);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     // Configure Google Sign-In for mobile
@@ -170,11 +181,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🏦 [Grid] No Grid account found, starting sign-in...');
       
       // Start Grid sign-in - backend automatically detects auth level and handles migration
-      // If Grid is down or unavailable, this will fail and throw an error
-      // The error will propagate up and prevent the user from proceeding
       const { user: gridUser } = await gridClientService.startSignIn(userEmail);
-      setGridUserForOtp(gridUser);
-      setShowGridOtpModal(true);
+      
+      // Store gridUser in sessionStorage for OTP screen
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.setItem('mallory_grid_user', JSON.stringify(gridUser));
+      }
+      
+      // Navigate to OTP verification screen
+      // Note: isSigningIn remains true until OTP completes, preventing loading screen redirect
+      console.log('🏦 [Grid] Navigating to OTP verification screen');
+      router.push({
+        pathname: '/(auth)/verify-otp',
+        params: { email: userEmail }
+      });
     } catch (error: any) {
       console.error('❌ [Grid] Failed to start Grid sign-in:', error);
       
@@ -400,11 +420,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🚪 [LOGOUT] Starting comprehensive logout');
       setIsLoading(true);
       
-      // STEP 1: Close all modals and clear signing-in state immediately (prevents UI blocking)
-      setShowGridOtpModal(false);
-      setGridUserForOtp(null);
+      // STEP 1: Clear signing-in state immediately (prevents UI blocking)
       setIsSigningIn(false);
-      console.log('🚪 [LOGOUT] Modals closed and signing-in state cleared');
+      // Also clear from sessionStorage
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.removeItem('mallory_oauth_in_progress');
+      }
+      console.log('🚪 [LOGOUT] Signing-in state cleared');
       
       // STEP 2: Sign out from native Google Sign-In (mobile only)
       if (Platform.OS !== 'web') {
@@ -620,6 +642,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Set signing-in state when user explicitly starts the login process
       setIsSigningIn(true);
       
+      // IMPORTANT: Persist to sessionStorage for OAuth redirect on web
+      // When OAuth redirects back, the app reloads and loses React state
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.setItem('mallory_oauth_in_progress', 'true');
+        console.log('🔐 Set OAuth-in-progress flag in sessionStorage');
+      }
+      
       if (Platform.OS === 'web') {
         // Use Supabase OAuth for web
         const redirectUrl = config.webOAuthRedirectUrl || 'http://localhost:8081';
@@ -753,6 +782,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         needsReauth,
         isCheckingReauth,
+        isSigningIn, // Expose to loading screen
         login,
         logout,
         refreshGridAccount,
@@ -761,51 +791,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      
-      {/* Grid OTP Verification Modal */}
-      {showGridOtpModal && (
-        <OtpVerificationModal
-          visible={showGridOtpModal}
-          onClose={async (success: boolean) => {
-            console.log('🔐 [OTP Modal] onClose called with success:', success);
-            
-            if (!success) {
-              // Grid setup is REQUIRED - user must complete it to use the app
-              // If user closes modal or cancels, they're signing out
-              console.log('❌ [OTP Modal] Grid setup cancelled - signing out');
-              return;
-            }
-            
-            console.log('🔐 [OTP Modal] Success! Refreshing Grid account...');
-            
-            // Success - Grid address already synced by backend
-            // Refresh auth context to update user state from database
-            try {
-              console.log('🔐 [OTP Modal] Starting refreshGridAccount...');
-              
-              // Pass user.id explicitly to avoid state dependency issues
-              await refreshGridAccount(user?.id);
-              
-              console.log('🔐 [OTP Modal] Grid account refreshed successfully');
-            } catch (error) {
-              // Log the error but don't prevent modal from closing
-              // The Grid account is already created and synced - refresh is just nice-to-have
-              console.error('🔐 [OTP Modal] Error refreshing Grid account:', error);
-            } finally {
-              // Close modal
-              setShowGridOtpModal(false);
-              setGridUserForOtp(null);
-              
-              // Grid sign-in complete - clear loading state
-              // This allows the user to proceed to the app
-              setIsLoading(false);
-              console.log('🔐 [OTP Modal] Modal closed, loading complete');
-            }
-          }}
-          userEmail={user?.email || ''}
-          gridUser={gridUserForOtp}
-        />
-      )}
     </AuthContext.Provider>
   );
 }

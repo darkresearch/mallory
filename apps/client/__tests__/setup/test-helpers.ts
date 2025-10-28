@@ -118,6 +118,44 @@ export async function createTestUser(): Promise<{
   };
 }
 
+/**
+ * Sign up a new user with email and password
+ * Used for E2E signup tests with dynamic credentials
+ */
+export async function signupNewUser(email: string, password: string): Promise<{
+  userId: string;
+  email: string;
+  session: any;
+}> {
+  console.log('👤 Signing up new user:', email);
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: undefined, // No email confirmation needed for tests
+    },
+  });
+
+  if (error) {
+    throw new Error(`User signup failed: ${error.message}`);
+  }
+
+  if (!data.user || !data.session) {
+    throw new Error('No user or session returned from Supabase signup');
+  }
+
+  console.log('✅ User signed up successfully');
+  console.log('   User ID:', data.user.id);
+  console.log('   Email:', data.user.email);
+
+  return {
+    userId: data.user.id,
+    email: data.user.email!,
+    session: data.session,
+  };
+}
+
 // ============================================
 // GRID SESSION MANAGEMENT
 // ============================================
@@ -167,6 +205,112 @@ export async function createAndCacheGridAccount(email: string): Promise<GridSess
   
   // Save to cache for easy access
   await testStorage.setItem('grid_session_cache', JSON.stringify(gridSession));
+  
+  return gridSession;
+}
+
+/**
+ * Complete Grid signup flow for new user using PRODUCTION code path
+ * Calls backend API endpoints (same as production app)
+ * 
+ * IMPORTANT: Requires backend server to be running!
+ * 
+ * @param email - User's email address
+ * @param accessToken - Supabase access token (needed for backend auth)
+ * @returns Grid session data
+ */
+export async function completeGridSignupProduction(
+  email: string,
+  accessToken: string
+): Promise<GridSession> {
+  console.log('🏦 Starting Grid signup for:', email);
+  console.log('   Using PRODUCTION code path (backend API)');
+  
+  // Import production Grid client service
+  const { GridClient } = await import('@sqds/grid');
+  const config = {
+    backendApiUrl: process.env.TEST_BACKEND_URL || 'http://localhost:3001',
+  };
+  
+  // Step 1: Start sign-in via backend (same as production)
+  console.log('🔐 Calling backend /api/grid/start-sign-in...');
+  const startResponse = await fetch(`${config.backendApiUrl}/api/grid/start-sign-in`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ email })
+  });
+  
+  if (!startResponse.ok) {
+    const errorText = await startResponse.text();
+    throw new Error(`Backend start-sign-in failed: ${startResponse.status} - ${errorText}`);
+  }
+  
+  const startData = await startResponse.json();
+  
+  if (!startData.success || !startData.user) {
+    throw new Error(`Start sign-in failed: ${startData.error || 'Unknown error'}`);
+  }
+  
+  console.log('✅ Backend initiated Grid sign-in, OTP sent to email');
+  console.log('   Waiting for OTP via Mailosaur...');
+  
+  // Step 2: Get OTP via Mailosaur
+  const serverId = process.env.MAILOSAUR_SERVER_ID;
+  if (!serverId) {
+    throw new Error('MAILOSAUR_SERVER_ID not set');
+  }
+  
+  const otp = await waitForOTP(serverId, email, 90000);
+  console.log('✅ OTP received:', otp);
+  
+  // Step 3: Generate session secrets (same as production)
+  console.log('🔐 Generating session secrets...');
+  const tempClient = new GridClient({
+    environment: (process.env.EXPO_PUBLIC_GRID_ENV as 'sandbox' | 'production') || 'production',
+    apiKey: 'not-used-for-session-secrets',
+    baseUrl: 'https://grid.squads.xyz'
+  });
+  const sessionSecrets = await tempClient.generateSessionSecrets();
+  console.log('✅ Session secrets generated');
+  
+  // Step 4: Complete sign-in via backend (same as production)
+  console.log('🔐 Calling backend /api/grid/complete-sign-in...');
+  const completeResponse = await fetch(`${config.backendApiUrl}/api/grid/complete-sign-in`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      user: startData.user,
+      otpCode: otp,
+      sessionSecrets
+    })
+  });
+  
+  if (!completeResponse.ok) {
+    const errorText = await completeResponse.text();
+    throw new Error(`Backend complete-sign-in failed: ${completeResponse.status} - ${errorText}`);
+  }
+  
+  const completeData = await completeResponse.json();
+  
+  if (!completeData.success || !completeData.data) {
+    throw new Error(`Complete sign-in failed: ${completeData.error || 'Unknown error'}`);
+  }
+  
+  console.log('✅ Grid account verified successfully via backend');
+  console.log('   Address:', completeData.data.address);
+  
+  // Return Grid session
+  const gridSession: GridSession = {
+    address: completeData.data.address,
+    authentication: completeData.data.authentication,
+    sessionSecrets: sessionSecrets,
+  };
   
   return gridSession;
 }

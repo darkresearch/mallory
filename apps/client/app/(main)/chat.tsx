@@ -56,7 +56,8 @@ export default function ChatScreen() {
   } = useChatState({ 
     currentConversationId,
     userId: user?.id,  // Pass userId for Supermemory memory management
-    walletBalance: walletBalance  // Pass wallet balance for x402 threshold checking
+    walletBalance: walletBalance,  // Pass wallet balance for x402 threshold checking
+    userHasCompletedOnboarding: user?.hasCompletedOnboarding // For intro message safeguard
   });
 
   // Smart scroll behavior for chat messages
