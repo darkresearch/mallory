@@ -69,9 +69,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('Auth state changed:', event, 'Session:', !!session);
         
         if (session && event === 'SIGNED_IN') {
+          // When Supabase auth succeeds, also initiate Grid sign-in
+          // This pairs Supabase + Grid as one unified sign-in experience
           await handleSignIn(session);
         } else if (event === 'TOKEN_REFRESHED' && session) {
-          // Just update tokens, don't re-process user data
+          // Just update tokens, don't re-process user data or trigger Grid
+          // User is already signed in to both Supabase and Grid
           await secureStorage.setItem(AUTH_TOKEN_KEY, session.access_token);
           if (session.refresh_token) {
             await secureStorage.setItem(REFRESH_TOKEN_KEY, session.refresh_token);
@@ -87,50 +90,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Check re-auth status only when explicitly triggered (not automatically)
-  // This prevents infinite loops while still allowing manual re-auth checks
-
-  // Client-side Grid sign-in initialization
-  // Backend handles all complexity: beginner vs advanced detection, migrations, upgrades
-  useEffect(() => {
-    const checkGridAccount = async () => {
-      console.log('🏦 [Grid] checkGridAccount called with user:', {
-        userId: user?.id,
-        email: user?.email,
-        isLoading,
-      });
+  // Helper function to check and initiate Grid sign-in if needed
+  // Called explicitly only when we know the user should have a Grid account
+  const checkAndInitiateGridSignIn = async (userEmail: string) => {
+    try {
+      console.log('🏦 [Grid] Checking Grid account status for:', userEmail);
       
-      // Only run if we have a user with email
-      if (!user?.id || !user?.email || isLoading) {
-        console.log('🏦 [Grid] Skipping - no user, no email, or still loading');
-        return;
-      }
-      
-      console.log('🏦 [Grid] User has email, proceeding with Grid sign-in:', user.email);
-      
-      // First, check if Grid account exists in client-side secure storage
+      // Check if Grid account exists in client-side secure storage
       const gridAccount = await gridClientService.getAccount();
       
       if (gridAccount) {
-        console.log('✅ [Grid] Grid account already exists in secure storage - skipping initialization');
-        return;
+        console.log('✅ [Grid] Grid account already exists in secure storage');
+        return; // Already signed in to Grid
       }
       
-      console.log('🏦 [Grid] No Grid account in secure storage, starting sign-in...');
+      console.log('🏦 [Grid] No Grid account found, starting sign-in...');
       
       // Start Grid sign-in - backend automatically detects auth level and handles migration
-      try {
-        const { user: gridUser } = await gridClientService.startSignIn(user.email);
-        setGridUserForOtp(gridUser);
-        setShowGridOtpModal(true);
-      } catch (error) {
-        console.error('❌ [Grid] Failed to start Grid sign-in:', error);
-        // Show user-friendly error (could add toast notification here)
-      }
-    };
-    
-    checkGridAccount();
-  }, [user?.id, user?.email, isLoading]);
+      const { user: gridUser } = await gridClientService.startSignIn(userEmail);
+      setGridUserForOtp(gridUser);
+      setShowGridOtpModal(true);
+    } catch (error) {
+      console.error('❌ [Grid] Failed to start Grid sign-in:', error);
+      // Don't block the main flow - Grid wallet is optional
+    }
+  };
 
   const checkAuthSession = async () => {
     console.log('🔍 checkAuthSession called');
@@ -218,7 +202,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(user);
       console.log('✅ User set successfully');
 
-      // Grid account logic is now handled by separate useEffect (client-side only)
+      // UNIFIED SIGN-IN: Pair Grid authentication with Supabase authentication
+      // After successful Supabase login, automatically initiate Grid sign-in
+      // This creates a seamless single sign-in experience for users
+      if (user.email) {
+        await checkAndInitiateGridSignIn(user.email);
+      }
     } catch (error) {
       console.error('❌ Error handling sign in:', error);
     }
