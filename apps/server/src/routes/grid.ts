@@ -51,6 +51,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import { GridClient } from '@sqds/grid';
+import { createClient } from '@supabase/supabase-js';
 import { authenticateUser } from '../middleware/auth';
 
 const router: Router = Router();
@@ -62,12 +63,18 @@ interface AuthenticatedRequest extends Request {
   };
 }
 
-// Initialize Grid client
+// Initialize Grid client (shared across all requests)
 const gridClient = new GridClient({
   environment: (process.env.GRID_ENV || 'production') as 'sandbox' | 'production',
   apiKey: process.env.GRID_API_KEY!,
   baseUrl: 'https://grid.squads.xyz'
 });
+
+// Initialize Supabase admin client (shared across all requests)
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 /**
  * Helper: Update user's Grid auth level in app_metadata
@@ -90,13 +97,7 @@ const gridClient = new GridClient({
  * @throws Error if Supabase update fails
  */
 async function updateGridAuthLevel(userId: string, isAdvanced: boolean): Promise<void> {
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-  
-  const { error } = await supabase.auth.admin.updateUserById(userId, {
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
     app_metadata: { 'grid-advanced': isAdvanced }
   });
   
@@ -122,13 +123,7 @@ async function updateGridAuthLevel(userId: string, isAdvanced: boolean): Promise
  * @throws Error if user lookup fails (defaults to beginner level on error)
  */
 async function getGridAuthLevel(userId: string): Promise<boolean> {
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-  
-  const { data, error } = await supabase.auth.admin.getUserById(userId);
+  const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
   
   if (error || !data?.user) {
     console.error('❌ Failed to get user auth level:', error);
@@ -139,7 +134,7 @@ async function getGridAuthLevel(userId: string): Promise<boolean> {
 }
 
 /**
- * POST /api/grid/init-account
+ * POST /api/grid/start-sign-in
  * 
  * ═══════════════════════════════════════════════════════════════════════════════
  * ENDPOINT: Start Grid Sign-In (Send OTP)
@@ -190,7 +185,7 @@ async function getGridAuthLevel(userId: string): Promise<boolean> {
  * The returned user object is needed for OTP verification in /verify-otp endpoint.
  * ═══════════════════════════════════════════════════════════════════════════════
  */
-router.post('/init-account', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { email } = req.body;
     const userId = req.user!.id;
@@ -224,11 +219,29 @@ router.post('/init-account', authenticateUser, async (req: AuthenticatedRequest,
       } catch (error: any) {
         // MIGRATION SCENARIO: Account already exists but user is marked as beginner
         // This happens for existing users before we implemented app_metadata tracking
-        const errorBody = error?.response?.data || error?.message || String(error);
-        const errorString = typeof errorBody === 'string' ? errorBody : JSON.stringify(errorBody);
+        //
+        // We specifically check for:
+        // - HTTP 400 status
+        // - Error code: "grid_account_already_exists_for_user" in the details array
+        //
+        // Example error structure:
+        // {
+        //   "message": "Email associated with grid account already exists...",
+        //   "details": [{"code": "grid_account_already_exists_for_user", ...}],
+        //   ...
+        // }
         
-        if (errorString.includes('grid_account_already_exists_for_user')) {
-          console.log('📈 [Grid Migration] Account exists - upgrading to advanced level');
+        const errorStatus = error?.response?.status || error?.status;
+        const errorBody = error?.response?.data || error?.data;
+        const errorDetails = errorBody?.details || [];
+        
+        // Check for specific 400 error with the account-exists error code
+        const isAccountExistsError = 
+          errorStatus === 400 && 
+          errorDetails.some((detail: any) => detail.code === 'grid_account_already_exists_for_user');
+        
+        if (isAccountExistsError) {
+          console.log('📈 [Grid Migration] Detected existing account (400 error) - upgrading to advanced level');
           
           // Upgrade user to advanced level permanently
           await updateGridAuthLevel(userId, true);
@@ -240,6 +253,11 @@ router.post('/init-account', authenticateUser, async (req: AuthenticatedRequest,
           console.log('✅ [Grid Migration] Successfully migrated user to advanced flow');
         } else {
           // Some other error - re-throw
+          console.error('❌ [Grid Init] Unexpected error (not account-exists):', {
+            status: errorStatus,
+            details: errorDetails,
+            message: errorBody?.message
+          });
           throw error;
         }
       }
@@ -268,7 +286,7 @@ router.post('/init-account', authenticateUser, async (req: AuthenticatedRequest,
 });
 
 /**
- * POST /api/grid/verify-otp
+ * POST /api/grid/complete-sign-in
  * 
  * ═══════════════════════════════════════════════════════════════════════════════
  * ENDPOINT: Complete Grid Sign-In (Verify OTP)
@@ -330,7 +348,7 @@ router.post('/init-account', authenticateUser, async (req: AuthenticatedRequest,
  * - authentication: Session data for future transactions
  * ═══════════════════════════════════════════════════════════════════════════════
  */
-router.post('/verify-otp', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { user, otpCode, sessionSecrets } = req.body;
     const userId = req.user!.id;
@@ -389,17 +407,11 @@ router.post('/verify-otp', authenticateUser, async (req: AuthenticatedRequest, r
     }
     
     // STEP 2: Sync Grid address to database (with retry logic)
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-    
     const maxRetries = 3;
     let dbError = null;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('users_grid')
         .upsert({
           id: userId,

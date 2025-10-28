@@ -1,4 +1,5 @@
 import { secureStorage, config } from '@/lib';
+import { GridClient } from '@sqds/grid';
 
 /**
  * Grid Client Service
@@ -100,7 +101,7 @@ class GridClientService {
       const backendUrl = config.backendApiUrl || 'http://localhost:3001';
       const token = await secureStorage.getItem('mallory_auth_token');
       
-      const response = await fetch(`${backendUrl}/api/grid/init-account`, {
+      const response = await fetch(`${backendUrl}/api/grid/start-sign-in`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -118,8 +119,6 @@ class GridClientService {
       }
       
       // Generate session secrets (client-side only, never sent to backend until needed for signing)
-      // Import Grid SDK just for this utility function
-      const { GridClient } = await import('@sqds/grid');
       const tempClient = new GridClient({
         environment: (config.gridEnv || 'production') as 'sandbox' | 'production',
         apiKey: 'temp', // Not used for generateSessionSecrets
@@ -200,7 +199,7 @@ class GridClientService {
       const backendUrl = config.backendApiUrl || 'http://localhost:3001';
       const token = await secureStorage.getItem('mallory_auth_token');
       
-      const response = await fetch(`${backendUrl}/api/grid/verify-otp`, {
+      const response = await fetch(`${backendUrl}/api/grid/complete-sign-in`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -249,7 +248,6 @@ class GridClientService {
     try {
       // For now, proxy through backend or use Grid SDK temporarily
       // This is less critical than sendTokens, can be implemented later if needed
-      const { GridClient } = await import('@sqds/grid');
       const tempClient = new GridClient({
         environment: (config.gridEnv || 'production') as 'sandbox' | 'production',
         apiKey: config.gridApiKey || 'temp',
