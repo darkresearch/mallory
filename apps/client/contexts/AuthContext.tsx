@@ -51,6 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Grid OTP modal state
   const [showGridOtpModal, setShowGridOtpModal] = useState(false);
   const [gridUserForOtp, setGridUserForOtp] = useState<any>(null);
+  
+  // RACE CONDITION GUARD: Prevent concurrent Grid sign-in attempts
+  // This singleton flag ensures only ONE Grid sign-in flow runs at a time
+  const isInitiatingGridSignIn = useRef(false);
 
   console.log('AuthProvider rendering, user:', user?.email || 'none', 'isLoading:', isLoading);
 
@@ -69,15 +73,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('Auth state changed:', event, 'Session:', !!session);
         
         if (session && event === 'SIGNED_IN') {
+          // When Supabase auth succeeds, also initiate Grid sign-in
+          // This pairs Supabase + Grid as one unified sign-in experience
           await handleSignIn(session);
         } else if (event === 'TOKEN_REFRESHED' && session) {
-          // Just update tokens, don't re-process user data
+          // COUPLED SESSION VALIDATION: Check both Supabase AND Grid sessions
+          // Supabase and Grid sessions are treated as "coupled at the hip"
+          // If either expires, user must re-authenticate both
+          console.log('🔄 [Token Refresh] Supabase token refreshed, validating Grid session...');
+          
+          // Update Supabase tokens
           await secureStorage.setItem(AUTH_TOKEN_KEY, session.access_token);
           if (session.refresh_token) {
             await secureStorage.setItem(REFRESH_TOKEN_KEY, session.refresh_token);
           }
+          
+          // Validate Grid session still exists and is valid
+          try {
+            const gridAccount = await gridClientService.getAccount();
+            if (!gridAccount) {
+              console.warn('⚠️ [Token Refresh] Grid session missing - triggering re-auth');
+              setNeedsReauth(true);
+            } else {
+              console.log('✅ [Token Refresh] Grid session still valid');
+            }
+          } catch (error) {
+            console.error('❌ [Token Refresh] Error checking Grid session:', error);
+            // If we can't verify Grid session, assume it's invalid
+            setNeedsReauth(true);
+          }
         } else if (event === 'SIGNED_OUT') {
-          await handleSignOut();
+          // Supabase session ended - use unified logout to clear everything
+          console.log('🚪 [Auth State] SIGNED_OUT event - triggering logout');
+          await logout();
         }
       }
     );
@@ -87,118 +115,107 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Check re-auth status only when explicitly triggered (not automatically)
-  // This prevents infinite loops while still allowing manual re-auth checks
-
-  // Client-side Grid account initialization
-  useEffect(() => {
-    const checkGridAccount = async () => {
-      console.log('🏦 [DEBUG] checkGridAccount called with user:', {
-        userId: user?.id,
-        email: user?.email,
-        isLoading,
-        hasId: !!user?.id,
-        hasEmail: !!user?.email,
-      });
+  // Helper function to check and initiate Grid sign-in if needed
+  // Grid wallet is REQUIRED - users must complete Grid setup to use the app
+  // 
+  // SINGLETON PATTERN: Uses ref guard to prevent race conditions
+  // Multiple calls to this function will be de-duplicated automatically
+  const checkAndInitiateGridSignIn = async (userEmail: string) => {
+    // GUARD: If Grid sign-in is already in progress, skip this call
+    if (isInitiatingGridSignIn.current) {
+      console.log('🏦 [Grid] Sign-in already in progress, skipping duplicate call');
+      return;
+    }
+    
+    try {
+      // Set guard flag FIRST (before any async operations)
+      isInitiatingGridSignIn.current = true;
       
-      // Only run if we have a user with email
-      if (!user?.id || !user?.email || isLoading) {
-        console.log('🏦 [DEBUG] Skipping - no user, no email, or still loading');
-        return;
-      }
+      console.log('🏦 [Grid] Checking Grid account status for:', userEmail);
       
-      console.log('🏦 [DEBUG] User has email, proceeding with Grid setup:', user.email);
-      
-      // First, check if Grid account exists in client-side secure storage
+      // Check if Grid account exists in client-side secure storage
       const gridAccount = await gridClientService.getAccount();
       
-      console.log('🏦 [DEBUG] Grid account in secure storage:', {
-        exists: !!gridAccount,
-        address: gridAccount?.address,
-      });
-      
       if (gridAccount) {
-        console.log('✅ [DEBUG] Grid account found in secure storage - STOPPING HERE');
-        // No sync needed - already synced when created/verified
+        console.log('✅ [Grid] Grid account already exists in secure storage');
+        return; // Already signed in to Grid
+      }
+      
+      console.log('🏦 [Grid] No Grid account found, starting sign-in...');
+      
+      // Start Grid sign-in - backend automatically detects auth level and handles migration
+      // If Grid is down or unavailable, this will fail and throw an error
+      // The error will propagate up and prevent the user from proceeding
+      const { user: gridUser } = await gridClientService.startSignIn(userEmail);
+      setGridUserForOtp(gridUser);
+      setShowGridOtpModal(true);
+    } catch (error: any) {
+      console.error('❌ [Grid] Failed to start Grid sign-in:', error);
+      
+      // Grid wallet is REQUIRED - if we can't reach Grid, sign out completely
+      // This handles Grid being down, network errors, or any other Grid failures
+      console.error('💥 [Grid] Cannot proceed without Grid - signing out');
+      await logout();
+      throw error;
+    } finally {
+      // ALWAYS clear guard flag when done (success or error)
+      isInitiatingGridSignIn.current = false;
+    }
+  };
+
+  const checkAuthSession = async () => {
+    console.log('🔍 [Auth Check] Starting comprehensive auth validation...');
+    try {
+      // STEP 1: Check Supabase session
+      console.log('🔍 [Auth Check] Checking Supabase session...');
+      const { data: { session }, error } = await supabase.auth.getSession();
+      console.log('🔍 [Auth Check] Supabase session:', !!session, 'Error:', error);
+      
+      if (!session) {
+        console.log('✅ [Auth Check] No session - user is logged out (expected)');
+        setIsLoading(false);
         return;
       }
       
-      console.log('🏦 [DEBUG] No Grid account in secure storage, checking database...');
-      
-      // Check if user already has Grid account in database (existing users)
-      const { data: existingGridData, error: gridDbError } = await supabase
-        .from('users_grid')
-        .select('solana_wallet_address, grid_account_id, account_type')
-        .eq('id', user.id)
-        .single();
-      
-      console.log('🏦 [DEBUG] Database query result:', {
-        hasData: !!existingGridData,
-        hasAddress: !!existingGridData?.solana_wallet_address,
-        accountType: existingGridData?.account_type,
-        error: gridDbError?.message,
-        errorCode: gridDbError?.code,
-      });
-      
-      if (existingGridData?.solana_wallet_address) {
-        console.log('🏦 [DEBUG] Found existing Grid account in database:', {
-          address: existingGridData.solana_wallet_address,
-          accountType: existingGridData.account_type,
-        });
-        
-        // For email-based accounts, try re-authentication
-        console.log('🏦 [DEBUG] Existing Grid account - attempting re-auth');
-        try {
-          const { user: gridUser } = await gridClientService.reauthenticateAccount(user.email);
-          setGridUserForOtp({ ...gridUser, isReauth: true });
-          setShowGridOtpModal(true);
-        } catch (reauthError) {
-          console.warn('⚠️ Re-auth failed, trying account creation as fallback:', reauthError);
-          
-          try {
-            const { user: gridUser } = await gridClientService.createAccount(user.email);
-            setGridUserForOtp({ ...gridUser, isReauth: false });
-            setShowGridOtpModal(true);
-          } catch (createError) {
-            console.error('❌ Both re-auth and creation failed:', createError);
-          }
-        }
-      } else {
-        console.log('🏦 [DEBUG] No Grid account in database - creating new one for email user');
-        
-        // User has email (either Google auth or wallet user who provided email)
-        // Create email-based Grid account
-        try {
-          const { user: gridUser } = await gridClientService.createAccount(user.email);
-          setGridUserForOtp({ ...gridUser, isReauth: false });
-          setShowGridOtpModal(true);
-        } catch (error) {
-          console.error('❌ Failed to create email-based Grid account:', error);
-        }
-      }
-    };
-    
-    checkGridAccount();
-  }, [user?.id, user?.email, isLoading]);
-
-  const checkAuthSession = async () => {
-    console.log('🔍 checkAuthSession called');
-    try {
-      // Get session from Supabase
-      console.log('🔍 About to call supabase.auth.getSession()');
-      const { data: { session }, error } = await supabase.auth.getSession();
-      console.log('checkAuthSession - Session:', !!session, 'Error:', error);
-      console.log('checkAuthSession - Session data:', session ? {
+      console.log('🔍 [Auth Check] Supabase session found:', {
         user_id: session.user?.id,
         email: session.user?.email,
         expires_at: session.expires_at
-      } : null);
+      });
       
-      if (session) {
-        await handleSignIn(session);
+      // STEP 2: Check Grid session (REQUIRED for full authentication)
+      // ALL-OR-NOTHING RULE: User must have BOTH Supabase AND Grid sessions
+      console.log('🔍 [Auth Check] Validating Grid session...');
+      const gridAccount = await gridClientService.getAccount();
+      
+      if (!gridAccount) {
+        // INCOMPLETE AUTH STATE: User has Supabase session but NO Grid session
+        // This means they started login but never completed Grid OTP verification
+        // OR they're returning after closing the app mid-flow
+        console.warn('⚠️ [Auth Check] INCOMPLETE AUTH STATE DETECTED');
+        console.warn('⚠️ [Auth Check] User has Supabase session but NO Grid session');
+        console.warn('⚠️ [Auth Check] Signing out and restarting auth flow...');
+        
+        // Sign out completely and restart the flow
+        await logout();
+        return;
       }
+      
+      console.log('✅ [Auth Check] Grid session validated:', {
+        address: gridAccount.address,
+        hasAuthentication: !!gridAccount.authentication
+      });
+      
+      // STEP 3: Both sessions exist - proceed with full sign-in
+      console.log('✅ [Auth Check] Full auth state validated - proceeding with sign-in');
+      await handleSignIn(session);
+      
     } catch (error) {
-      console.error('Error checking auth session:', error);
+      console.error('❌ [Auth Check] Error during auth validation:', error);
+      
+      // On any error during validation, sign out to ensure clean state
+      console.log('🚪 [Auth Check] Error detected - signing out for safety');
+      await logout();
     } finally {
       setIsLoading(false);
     }
@@ -267,89 +284,145 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(user);
       console.log('✅ User set successfully');
 
-      // Grid account logic is now handled by separate useEffect (client-side only)
+      // UNIFIED SIGN-IN: Pair Grid authentication with Supabase authentication
+      // After successful Supabase login, automatically initiate Grid sign-in
+      // This creates a seamless single sign-in experience for users
+      if (user.email) {
+        await checkAndInitiateGridSignIn(user.email);
+      }
     } catch (error) {
       console.error('❌ Error handling sign in:', error);
     }
   };
 
   /**
-   * Clear all auth state and redirect to login
-   * Used internally by both manual logout and Supabase auth events
+   * ═══════════════════════════════════════════════════════════════════════════════
+   * UNIFIED LOGOUT - Single Source of Truth for All Sign-Out Operations
+   * ═══════════════════════════════════════════════════════════════════════════════
+   * 
+   * This is the ONLY logout function that should be used across the entire codebase.
+   * It performs a complete, comprehensive sign-out from all services:
+   * 
+   * WHAT IT CLEARS:
+   * ───────────────
+   * 1. Native Google Sign-In (mobile only)
+   * 2. Supabase authentication session
+   * 3. Grid wallet credentials (session secrets + account data)
+   * 4. Auth tokens (access + refresh)
+   * 5. Supabase persisted session in AsyncStorage
+   * 6. Wallet data cache
+   * 7. React state (user, modals, flags)
+   * 8. Navigation stack
+   * 
+   * USAGE:
+   * ─────
+   * - Manual sign-out button → logout()
+   * - Grid setup cancellation → logout()
+   * - Session expired → logout()
+   * - Any place that needs to sign user out → logout()
+   * 
+   * GUARANTEES:
+   * ──────────
+   * - User is completely signed out from all services
+   * - No credentials or sessions remain in storage
+   * - User is redirected to login screen
+   * - Even if errors occur, user ends up at login screen
+   * 
+   * ═══════════════════════════════════════════════════════════════════════════════
    */
-  const clearAuthState = async () => {
-    console.log('🚪 [clearAuthState] Clearing all auth state');
-    
-    // STEP 1: Close modals FIRST (before any state changes)
-    // This prevents modals from blocking navigation
-    setShowGridOtpModal(false);
-    setGridUserForOtp(null);
-    console.log('🚪 [clearAuthState] Modals closed');
-    
-    // STEP 2: Clear our tokens
-    await secureStorage.removeItem(AUTH_TOKEN_KEY);
-    await secureStorage.removeItem(REFRESH_TOKEN_KEY);
-    
-    // STEP 3: Clear Supabase's persisted session from AsyncStorage
-    // This prevents session re-hydration on hard refresh
+  const logout = async () => {
     try {
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-      const keys = await AsyncStorage.getAllKeys();
-      const supabaseKeys = keys.filter(key => 
-        key.includes('supabase') || 
-        key.includes('sb-') ||
-        key.startsWith('@supabase')
-      );
-      if (supabaseKeys.length > 0) {
-        await AsyncStorage.multiRemove(supabaseKeys);
-        console.log('🚪 [clearAuthState] Cleared Supabase storage:', supabaseKeys);
+      console.log('🚪 [LOGOUT] Starting comprehensive logout');
+      setIsLoading(true);
+      
+      // STEP 1: Close all modals immediately (prevents UI blocking)
+      setShowGridOtpModal(false);
+      setGridUserForOtp(null);
+      console.log('🚪 [LOGOUT] Modals closed');
+      
+      // STEP 2: Sign out from native Google Sign-In (mobile only)
+      if (Platform.OS !== 'web') {
+        try {
+          console.log('🚪 [LOGOUT] Signing out from Google (native)');
+          await signOutFromGoogle();
+        } catch (error) {
+          console.log('🚪 [LOGOUT] Google sign-out error (non-critical):', error);
+        }
       }
-    } catch (error) {
-      console.log('🚪 [clearAuthState] Could not clear Supabase storage:', error);
-    }
-    
-    // STEP 4: Clear wallet cache
-    try {
-      const { walletDataService } = await import('../features/wallet');
-      walletDataService.clearCache();
-      console.log('🚪 [clearAuthState] Wallet cache cleared');
-    } catch (error) {
-      console.log('🚪 [clearAuthState] Could not clear wallet cache:', error);
-    }
-    
-    // STEP 5: Clear auth state
-    setUser(null);
-    setNeedsReauth(false);
-    hasCheckedReauth.current = false;
-    console.log('🚪 [clearAuthState] Auth state cleared');
-    
-    // STEP 6: Clear navigation stack and redirect to login
-    // dismissAll() ensures we clear any stacked screens that might interfere
-    try {
-      if (router.canDismiss()) {
-        router.dismissAll();
-        console.log('🚪 [clearAuthState] Navigation stack dismissed');
+      
+      // STEP 3: Clear Grid wallet credentials (CRITICAL - prevents wallet access leakage)
+      try {
+        console.log('🚪 [LOGOUT] Clearing Grid wallet data');
+        await gridClientService.clearAccount();
+      } catch (error) {
+        console.log('🚪 [LOGOUT] Grid clear error (non-critical):', error);
       }
-    } catch (error) {
-      console.log('🚪 [clearAuthState] Could not dismiss navigation stack:', error);
-    }
-    
-    // Final redirect to login
-    router.replace('/(auth)/login');
-    console.log('🚪 [clearAuthState] Redirected to login');
-  };
-
-  /**
-   * Handle Supabase SIGNED_OUT event
-   * Called automatically when Supabase session ends
-   */
-  const handleSignOut = async () => {
-    try {
-      console.log('🚪 [handleSignOut] Supabase signed out event');
-      await clearAuthState();
-    } catch (error) {
-      console.error('🚪 [handleSignOut] Error:', error);
+      
+      // STEP 4: Clear auth tokens
+      await secureStorage.removeItem(AUTH_TOKEN_KEY);
+      await secureStorage.removeItem(REFRESH_TOKEN_KEY);
+      console.log('🚪 [LOGOUT] Auth tokens cleared');
+      
+      // STEP 5: Clear Supabase persisted session from AsyncStorage
+      try {
+        const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+        const keys = await AsyncStorage.getAllKeys();
+        const supabaseKeys = keys.filter(key => 
+          key.includes('supabase') || 
+          key.includes('sb-') ||
+          key.startsWith('@supabase')
+        );
+        if (supabaseKeys.length > 0) {
+          await AsyncStorage.multiRemove(supabaseKeys);
+          console.log('🚪 [LOGOUT] Cleared Supabase storage:', supabaseKeys);
+        }
+      } catch (error) {
+        console.log('🚪 [LOGOUT] Could not clear Supabase storage:', error);
+      }
+      
+      // STEP 6: Clear wallet cache
+      try {
+        const { walletDataService } = await import('../features/wallet');
+        walletDataService.clearCache();
+        console.log('🚪 [LOGOUT] Wallet cache cleared');
+      } catch (error) {
+        console.log('🚪 [LOGOUT] Could not clear wallet cache:', error);
+      }
+      
+      // STEP 7: Clear React state
+      setUser(null);
+      setNeedsReauth(false);
+      hasCheckedReauth.current = false;
+      console.log('🚪 [LOGOUT] React state cleared');
+      
+      // STEP 8: Sign out from Supabase (triggers SIGNED_OUT event)
+      try {
+        console.log('🚪 [LOGOUT] Signing out from Supabase');
+        await supabase.auth.signOut();
+      } catch (error) {
+        console.log('🚪 [LOGOUT] Supabase sign-out error (non-critical):', error);
+      }
+      
+      // STEP 9: Clear navigation stack and redirect to login
+      try {
+        if (router.canDismiss()) {
+          router.dismissAll();
+          console.log('🚪 [LOGOUT] Navigation stack dismissed');
+        }
+      } catch (error) {
+        console.log('🚪 [LOGOUT] Could not dismiss navigation stack:', error);
+      }
+      
+      // Final redirect to login
       router.replace('/(auth)/login');
+      console.log('🚪 [LOGOUT] Logout completed successfully');
+      
+    } catch (error) {
+      console.error('🚪 [LOGOUT] Unexpected error during logout:', error);
+      // Force redirect to login even on error - user MUST end up at login screen
+      router.replace('/(auth)/login');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -517,54 +590,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   /**
-   * Manual logout - Sign out from all services
-   * Called when user clicks "Sign out" button
+   * Refresh Grid account data from database
+   * 
+   * This function refetches Grid wallet info (address, status) from the database
+   * and updates the local user state. It's called after Grid sign-in completes
+   * to sync the newly created wallet address into the UI.
+   * 
+   * PARAMETERS:
+   * @param userId - Optional user ID to use (defaults to current user)
+   * 
+   * WHY THIS CAN HANG:
+   * ─────────────────
+   * 1. User state not yet initialized (user?.id is undefined)
+   * 2. Supabase query timeout or network issues
+   * 3. Database replication delay (Grid backend just wrote, client reads immediately)
+   * 
+   * FIXES APPLIED:
+   * ─────────────
+   * - Accept explicit userId parameter to avoid depending on state
+   * - Add timeout to Supabase query (abortSignal)
+   * - Return early with helpful logs if user not found
    */
-  const logout = async () => {
-    try {
-      console.log('🚪 [logout] Manual logout initiated');
-      setIsLoading(true);
-      
-      // Sign out from native Google Sign-In if on mobile
-      if (Platform.OS !== 'web') {
-        console.log('🚪 [logout] Signing out from Google (native)');
-        await signOutFromGoogle();
-      }
-      
-      // Sign out from Supabase (this will trigger handleSignOut via auth listener)
-      console.log('🚪 [logout] Signing out from Supabase');
-      await supabase.auth.signOut();
-      
-      // Clear auth state (in case listener doesn't fire)
-      await clearAuthState();
-      
-      console.log('🚪 [logout] Logout completed successfully');
-    } catch (error) {
-      console.error('🚪 [logout] Logout error:', error);
-      // Force clear state and redirect even on error
-      await clearAuthState();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const refreshGridAccount = async () => {
+  const refreshGridAccount = async (userId?: string) => {
     console.log('🔄 [refreshGridAccount] Starting...');
     
-    // Just refetch the Grid data from database, don't create new accounts
-    if (!user?.id) {
-      console.log('🔄 [refreshGridAccount] No user ID, skipping');
+    // Use provided userId or fall back to current user
+    const targetUserId = userId || user?.id;
+    
+    if (!targetUserId) {
+      console.log('🔄 [refreshGridAccount] No user ID provided or available, skipping');
       return;
     }
     
     try {
-      console.log('🔄 [refreshGridAccount] Querying database for user:', user.id);
+      console.log('🔄 [refreshGridAccount] Querying database for user:', targetUserId);
+      
+      // Add timeout to prevent hanging (5 second max)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       
       const { data: gridData, error: queryError } = await supabase
         .from('users_grid')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', targetUserId)
+        .abortSignal(controller.signal)
         .single();
+      
+      clearTimeout(timeoutId);
 
       console.log('🔄 [refreshGridAccount] Query result:', {
         hasData: !!gridData,
@@ -573,19 +645,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         error: queryError?.message,
       });
 
-      console.log('🔄 [refreshGridAccount] Updating user state...');
-      setUser(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          solanaAddress: gridData?.solana_wallet_address,
-          gridAccountStatus: gridData?.grid_account_status || 'not_created',
-          gridAccountId: gridData?.grid_account_id,
-        };
-      });
-      console.log('🔄 [refreshGridAccount] User state updated');
-    } catch (error) {
-      console.error('❌ [refreshGridAccount] Error:', error);
+      // Update user state only if we have a current user
+      if (user) {
+        console.log('🔄 [refreshGridAccount] Updating user state...');
+        setUser(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            solanaAddress: gridData?.solana_wallet_address,
+            gridAccountStatus: gridData?.grid_account_status || 'not_created',
+            gridAccountId: gridData?.grid_account_id,
+          };
+        });
+        console.log('🔄 [refreshGridAccount] User state updated');
+      } else {
+        console.log('🔄 [refreshGridAccount] No user in state, skipping state update');
+      }
+    } catch (error: any) {
+      // Check if this is an abort error (timeout)
+      if (error.name === 'AbortError') {
+        console.error('❌ [refreshGridAccount] Query timed out after 5 seconds');
+      } else {
+        console.error('❌ [refreshGridAccount] Error:', error);
+      }
+      // Don't throw - this is a non-critical operation
     }
     
     console.log('🔄 [refreshGridAccount] COMPLETED');
@@ -616,34 +699,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.log('🔐 [OTP Modal] onClose called with success:', success);
             
             if (!success) {
-              // User cannot skip - Grid setup is required
-              console.error('❌ Grid setup is required to use Mallory');
-              // Keep modal open by not changing state
+              // Grid setup is REQUIRED - user must complete it to use the app
+              // If user closes modal or cancels, they're signing out
+              console.log('❌ [OTP Modal] Grid setup cancelled - signing out');
               return;
             }
             
             console.log('🔐 [OTP Modal] Success! Refreshing Grid account...');
-            
-            // Safety net: Ensure modal closes within 2 seconds even if refresh hangs
-            // This fixes mobile Safari issues where refreshGridAccount can stall
-            const timeoutId = setTimeout(() => {
-              console.warn('🔐 [OTP Modal] Force closing modal after timeout');
-              setShowGridOtpModal(false);
-              setGridUserForOtp(null);
-            }, 2000);
             
             // Success - Grid address already synced by backend
             // Refresh auth context to update user state from database
             try {
               console.log('🔐 [OTP Modal] Starting refreshGridAccount...');
               
-              // Race the refresh against a 1.8s timeout to detect hangs early
-              await Promise.race([
-                refreshGridAccount(),
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('Refresh timeout')), 1800)
-                )
-              ]);
+              // Pass user.id explicitly to avoid state dependency issues
+              await refreshGridAccount(user?.id);
               
               console.log('🔐 [OTP Modal] Grid account refreshed successfully');
             } catch (error) {
@@ -651,8 +721,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               // The Grid account is already created and synced - refresh is just nice-to-have
               console.error('🔐 [OTP Modal] Error refreshing Grid account:', error);
             } finally {
-              // Always clean up: cancel timeout and close modal
-              clearTimeout(timeoutId);
+              // Close modal
               setShowGridOtpModal(false);
               setGridUserForOtp(null);
               console.log('🔐 [OTP Modal] Modal closed');
