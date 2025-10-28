@@ -144,35 +144,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🏦 [Grid] No Grid account found, starting sign-in...');
       
       // Start Grid sign-in - backend automatically detects auth level and handles migration
+      // If Grid is down or unavailable, this will fail and throw an error
+      // The error will propagate up and prevent the user from proceeding
       const { user: gridUser } = await gridClientService.startSignIn(userEmail);
       setGridUserForOtp(gridUser);
       setShowGridOtpModal(true);
     } catch (error: any) {
       console.error('❌ [Grid] Failed to start Grid sign-in:', error);
       
-      // CHECK: Is Grid service down?
-      // If we get network errors or 5xx errors, Grid might be unavailable
-      const errorMessage = error?.message || String(error);
-      const isNetworkError = errorMessage.toLowerCase().includes('network') || 
-                            errorMessage.toLowerCase().includes('fetch') ||
-                            errorMessage.toLowerCase().includes('connection');
-      const isServerError = error?.status >= 500 || errorMessage.includes('500') || errorMessage.includes('502') || errorMessage.includes('503');
-      
-      if (isNetworkError || isServerError) {
-        console.error('💥 [Grid] GRID SERVICE APPEARS TO BE DOWN');
-        console.error('💥 [Grid] Signing out user - app cannot function without Grid');
-        
-        // Grid is down - sign out user completely
-        // The app cannot function without Grid wallet access
-        await logout();
-        
-        // Show user-friendly error (optional - could be in UI layer)
-        alert('Wallet service is temporarily unavailable. Please try again later.');
-        return;
-      }
-      
-      // Grid wallet is REQUIRED - show error to user
-      // The OTP modal will display and user must complete setup to continue
+      // Grid wallet is REQUIRED - if we can't reach Grid, sign out completely
+      // This handles Grid being down, network errors, or any other Grid failures
+      console.error('💥 [Grid] Cannot proceed without Grid - signing out');
+      await logout();
       throw error;
     } finally {
       // ALWAYS clear guard flag when done (success or error)
