@@ -17,7 +17,7 @@ interface OtpVerificationModalProps {
   visible: boolean;
   onClose: (success: boolean) => void;
   userEmail: string;
-  gridUser?: any; // User object from Grid account creation
+  gridUser: any; // User object from Grid startSignIn() - REQUIRED
 }
 
 export default function OtpVerificationModal({
@@ -70,18 +70,16 @@ export default function OtpVerificationModal({
     setError('');
 
     try {
-      // If we don't have gridUser, start sign-in first
-      let user = gridUser;
-      if (!user) {
-        console.log('🔐 Starting Grid sign-in for:', userEmail);
-        const signInResult = await gridClientService.startSignIn(userEmail);
-        user = signInResult.user;
+      // Safety check - gridUser should always be provided by upstream code
+      if (!gridUser) {
+        console.error('❌ [OTP Modal] gridUser is missing - this is a bug in calling code');
+        throw new Error('Sign-in session not found. Please close this modal and try again.');
       }
 
       console.log('🔐 Completing sign-in with OTP - backend determines correct flow');
       
       // Backend automatically uses the correct flow (beginner or advanced)
-      const authResult = await gridClientService.completeSignIn(user, otp);
+      const authResult = await gridClientService.completeSignIn(gridUser, otp);
       
       console.log('🔐 [OTP Verification] Sign-in result:', {
         success: authResult.success,
