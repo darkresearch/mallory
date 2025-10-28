@@ -22,11 +22,26 @@ jobs:
       - name: Start web app
         run: |
           cd apps/client
-          bun run web &
-          sleep 30
+          bun run web > /tmp/expo.log 2>&1 &
+          echo "Waiting for web app to start on port 8081..."
+          for i in {1..60}; do
+            if curl -s http://localhost:8081 > /dev/null; then
+              echo "✅ Web app is ready!"
+              break
+            fi
+            echo "Waiting... ($i/60)"
+            sleep 2
+          done
+          echo "=== Expo logs ==="
+          cat /tmp/expo.log
+          
+      - name: Debug - Check what's on the page
+        run: |
+          echo "=== Checking localhost:8081 ==="
+          curl -s http://localhost:8081 | head -100 || echo "Failed to curl"
         
       - name: Run Playwright test
-        run: bunx playwright test
+        run: bunx playwright test --trace on
       
       - name: Upload screenshots
         if: always()
