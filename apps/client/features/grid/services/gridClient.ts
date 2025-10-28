@@ -120,8 +120,8 @@ class GridClientService {
       
       // Generate session secrets (client-side only, never sent to backend until needed for signing)
       const tempClient = new GridClient({
-        environment: (config.gridEnv || 'production') as 'sandbox' | 'production',
-        apiKey: 'temp', // Not used for generateSessionSecrets
+        environment: 'production',
+        apiKey: 'not-used-for-session-secrets', // GridClient requires apiKey but doesn't use it for generateSessionSecrets
         baseUrl: 'https://grid.squads.xyz'
       });
       const sessionSecrets = await tempClient.generateSessionSecrets();
@@ -242,23 +242,13 @@ class GridClientService {
 
   /**
    * Get account balances
-   * Calls Grid SDK via backend proxy
+   * 
+   * NOTE: This method is not implemented. Balance fetching should be done
+   * through the backend API to avoid exposing Grid API keys.
+   * Use the wallet API endpoints instead: /api/wallet/status or /api/wallet/holdings
    */
   async getAccountBalances(address: string) {
-    try {
-      // For now, proxy through backend or use Grid SDK temporarily
-      // This is less critical than sendTokens, can be implemented later if needed
-      const tempClient = new GridClient({
-        environment: (config.gridEnv || 'production') as 'sandbox' | 'production',
-        apiKey: config.gridApiKey || 'temp',
-        baseUrl: 'https://grid.squads.xyz'
-      });
-      const balances = await tempClient.getAccountBalances(address);
-      return balances;
-    } catch (error) {
-      console.error('❌ Balance fetch error:', error);
-      throw error;
-    }
+    throw new Error('getAccountBalances should not be called from client. Use backend API endpoints instead.');
   }
 
   /**

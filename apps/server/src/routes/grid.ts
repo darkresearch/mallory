@@ -220,27 +220,12 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
         // MIGRATION SCENARIO: Account already exists but user is marked as beginner
         // This happens for existing users before we implemented app_metadata tracking
         //
-        // We specifically check for:
-        // - HTTP 400 status
-        // - Error code: "grid_account_already_exists_for_user" in the details array
-        //
-        // Example error structure:
-        // {
-        //   "message": "Email associated with grid account already exists...",
-        //   "details": [{"code": "grid_account_already_exists_for_user", ...}],
-        //   ...
-        // }
+        // We check for HTTP 400 status - Grid returns 400 when trying to create an account
+        // that already exists. In this case, we upgrade the user to advanced level and retry.
         
         const errorStatus = error?.response?.status || error?.status;
-        const errorBody = error?.response?.data || error?.data;
-        const errorDetails = errorBody?.details || [];
         
-        // Check for specific 400 error with the account-exists error code
-        const isAccountExistsError = 
-          errorStatus === 400 && 
-          errorDetails.some((detail: any) => detail.code === 'grid_account_already_exists_for_user');
-        
-        if (isAccountExistsError) {
+        if (errorStatus === 400) {
           console.log('📈 [Grid Migration] Detected existing account (400 error) - upgrading to advanced level');
           
           // Upgrade user to advanced level permanently
@@ -253,10 +238,9 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
           console.log('✅ [Grid Migration] Successfully migrated user to advanced flow');
         } else {
           // Some other error - re-throw
-          console.error('❌ [Grid Init] Unexpected error (not account-exists):', {
+          console.error('❌ [Grid Init] Unexpected error:', {
             status: errorStatus,
-            details: errorDetails,
-            message: errorBody?.message
+            message: error?.message
           });
           throw error;
         }

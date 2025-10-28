@@ -15,8 +15,6 @@ export const config = {
   googleIosClientId: (Constants.expoConfig?.extra?.googleIosClientId || process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID) as string,
   termsUrl: (Constants.expoConfig?.extra?.termsUrl || process.env.EXPO_PUBLIC_TERMS_URL) as string,
   privacyUrl: (Constants.expoConfig?.extra?.privacyUrl || process.env.EXPO_PUBLIC_PRIVACY_URL) as string,
-  gridApiKey: (Constants.expoConfig?.extra?.gridApiKey || process.env.EXPO_PUBLIC_GRID_API_KEY) as string,
-  gridEnv: (Constants.expoConfig?.extra?.gridEnv || process.env.EXPO_PUBLIC_GRID_ENV) as string,
 };
 
 // Debug log on load
@@ -29,7 +27,5 @@ console.log('📋 Config loaded:', {
   googleIosClientId: config.googleIosClientId ? 'loaded' : 'missing',
   termsUrl: config.termsUrl ? 'loaded' : 'missing',
   privacyUrl: config.privacyUrl ? 'loaded' : 'missing',
-  gridApiKey: config.gridApiKey ? 'loaded' : 'missing',
-  gridEnv: config.gridEnv || 'sandbox',
 });
 
