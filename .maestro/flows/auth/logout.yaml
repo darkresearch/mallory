@@ -1,0 +1,57 @@
+# Test: Logout Flow
+# Tests that logout works correctly and user is redirected to login
+#
+# This tests the issue where logout was getting stuck on loading screen
+# due to recursive logout calls from SIGNED_OUT event.
+#
+# Expected behavior:
+# 1. User is logged in
+# 2. User taps logout
+# 3. User is redirected to login screen (NOT stuck on loading)
+
+appId: ${APP_ID}
+tags:
+  - auth
+  - critical
+  - logout
+
+---
+
+# Step 1: Login first (using helper flow)
+- runFlow: ../helpers/login.yaml
+
+# Step 2: Verify we're logged in
+- assertVisible: "Chat"
+- assertNotVisible: "Continue with Google"
+
+# Step 3: Navigate to settings/profile (wherever logout is)
+# TODO: Update this based on your actual UI
+- tapOn:
+    id: "settings-button"  # or text: "Settings"
+- waitForAnimationToEnd
+
+# Step 4: Tap logout button
+- tapOn: "Logout"
+- waitForAnimationToEnd
+
+# Step 5: Confirm logout if there's a confirmation dialog
+- runFlow:
+    when:
+      visible: "Are you sure"
+    commands:
+      - tapOn: "Yes|Confirm|Logout"
+
+# Step 6: Should be redirected to login screen
+- assertVisible:
+    text: "Continue with Google"
+    timeout: ${TIMEOUT_MEDIUM}
+
+# Step 7: Verify we're NOT stuck on loading
+- assertNotVisible: "Loading..."
+- assertNotVisible: "Verifying wallet access..."
+
+# Step 8: Verify we can't access authenticated screens
+- assertNotVisible: "Chat"
+
+# SUCCESS: Logout completed and redirected correctly!
+

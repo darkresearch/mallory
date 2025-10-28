@@ -1,0 +1,75 @@
+# Test: New User Signup with Mailosaur OTP
+# Fully automated test using real Grid OTP from Mailosaur
+# 
+# Prerequisites:
+# - Mailosaur account configured (MAILOSAUR_API_KEY in env)
+# - Backend server running on localhost:3001
+# - Fresh Mailosaur email address (each test should use unique email)
+#
+# Flow:
+# 1. User clicks "Continue with Google"
+# 2. OAuth completes (manual first time, then cached)
+# 3. Grid sends OTP to Mailosaur email
+# 4. Script fetches OTP from Mailosaur API
+# 5. Test enters OTP automatically
+# 6. User lands on chat screen
+
+appId: ${APP_ID}
+tags:
+  - auth
+  - critical
+  - automated
+
+---
+
+# Step 1: Verify we're on login screen
+- assertVisible: "Continue with Google"
+
+# Step 2: Start sign-in flow
+- tapOn: "Continue with Google"
+- waitForAnimationToEnd:
+    timeout: ${TIMEOUT_LONG}
+
+# Step 3: OAuth redirect (external)
+# After OAuth completes, Grid OTP modal should appear
+- assertVisible:
+    text: "Enter verification code"
+    timeout: ${TIMEOUT_LONG}
+
+# Step 4: Fetch OTP from Mailosaur
+# This runs a background script that waits for the email and extracts OTP
+- runScript: |
+    cd apps/client
+    bun maestro-mailosaur-otp.ts ${TEST_EMAIL} > /tmp/maestro-otp.log 2>&1 &
+    
+    # Wait for OTP file to be created (max 2 minutes)
+    for i in {1..120}; do
+      if [ -f .maestro/.latest-otp ]; then
+        OTP=$(cat .maestro/.latest-otp)
+        echo "✅ Got OTP: $OTP"
+        break
+      fi
+      sleep 1
+    done
+
+# Step 5: Read OTP from file and enter it
+- runScript: |
+    cat apps/client/.maestro/.latest-otp
+- inputText: ${output.stdout}
+
+# Step 6: Tap verify button
+- tapOn: "Verify"
+- waitForAnimationToEnd:
+    timeout: ${TIMEOUT_MEDIUM}
+
+# Step 7: Verify successful login
+- assertVisible:
+    text: "Chat"
+    timeout: ${TIMEOUT_MEDIUM}
+
+# Step 8: Cleanup - delete OTP file
+- runScript: |
+    rm -f apps/client/.maestro/.latest-otp
+
+# SUCCESS: Fully automated test with real OTP!
+
