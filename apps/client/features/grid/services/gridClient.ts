@@ -201,8 +201,13 @@ class GridClientService {
       // Generate session secrets on-demand (not stored between start/complete)
       // These are just cryptographic keys - no need to generate earlier
       console.log('🔐 [Grid Client] Generating session secrets...');
+
+      // IMPORTANT: Use same environment as backend (from config)
+      const gridEnv = (config.gridEnv || 'production') as 'sandbox' | 'production';
+      console.log(`🔐 [Grid Client] Using Grid environment: ${gridEnv}`);
+
       const tempClient = new GridClient({
-        environment: 'production',
+        environment: gridEnv,
         apiKey: 'not-used-for-session-secrets', // GridClient requires apiKey but doesn't use it for generateSessionSecrets
         baseUrl: 'https://grid.squads.xyz'
       });
