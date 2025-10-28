@@ -90,7 +90,11 @@ export default function OtpVerificationModal({
       if (authResult.success && authResult.data) {
         console.log('✅ Grid sign-in complete:', authResult.data.address);
         setVerificationSuccess(true);
-        onClose(true);
+        
+        // Wait a brief moment to show success state, then close
+        setTimeout(() => {
+          onClose(true);
+        }, 500);
         return;
       }
       
