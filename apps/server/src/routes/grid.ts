@@ -216,17 +216,43 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
       
       try {
         response = await gridClient.createAccount({ email });
+        
+        // Log the response to see what Grid is actually returning
+        console.log('🔍 [Grid Init] createAccount response:', {
+          success: response.success,
+          hasData: !!response.data,
+          hasError: !!response.error,
+          error: response.error
+        });
+        
       } catch (error: any) {
         // MIGRATION SCENARIO: Account already exists but user is marked as beginner
         // This happens for existing users before we implemented app_metadata tracking
         //
-        // We check for HTTP 400 status - Grid returns 400 when trying to create an account
-        // that already exists. In this case, we upgrade the user to advanced level and retry.
+        // Grid SDK returns errors in different formats depending on the error type:
+        // - HTTP errors: error.response?.status or error.status
+        // - SDK errors: error.message contains the error text
+        
+        // Log full error structure for debugging
+        console.log('🔍 [Grid Init] Error structure:', {
+          hasResponse: !!error?.response,
+          responseStatus: error?.response?.status,
+          status: error?.status,
+          message: error?.message,
+          fullError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+        });
         
         const errorStatus = error?.response?.status || error?.status;
+        const errorMessage = error?.message || '';
         
-        if (errorStatus === 400) {
-          console.log('📈 [Grid Migration] Detected existing account (400 error) - upgrading to advanced level');
+        // Check for existing account error by status code OR message content
+        const isExistingAccount = 
+          errorStatus === 400 || 
+          errorMessage.includes('grid_account_already_exists_for_user') ||
+          errorMessage.includes('Email associated with grid account already exists');
+        
+        if (isExistingAccount) {
+          console.log('📈 [Grid Migration] Detected existing account - upgrading to advanced level');
           
           // Upgrade user to advanced level permanently
           await updateGridAuthLevel(userId, true);
@@ -244,6 +270,29 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
           });
           throw error;
         }
+      }
+    }
+    
+    // Check if response indicates existing account (Grid might return success: false instead of throwing)
+    if (!response.success && response.error) {
+      const errorMessage = response.error;
+      
+      // Check if this is an "account already exists" error
+      const isExistingAccount = 
+        errorMessage.includes('grid_account_already_exists_for_user') ||
+        errorMessage.includes('Email associated with grid account already exists');
+      
+      if (isExistingAccount && !isAdvanced) {
+        console.log('📈 [Grid Migration] Response indicates existing account - upgrading to advanced level');
+        
+        // Upgrade user to advanced level permanently
+        await updateGridAuthLevel(userId, true);
+        
+        // Retry with advanced flow (initAuth sends OTP automatically)
+        console.log('🔄 [Grid Migration] Retrying with initAuth()');
+        response = await gridClient.initAuth({ email });
+        
+        console.log('✅ [Grid Migration] Successfully migrated user to advanced flow');
       }
     }
     
