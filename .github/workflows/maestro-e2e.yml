@@ -32,14 +32,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          cache: 'npm'
+          bun-version: latest
       
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies with Bun
+        run: bun install
       
       - name: Install Maestro CLI
         run: |
@@ -101,8 +100,8 @@ jobs:
       - name: Start backend server
         working-directory: apps/server
         run: |
-          npm install
-          npm run dev &
+          bun install
+          bun run dev &
           sleep 10  # Wait for server to start
           curl http://localhost:3001/health || echo "Backend health check failed"
       
