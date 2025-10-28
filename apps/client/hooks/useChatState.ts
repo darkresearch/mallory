@@ -10,9 +10,36 @@ interface UseChatStateProps {
     usdc?: number;
     totalUsd?: number;
   };
+  userHasCompletedOnboarding?: boolean; // To check if user has already received intro message
 }
 
-export function useChatState({ currentConversationId, userId, walletBalance }: UseChatStateProps) {
+/**
+ * Mark user as having completed onboarding
+ * This is a one-time flag to prevent infinite loops of intro messages
+ */
+async function markUserOnboardingComplete(userId: string): Promise<boolean> {
+  try {
+    console.log('🎯 [Onboarding] Marking user onboarding as complete for userId:', userId);
+    
+    const { error } = await supabase
+      .from('users')
+      .update({ has_completed_onboarding: true })
+      .eq('id', userId);
+    
+    if (error) {
+      console.error('❌ [Onboarding] Failed to update has_completed_onboarding:', error);
+      return false;
+    }
+    
+    console.log('✅ [Onboarding] Successfully marked onboarding as complete');
+    return true;
+  } catch (err) {
+    console.error('❌ [Onboarding] Exception updating onboarding flag:', err);
+    return false;
+  }
+}
+
+export function useChatState({ currentConversationId, userId, walletBalance, userHasCompletedOnboarding }: UseChatStateProps) {
   // State for immediate reasoning feedback
   const [showImmediateReasoning, setShowImmediateReasoning] = useState(false);
   const [liveReasoningText, setLiveReasoningText] = useState('');
@@ -159,11 +186,18 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
   }, [liveReasoningText, hasInitialReasoning]);
 
   // Trigger proactive message for empty onboarding conversations
+  // SAFEGUARDS AGAINST INFINITE LOOPS:
+  // 1. Check userHasCompletedOnboarding flag (persistent across sessions)
+  // 2. Check hasTriggeredProactiveMessage ref (prevents multiple triggers in same session)
+  // 3. Check conversation has no messages (rawMessages.length === 0)
+  // 4. Mark onboarding complete BEFORE sending message (fail-safe)
   useEffect(() => {
     const triggerProactiveMessage = async () => {
-      // TEMPORARILY DISABLED: Proactive welcome message causing infinite loop
-      // TODO: Re-enable after investigating the issue
-      return;
+      // SAFEGUARD #1: User has already received intro message - NEVER send again
+      if (userHasCompletedOnboarding) {
+        console.log('🤖 [Proactive] User has already completed onboarding - skipping intro message');
+        return;
+      }
       
       // Only run once per conversation, after history is loaded, when ready
       if (
@@ -171,8 +205,9 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
         hasTriggeredProactiveMessage.current || 
         !currentConversationId || 
         !sendAIMessage ||
+        !userId || // Need userId to mark onboarding complete
         aiStatus !== 'ready' ||
-        rawMessages.length > 0
+        rawMessages.length > 0 // SAFEGUARD #3: Conversation must be empty
       ) {
         return;
       }
@@ -191,10 +226,24 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
         return;
       }
       
-      // If this is an onboarding conversation, trigger Scout's greeting
+      // If this is an onboarding conversation, trigger Mallory's greeting
       if (conversation?.metadata?.is_onboarding) {
-        console.log('🤖 [Proactive] Detected onboarding conversation - triggering greeting');
+        console.log('🤖 [Proactive] Detected onboarding conversation - preparing greeting');
+        
+        // SAFEGUARD #2: Mark as triggered immediately (session-level protection)
         hasTriggeredProactiveMessage.current = true;
+        
+        // SAFEGUARD #4: Mark onboarding complete BEFORE sending message
+        // This is the CRITICAL safeguard - even if message fails, we won't retry
+        console.log('🎯 [Proactive] Marking user onboarding complete BEFORE sending intro message');
+        const success = await markUserOnboardingComplete(userId);
+        
+        if (!success) {
+          console.error('❌ [Proactive] Failed to mark onboarding complete - ABORTING intro message to prevent loops');
+          return;
+        }
+        
+        console.log('✅ [Proactive] Onboarding marked complete - safe to send intro message');
         
         // Show placeholder immediately (just like when user sends a message)
         setLiveReasoningText('');
@@ -206,16 +255,18 @@ export function useChatState({ currentConversationId, userId, walletBalance }: U
         setHasInitialReasoning(true); // Create placeholder immediately
         setIsOnboardingGreeting(true); // Track that this is onboarding greeting
         
-        // Send system message to trigger Scout's streaming greeting
+        // Send system message to trigger Mallory's streaming greeting
         sendAIMessage({
           role: 'system',
           content: 'onboarding_greeting',
         } as any);
+        
+        console.log('🚀 [Proactive] Intro message sent - user will only see this ONCE ever');
       }
     };
 
     triggerProactiveMessage();
-  }, [isLoadingHistory, rawMessages.length, currentConversationId, sendAIMessage, aiStatus]);
+  }, [isLoadingHistory, rawMessages.length, currentConversationId, sendAIMessage, aiStatus, userHasCompletedOnboarding, userId]);
 
   const handleSendMessage = (message: string) => {
     if (!sendAIMessage) return;

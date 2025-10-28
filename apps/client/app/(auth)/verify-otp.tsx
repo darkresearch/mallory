@@ -1,4 +1,4 @@
-import { View, Text, TextInput, StyleSheet, Platform, useWindowDimensions, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Platform, useWindowDimensions, TouchableOpacity, Pressable } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import Animated, { 
@@ -44,6 +44,9 @@ export default function VerifyOtpScreen() {
   
   // Guard to prevent double-submission
   const verificationInProgress = useRef(false);
+  
+  // Ref for the hidden input to manage focus
+  const inputRef = useRef<TextInput>(null);
 
   // Handle OTP input with number validation
   const handleOtpChange = (text: string) => {
@@ -289,16 +292,25 @@ export default function VerifyOtpScreen() {
     }
   };
 
+  // Focus the hidden input when clicking anywhere on the OTP area
+  const focusInput = () => {
+    inputRef.current?.focus();
+  };
+
   return (
-    <View 
-      style={[
-        styles.container,
-        Platform.OS === 'web' && {
-          height: '100dvh' as any,
-          maxHeight: '100dvh' as any,
-        }
-      ]}
+    <Pressable 
+      style={{ flex: 1 }}
+      onPress={focusInput}
     >
+      <View 
+        style={[
+          styles.container,
+          Platform.OS === 'web' && {
+            height: '100dvh' as any,
+            maxHeight: '100dvh' as any,
+          }
+        ]}
+      >
       {/* Mobile header with sign out */}
       {isMobile && (
         <View style={styles.mobileHeader}>
@@ -312,38 +324,41 @@ export default function VerifyOtpScreen() {
         {/* Top group - OTP + Instruction Text (like lockup + tagline on login) */}
         <Animated.View style={[textAnimatedStyle, isMobile && { width: '100%', flex: 1, justifyContent: 'center' }]}>
           {/* OTP Input - 6 underscores style */}
-          <View style={[
-            styles.otpContainer,
-            isMobile && { marginBottom: 11 } // Match lockup-to-tagline spacing on mobile
-          ]}>
-            {[0, 1, 2, 3, 4, 5].map((index) => {
-              const isActive = index === otp.length && !isVerifying;
-              return (
-                <View 
-                  key={index} 
-                  style={[
-                    styles.digitBox,
-                    isMobile && styles.digitBoxMobile
-                  ]}
-                >
-                  <Text style={styles.digitText}>
-                    {otp[index] || ''}
-                  </Text>
-                  {/* Show cursor on active position */}
-                  {isActive && (
-                    <Animated.View style={[styles.cursor, cursorAnimatedStyle]} />
-                  )}
-                  <View style={[
-                    styles.digitUnderline,
-                    isActive && styles.digitUnderlineActive
-                  ]} />
-                </View>
-              );
-            })}
-          </View>
+          <Pressable onPress={focusInput}>
+            <View style={[
+              styles.otpContainer,
+              isMobile && { marginBottom: 11 } // Match lockup-to-tagline spacing on mobile
+            ]}>
+              {[0, 1, 2, 3, 4, 5].map((index) => {
+                const isActive = index === otp.length && !isVerifying;
+                return (
+                  <View 
+                    key={index} 
+                    style={[
+                      styles.digitBox,
+                      isMobile && styles.digitBoxMobile
+                    ]}
+                  >
+                    <Text style={styles.digitText}>
+                      {otp[index] || ''}
+                    </Text>
+                    {/* Show cursor on active position */}
+                    {isActive && (
+                      <Animated.View style={[styles.cursor, cursorAnimatedStyle]} />
+                    )}
+                    <View style={[
+                      styles.digitUnderline,
+                      isActive && styles.digitUnderlineActive
+                    ]} />
+                  </View>
+                );
+              })}
+            </View>
+          </Pressable>
           
           {/* Hidden TextInput for capturing input */}
           <TextInput
+            ref={inputRef}
             style={styles.hiddenInput}
             value={otp}
             onChangeText={handleOtpChange}
@@ -395,7 +410,8 @@ export default function VerifyOtpScreen() {
           </TouchableOpacity>
         </View>
       )}
-    </View>
+      </View>
+    </Pressable>
   );
 }
 

@@ -28,11 +28,24 @@ export default function LoadingScreen() {
         });
         
         if (isAuthenticated) {
-          // TEMPORARILY DISABLED: Skip onboarding conversation creation
-          // TODO: Re-enable after investigating infinite loop issue
-          // All users go directly to regular chat
-          console.log('📱 [LoadingScreen] User → main chat (onboarding disabled)');
-          router.replace('/(main)/chat');
+          // Check if this is a first-time user who needs onboarding
+          if (!user?.hasCompletedOnboarding) {
+            console.log('📱 [LoadingScreen] New user detected - creating onboarding conversation');
+            try {
+              const conversation = await createOnboardingConversation(user?.id);
+              console.log('✅ [LoadingScreen] Onboarding conversation created:', conversation.conversationId);
+              // Navigate directly to chat - useChatState will detect onboarding conversation
+              router.replace('/(main)/chat');
+            } catch (error) {
+              console.error('❌ [LoadingScreen] Failed to create onboarding conversation:', error);
+              // Fallback to regular chat if onboarding creation fails
+              router.replace('/(main)/chat');
+            }
+          } else {
+            // Returning user - go directly to regular chat
+            console.log('📱 [LoadingScreen] Returning user → main chat');
+            router.replace('/(main)/chat');
+          }
         } else {
           router.replace('/(auth)/login');
         }
