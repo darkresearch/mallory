@@ -31,6 +31,9 @@ export default function OtpVerificationModal({
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState('');
   const [verificationSuccess, setVerificationSuccess] = useState(false);
+  
+  // Track in-flight request to prevent race conditions
+  const verificationInProgress = React.useRef(false);
 
   // Reset local state when modal visibility changes
   useEffect(() => {
@@ -38,6 +41,8 @@ export default function OtpVerificationModal({
       setVerificationSuccess(false);
       setOtp('');
       setError('');
+      setIsVerifying(false);
+      verificationInProgress.current = false; // Reset ref
     }
   }, [visible]);
 
@@ -61,11 +66,35 @@ export default function OtpVerificationModal({
   };
 
   const handleVerify = async () => {
-    if (otp.length !== 6) {
-      setError('Please enter a 6-digit code');
+    // ============================================
+    // CRITICAL: Prevent double-submission
+    // ============================================
+    // This guard prevents users from clicking "Verify" multiple times
+    // which would cause the second request to fail with "Invalid code"
+    // because Grid invalidates OTPs after first successful use.
+    
+    if (verificationInProgress.current) {
+      console.log('⚠️  [OTP] Verification already in progress, ignoring duplicate click');
       return;
     }
-
+    
+    // STRICT validation - must be exactly 6 digits
+    const cleanOtp = otp.trim();
+    
+    if (cleanOtp.length !== 6) {
+      setError('Code must be exactly 6 digits');
+      return;
+    }
+    
+    // Additional validation: ensure it's numeric only
+    if (!/^\d{6}$/.test(cleanOtp)) {
+      setError('Code must contain only numbers');
+      return;
+    }
+    
+    // Mark verification as in-progress IMMEDIATELY
+    // This prevents any subsequent clicks from proceeding
+    verificationInProgress.current = true;
     setIsVerifying(true);
     setError('');
 
@@ -76,10 +105,11 @@ export default function OtpVerificationModal({
         throw new Error('Sign-in session not found. Please close this modal and try again.');
       }
 
-      console.log('🔐 Completing sign-in with OTP - backend determines correct flow');
+      console.log('🔐 [OTP] Completing sign-in with OTP - backend determines correct flow');
+      console.log('🔐 [OTP] OTP length:', cleanOtp.length, 'First 2 digits:', cleanOtp.substring(0, 2) + '****');
       
       // Backend automatically uses the correct flow (beginner or advanced)
-      const authResult = await gridClientService.completeSignIn(gridUser, otp);
+      const authResult = await gridClientService.completeSignIn(gridUser, cleanOtp);
       
       console.log('🔐 [OTP Verification] Sign-in result:', {
         success: authResult.success,
@@ -88,7 +118,7 @@ export default function OtpVerificationModal({
       });
       
       if (authResult.success && authResult.data) {
-        console.log('✅ Grid sign-in complete:', authResult.data.address);
+        console.log('✅ [OTP] Grid sign-in complete:', authResult.data.address);
         setVerificationSuccess(true);
         onClose(true);
         return;
@@ -97,19 +127,24 @@ export default function OtpVerificationModal({
       // If we reach here without returning, verification failed
       setError('Verification failed. Please check your code and try again.');
     } catch (error) {
-      console.error('❌ OTP verification error:', error);
+      console.error('❌ [OTP] Verification error:', error);
       const errorMessage = error instanceof Error ? error.message : 'An error occurred. Please try again.';
       
       // Provide more specific error messages
       if (errorMessage.toLowerCase().includes('session secrets not found')) {
         setError('Session expired. Please request a new code.');
       } else if (errorMessage.toLowerCase().includes('invalid email and code combination')) {
-        setError('Invalid code. Please check and try again.');
+        setError('Invalid code. Please check and try again, or request a new code.');
+      } else if (errorMessage.toLowerCase().includes('invalid code')) {
+        setError('Invalid code. This code may have been used already. Please request a new code.');
       } else {
         setError(errorMessage);
       }
     } finally {
       setIsVerifying(false);
+      // Reset the in-progress flag ONLY in finally block
+      // This ensures it's reset even if there's an error
+      verificationInProgress.current = false;
     }
   };
 
@@ -127,13 +162,38 @@ export default function OtpVerificationModal({
   };
 
   const getButtonText = () => {
-    if (verificationSuccess) {
+    if (isVerifying) {
+      return 'Verifying...';
+    } else if (verificationSuccess) {
       return 'Done';
     } else if (error) {
       return 'Resend Code';
     } else {
       return 'Continue';
     }
+  };
+  
+  // ============================================
+  // BUTTON DISABLE LOGIC - STRICT VALIDATION
+  // ============================================
+  // Button is disabled if:
+  // 1. Currently verifying (isVerifying = true)
+  // 2. OTP is not exactly 6 digits
+  // 3. Verification was successful (shows "Done" instead)
+  const isButtonDisabled = () => {
+    // If error state, allow "Resend Code" button
+    if (error) {
+      return isVerifying;
+    }
+    
+    // If success state, allow "Done" button
+    if (verificationSuccess) {
+      return false;
+    }
+    
+    // Normal state: disable if verifying OR if OTP is not 6 digits
+    const cleanOtp = otp.trim();
+    return isVerifying || cleanOtp.length !== 6;
   };
 
   const isWeb = Platform.OS === 'web';
@@ -154,7 +214,10 @@ export default function OtpVerificationModal({
             Verify Your Wallet
           </Text>
           <Text style={styles.description}>
-            {`We've sent a 6-digit code to ${userEmail}`}
+            {isVerifying 
+              ? 'Verifying your code...'
+              : `We've sent a 6-digit code to ${userEmail}`
+            }
           </Text>
           
           <TextInput
@@ -166,16 +229,25 @@ export default function OtpVerificationModal({
             keyboardType="number-pad"
             maxLength={6}
             autoFocus
+            editable={!isVerifying} // Disable input during verification
           />
 
           {error ? (
             <Text style={styles.error}>{error}</Text>
+          ) : null}
+          
+          {/* Show hint when OTP is incomplete */}
+          {!error && !verificationSuccess && !isVerifying && otp.trim().length > 0 && otp.trim().length < 6 ? (
+            <Text style={styles.hint}>
+              Enter all 6 digits to continue ({otp.trim().length}/6)
+            </Text>
           ) : null}
 
           <PressableButton
             fullWidth
             onPress={handleButtonPress}
             loading={isVerifying}
+            disabled={isButtonDisabled()}
             style={styles.button}
             textStyle={styles.buttonText}
           >
@@ -276,6 +348,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 16,
+    fontFamily: 'Satoshi',
+  },
+  hint: {
+    color: '#F8CEAC',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 16,
+    fontFamily: 'Satoshi',
+    fontWeight: '500',
   },
   button: {
     backgroundColor: '#FBAA69',
