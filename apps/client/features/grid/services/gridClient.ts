@@ -80,11 +80,13 @@ class GridClientService {
    * 1. Backend determines user's auth level
    * 2. Backend calls appropriate Grid API
    * 3. Grid sends OTP to user's email
-   * 4. Backend returns user object
-   * 5. Client generates session secrets (stored locally)
+   * 4. Backend returns user object for OTP verification
+   * 
+   * NOTE: Session secrets are NOT generated here. They're generated
+   * on-demand in completeSignIn() when we actually need them for verification.
    * 
    * @param email - User's email address
-   * @returns Promise with { user, sessionSecrets }
+   * @returns Promise with { user } - Grid user object for OTP verification
    * @throws Error if backend request fails
    * 
    * USAGE:
@@ -118,22 +120,10 @@ class GridClientService {
         throw new Error(`Sign-in failed: ${data.error || 'Unknown error'}`);
       }
       
-      // Generate session secrets (client-side only, never sent to backend until needed for signing)
-      const tempClient = new GridClient({
-        environment: 'production',
-        apiKey: 'not-used-for-session-secrets', // GridClient requires apiKey but doesn't use it for generateSessionSecrets
-        baseUrl: 'https://grid.squads.xyz'
-      });
-      const sessionSecrets = await tempClient.generateSessionSecrets();
-      
-      // Store session secrets securely
-      await secureStorage.setItem('grid_session_secrets', JSON.stringify(sessionSecrets));
-      
       console.log('✅ [Grid Client] Sign-in started, OTP sent to email');
       
       return { 
-        user: data.user, 
-        sessionSecrets 
+        user: data.user
       };
     } catch (error) {
       console.error('❌ [Grid Client] Sign-in start error:', error);
@@ -155,14 +145,25 @@ class GridClientService {
    * • Returning users: Uses gridClient.completeAuth()
    *   - Re-authenticates existing account
    * 
+   * SESSION SECRETS:
+   * ───────────────
+   * Session secrets are generated HERE (not in startSignIn) because:
+   * 1. They're just cryptographic keys, not tied to OTP timing
+   * 2. Generate on-demand = simpler, no storage between steps
+   * 3. If OTP expires, we generate fresh secrets on retry
+   * 
+   * After generation, they're stored permanently because:
+   * - They never expire (unless manually revoked)
+   * - They're reused for all future transactions
+   * - Think of them as "device credentials"
+   * 
    * WHAT HAPPENS:
    * ────────────
-   * 1. Backend determines user's auth level
-   * 2. Backend calls appropriate Grid API with OTP
-   * 3. Grid verifies OTP and returns account data
-   * 4. Backend syncs Grid address to database
-   * 5. Client stores account data locally
-   * 6. User is now signed in and can make transactions
+   * 1. Generate session secrets (cryptographic keys)
+   * 2. Backend verifies OTP + creates/authenticates account
+   * 3. Backend syncs Grid address to database
+   * 4. Client stores account data + session secrets
+   * 5. User is now signed in and can make transactions
    * 
    * FOR FIRST-TIME USERS:
    * ────────────────────
@@ -187,13 +188,16 @@ class GridClientService {
     try {
       console.log('🔐 [Grid Client] Completing sign-in with OTP');
       
-      // Retrieve session secrets from secure storage
-      const sessionSecretsJson = await secureStorage.getItem('grid_session_secrets');
-      if (!sessionSecretsJson) {
-        throw new Error('Session secrets not found. Please start sign-in first.');
-      }
-      
-      const sessionSecrets = JSON.parse(sessionSecretsJson);
+      // Generate session secrets on-demand (not stored between start/complete)
+      // These are just cryptographic keys - no need to generate earlier
+      console.log('🔐 [Grid Client] Generating session secrets...');
+      const tempClient = new GridClient({
+        environment: 'production',
+        apiKey: 'not-used-for-session-secrets', // GridClient requires apiKey but doesn't use it for generateSessionSecrets
+        baseUrl: 'https://grid.squads.xyz'
+      });
+      const sessionSecrets = await tempClient.generateSessionSecrets();
+      console.log('✅ [Grid Client] Session secrets generated');
       
       // Call backend proxy to complete auth (backend determines beginner vs advanced)
       const backendUrl = config.backendApiUrl || 'http://localhost:3001';
@@ -220,8 +224,12 @@ class GridClientService {
         throw new Error(`Sign-in completion failed: ${authResult.error || 'Unknown error'}`);
       }
       
-      // Store account data
+      // Store account data (includes authentication tokens)
       await secureStorage.setItem('grid_account', JSON.stringify(authResult.data));
+      
+      // Store session secrets for future transactions
+      // These never expire - they're permanent "device credentials"
+      await secureStorage.setItem('grid_session_secrets', JSON.stringify(sessionSecrets));
       
       console.log('✅ [Grid Client] Sign-in complete:', authResult.data.address);
       
