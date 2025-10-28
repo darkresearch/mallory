@@ -52,6 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [showGridOtpModal, setShowGridOtpModal] = useState(false);
   const [gridUserForOtp, setGridUserForOtp] = useState<any>(null);
   
+  // SIGN-IN STATE: Tracks when user is actively signing in
+  // Set when user clicks "Continue with Google", cleared when sign-in completes or fails
+  // Prevents premature logout during the sign-in flow
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  
   // RACE CONDITION GUARD: Prevent concurrent Grid sign-in attempts
   // This singleton flag ensures only ONE Grid sign-in flow runs at a time
   const isInitiatingGridSignIn = useRef(false);
@@ -65,7 +70,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     
     // Check for existing session
-    checkAuthSession();
+    // SKIP if we're returning from OAuth - let onAuthStateChange handle it instead
+    // We use sessionStorage to persist this flag across React StrictMode double-renders
+    // (in dev mode, React mounts components twice, and Supabase consumes the hash on first mount)
+    const isOAuthCallback = typeof window !== 'undefined' && (
+      window.location.hash.includes('access_token=') ||
+      window.sessionStorage.getItem('mallory_oauth_in_progress') === 'true'
+    );
+    
+    if (isOAuthCallback) {
+      console.log('🔍 [Init] Skipping initial auth check (OAuth callback detected)');
+      // Set flag in sessionStorage so it persists across StrictMode double-renders
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem('mallory_oauth_in_progress', 'true');
+      }
+    } else {
+      console.log('🔍 [Init] Running initial auth check (not an OAuth callback)');
+      checkAuthSession();
+    }
 
     // Listen for auth state changes - simplified
     const { data: authListener } = supabase.auth.onAuthStateChange(
@@ -185,10 +207,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // STEP 2: Check Grid session (REQUIRED for full authentication)
       // ALL-OR-NOTHING RULE: User must have BOTH Supabase AND Grid sessions
+      // EXCEPTION: If Grid sign-in is currently in progress, skip this check
       console.log('🔍 [Auth Check] Validating Grid session...');
       const gridAccount = await gridClientService.getAccount();
       
       if (!gridAccount) {
+        // Check if we're in the middle of OAuth flow (just returned from Google)
+        // When Supabase OAuth completes, it adds #access_token= to the URL
+        const isReturningFromOAuth = typeof window !== 'undefined' && 
+                                     window.location.hash.includes('access_token=');
+        
+        // Check if user is currently signing in (in-memory state)
+        if (isSigningIn || isReturningFromOAuth) {
+          console.log('🔄 [Auth Check] User is signing in - skipping logout check');
+          if (isReturningFromOAuth) {
+            console.log('🔄 [Auth Check] Detected OAuth redirect in URL');
+          }
+          console.log('🔄 [Auth Check] Allowing sign-in flow to complete...');
+          // Proceed with handleSignIn which will initiate/continue Grid sign-in
+          await handleSignIn(session);
+          return;
+        }
+        
         // INCOMPLETE AUTH STATE: User has Supabase session but NO Grid session
         // This means they started login but never completed Grid OTP verification
         // OR they're returning after closing the app mid-flow
@@ -232,6 +272,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       expires_at: session?.expires_at
     });
     console.log('User metadata:', session?.user?.user_metadata);
+    
+    // Clear OAuth-in-progress flag now that we're handling the sign-in
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem('mallory_oauth_in_progress');
+      console.log('🔐 Cleared OAuth-in-progress flag');
+    }
     
     try {
       // Store tokens securely
@@ -290,8 +336,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user.email) {
         await checkAndInitiateGridSignIn(user.email);
       }
+      
+      // Sign-in completed successfully, clear the signing-in state
+      setIsSigningIn(false);
     } catch (error) {
       console.error('❌ Error handling sign in:', error);
+      // Clear signing-in state on error
+      setIsSigningIn(false);
     }
   };
 
@@ -335,10 +386,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🚪 [LOGOUT] Starting comprehensive logout');
       setIsLoading(true);
       
-      // STEP 1: Close all modals immediately (prevents UI blocking)
+      // STEP 1: Close all modals and clear signing-in state immediately (prevents UI blocking)
       setShowGridOtpModal(false);
       setGridUserForOtp(null);
-      console.log('🚪 [LOGOUT] Modals closed');
+      setIsSigningIn(false);
+      console.log('🚪 [LOGOUT] Modals closed and signing-in state cleared');
       
       // STEP 2: Sign out from native Google Sign-In (mobile only)
       if (Platform.OS !== 'web') {
@@ -550,6 +602,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async () => {
     try {
       setIsLoading(true);
+      // Set signing-in state when user explicitly starts the login process
+      setIsSigningIn(true);
       
       if (Platform.OS === 'web') {
         // Use Supabase OAuth for web
@@ -583,6 +637,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     } catch (error: any) {
       console.error('Login error:', error);
+      // Clear signing-in state on error
+      setIsSigningIn(false);
       throw error;
     } finally {
       setIsLoading(false);
@@ -724,7 +780,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               // Close modal
               setShowGridOtpModal(false);
               setGridUserForOtp(null);
-              console.log('🔐 [OTP Modal] Modal closed');
+              
+              // Grid sign-in complete - clear loading state
+              // This allows the user to proceed to the app
+              setIsLoading(false);
+              console.log('🔐 [OTP Modal] Modal closed, loading complete');
             }
           }}
           userEmail={user?.email || ''}
