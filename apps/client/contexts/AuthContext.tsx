@@ -147,8 +147,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { user: gridUser } = await gridClientService.startSignIn(userEmail);
       setGridUserForOtp(gridUser);
       setShowGridOtpModal(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [Grid] Failed to start Grid sign-in:', error);
+      
+      // CHECK: Is Grid service down?
+      // If we get network errors or 5xx errors, Grid might be unavailable
+      const errorMessage = error?.message || String(error);
+      const isNetworkError = errorMessage.toLowerCase().includes('network') || 
+                            errorMessage.toLowerCase().includes('fetch') ||
+                            errorMessage.toLowerCase().includes('connection');
+      const isServerError = error?.status >= 500 || errorMessage.includes('500') || errorMessage.includes('502') || errorMessage.includes('503');
+      
+      if (isNetworkError || isServerError) {
+        console.error('💥 [Grid] GRID SERVICE APPEARS TO BE DOWN');
+        console.error('💥 [Grid] Signing out user - app cannot function without Grid');
+        
+        // Grid is down - sign out user completely
+        // The app cannot function without Grid wallet access
+        await logout();
+        
+        // Show user-friendly error (optional - could be in UI layer)
+        alert('Wallet service is temporarily unavailable. Please try again later.');
+        return;
+      }
+      
       // Grid wallet is REQUIRED - show error to user
       // The OTP modal will display and user must complete setup to continue
       throw error;
@@ -159,23 +181,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const checkAuthSession = async () => {
-    console.log('🔍 checkAuthSession called');
+    console.log('🔍 [Auth Check] Starting comprehensive auth validation...');
     try {
-      // Get session from Supabase
-      console.log('🔍 About to call supabase.auth.getSession()');
+      // STEP 1: Check Supabase session
+      console.log('🔍 [Auth Check] Checking Supabase session...');
       const { data: { session }, error } = await supabase.auth.getSession();
-      console.log('checkAuthSession - Session:', !!session, 'Error:', error);
-      console.log('checkAuthSession - Session data:', session ? {
+      console.log('🔍 [Auth Check] Supabase session:', !!session, 'Error:', error);
+      
+      if (!session) {
+        console.log('✅ [Auth Check] No session - user is logged out (expected)');
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log('🔍 [Auth Check] Supabase session found:', {
         user_id: session.user?.id,
         email: session.user?.email,
         expires_at: session.expires_at
-      } : null);
+      });
       
-      if (session) {
-        await handleSignIn(session);
+      // STEP 2: Check Grid session (REQUIRED for full authentication)
+      // ALL-OR-NOTHING RULE: User must have BOTH Supabase AND Grid sessions
+      console.log('🔍 [Auth Check] Validating Grid session...');
+      const gridAccount = await gridClientService.getAccount();
+      
+      if (!gridAccount) {
+        // INCOMPLETE AUTH STATE: User has Supabase session but NO Grid session
+        // This means they started login but never completed Grid OTP verification
+        // OR they're returning after closing the app mid-flow
+        console.warn('⚠️ [Auth Check] INCOMPLETE AUTH STATE DETECTED');
+        console.warn('⚠️ [Auth Check] User has Supabase session but NO Grid session');
+        console.warn('⚠️ [Auth Check] Signing out and restarting auth flow...');
+        
+        // Sign out completely and restart the flow
+        await logout();
+        return;
       }
+      
+      console.log('✅ [Auth Check] Grid session validated:', {
+        address: gridAccount.address,
+        hasAuthentication: !!gridAccount.authentication
+      });
+      
+      // STEP 3: Both sessions exist - proceed with full sign-in
+      console.log('✅ [Auth Check] Full auth state validated - proceeding with sign-in');
+      await handleSignIn(session);
+      
     } catch (error) {
-      console.error('Error checking auth session:', error);
+      console.error('❌ [Auth Check] Error during auth validation:', error);
+      
+      // On any error during validation, sign out to ensure clean state
+      console.log('🚪 [Auth Check] Error detected - signing out for safety');
+      await logout();
     } finally {
       setIsLoading(false);
     }
