@@ -140,9 +140,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setNeedsReauth(true);
           }
         } else if (event === 'SIGNED_OUT') {
-          // Supabase session ended - use unified logout to clear everything
-          console.log('🚪 [Auth State] SIGNED_OUT event - triggering logout');
-          await logout();
+          // Supabase session ended - just clear state (don't call logout to avoid infinite loop)
+          // The logout() function already calls supabase.auth.signOut(), so this event
+          // is triggered BY logout(), not a trigger FOR logout()
+          console.log('🚪 [Auth State] SIGNED_OUT event - clearing state');
+
+          // Only clear state if we're not already in a logout flow
+          if (!isLoggingOut.current) {
+            setUser(null);
+            setIsLoading(false);
+          }
         }
       }
     );
@@ -158,15 +165,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // SINGLETON PATTERN: Uses ref guard to prevent race conditions
   // Multiple calls to this function will be de-duplicated automatically
   const checkAndInitiateGridSignIn = async (userEmail: string) => {
-    // GUARD: If Grid sign-in is already in progress, skip this call
+    // GUARD: Atomic check-and-set to prevent race conditions
     if (isInitiatingGridSignIn.current) {
       console.log('🏦 [Grid] Sign-in already in progress, skipping duplicate call');
       return;
     }
-    
+
+    // Set guard flag IMMEDIATELY (synchronously, before any awaits)
+    isInitiatingGridSignIn.current = true;
+
     try {
-      // Set guard flag FIRST (before any async operations)
-      isInitiatingGridSignIn.current = true;
       
       console.log('🏦 [Grid] Checking Grid account status for:', userEmail);
       
@@ -356,13 +364,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // UNIFIED SIGN-IN: Pair Grid authentication with Supabase authentication
       // After successful Supabase login, automatically initiate Grid sign-in
-      // This creates a seamless single sign-in experience for users
+      // The checkAndInitiateGridSignIn function has built-in guards and checks
       if (user.email) {
         await checkAndInitiateGridSignIn(user.email);
+      } else {
+        // No email, can't do Grid sign-in
+        setIsSigningIn(false);
       }
-      
-      // Sign-in completed successfully, clear the signing-in state
-      setIsSigningIn(false);
     } catch (error) {
       console.error('❌ Error handling sign in:', error);
       // Clear signing-in state on error
@@ -422,9 +430,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // STEP 1: Clear signing-in state immediately (prevents UI blocking)
       setIsSigningIn(false);
+      isInitiatingGridSignIn.current = false; // Reset Grid sign-in guard
       // Also clear from sessionStorage
       if (typeof window !== 'undefined' && window.sessionStorage) {
         sessionStorage.removeItem('mallory_oauth_in_progress');
+        sessionStorage.removeItem('mallory_grid_user');
+        sessionStorage.removeItem('mallory_grid_is_existing_user');
       }
       console.log('🚪 [LOGOUT] Signing-in state cleared');
       
