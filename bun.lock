@@ -88,6 +88,7 @@
       },
       "devDependencies": {
         "@expo/webpack-config": "^19.0.1",
+        "@playwright/test": "^1.56.1",
         "@types/react": "~19.1.0",
         "babel-plugin-module-resolver": "^5.0.2",
         "buffer": "^6.0.3",

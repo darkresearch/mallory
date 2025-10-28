@@ -15,6 +15,8 @@
     "type-check": "tsc --noEmit",
     "test": "bun test",
     "test:e2e": "bun test __tests__/e2e/",
+    "test:signup": "bun test __tests__/e2e/signup-flow.test.ts",
+    "test:signup:errors": "bun test __tests__/e2e/signup-error-scenarios.test.ts",
     "test:ui": "playwright test",
     "test:ui:headed": "playwright test --headed",
     "test:ui:debug": "playwright test --debug",
