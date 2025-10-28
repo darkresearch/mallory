@@ -24,14 +24,22 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
 
-// Grid SDK instance
-const gridClient = new GridClient({
-  environment: (process.env.GRID_ENV || 'production') as 'sandbox' | 'production',
-  apiKey: process.env.GRID_API_KEY!,
-  baseUrl: 'https://grid.squads.xyz'
-});
+/**
+ * Create a new GridClient instance
+ * GridClient is stateful, so we need to create a fresh instance
+ */
+function createGridClient(): GridClient {
+  return new GridClient({
+    environment: (process.env.GRID_ENV || 'production') as 'sandbox' | 'production',
+    apiKey: process.env.GRID_API_KEY!,
+    baseUrl: 'https://grid.squads.xyz'
+  });
+}
 
 async function testGridSigning() {
+  // Create fresh GridClient instance for this test (GridClient is stateful)
+  const gridClient = createGridClient();
+  
   console.log('🧪 Testing Grid Signing for x402 Payments');
   console.log('==========================================\n');
 
