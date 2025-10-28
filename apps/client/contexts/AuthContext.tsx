@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { supabase, secureStorage, config } from '../lib';
 import { configureGoogleSignIn, signInWithGoogle, signOutFromGoogle } from '../features/auth';
 import { gridClientService } from '../features/grid';
 import OtpVerificationModal from '../components/grid/OtpVerificationModal';
+import { getDeviceInfo, isMobileDevice } from '../lib/device/detection';
 
 interface User {
   id: string;
@@ -42,6 +43,10 @@ const REFRESH_TOKEN_KEY = 'mallory_refresh_token';
 // No additional configuration needed - Supabase handles OAuth natively
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { width } = useWindowDimensions();
+  const deviceInfo = getDeviceInfo(width);
+  const isMobile = isMobileDevice(deviceInfo);
+  
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [needsReauth, setNeedsReauth] = useState(false);
@@ -174,7 +179,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // The error will propagate up and prevent the user from proceeding
       const { user: gridUser } = await gridClientService.startSignIn(userEmail);
       setGridUserForOtp(gridUser);
-      setShowGridOtpModal(true);
+      
+      // Store gridUser in sessionStorage for screen-based flow
+      if (Platform.OS === 'web') {
+        sessionStorage.setItem('gridUser', JSON.stringify(gridUser));
+      }
+      
+      // On mobile web, navigate to OTP screen instead of showing modal
+      if (isMobile && Platform.OS === 'web') {
+        console.log('🏦 [Grid] Mobile web detected - navigating to OTP screen');
+        router.push('/(auth)/otp-verification');
+      } else {
+        console.log('🏦 [Grid] Desktop detected - showing OTP modal');
+        setShowGridOtpModal(true);
+      }
     } catch (error: any) {
       console.error('❌ [Grid] Failed to start Grid sign-in:', error);
       
@@ -762,8 +780,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     >
       {children}
       
-      {/* Grid OTP Verification Modal */}
-      {showGridOtpModal && (
+      {/* Grid OTP Verification Modal - Desktop only */}
+      {showGridOtpModal && !isMobile && (
         <OtpVerificationModal
           visible={showGridOtpModal}
           onClose={async (success: boolean) => {
