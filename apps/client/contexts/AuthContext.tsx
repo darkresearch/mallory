@@ -90,91 +90,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check re-auth status only when explicitly triggered (not automatically)
   // This prevents infinite loops while still allowing manual re-auth checks
 
-  // Client-side Grid account initialization
+  // Client-side Grid sign-in initialization
+  // Backend handles all complexity: beginner vs advanced detection, migrations, upgrades
   useEffect(() => {
     const checkGridAccount = async () => {
-      console.log('🏦 [DEBUG] checkGridAccount called with user:', {
+      console.log('🏦 [Grid] checkGridAccount called with user:', {
         userId: user?.id,
         email: user?.email,
         isLoading,
-        hasId: !!user?.id,
-        hasEmail: !!user?.email,
       });
       
       // Only run if we have a user with email
       if (!user?.id || !user?.email || isLoading) {
-        console.log('🏦 [DEBUG] Skipping - no user, no email, or still loading');
+        console.log('🏦 [Grid] Skipping - no user, no email, or still loading');
         return;
       }
       
-      console.log('🏦 [DEBUG] User has email, proceeding with Grid setup:', user.email);
+      console.log('🏦 [Grid] User has email, proceeding with Grid sign-in:', user.email);
       
       // First, check if Grid account exists in client-side secure storage
       const gridAccount = await gridClientService.getAccount();
       
-      console.log('🏦 [DEBUG] Grid account in secure storage:', {
-        exists: !!gridAccount,
-        address: gridAccount?.address,
-      });
-      
       if (gridAccount) {
-        console.log('✅ [DEBUG] Grid account found in secure storage - STOPPING HERE');
-        // No sync needed - already synced when created/verified
+        console.log('✅ [Grid] Grid account already exists in secure storage - skipping initialization');
         return;
       }
       
-      console.log('🏦 [DEBUG] No Grid account in secure storage, checking database...');
+      console.log('🏦 [Grid] No Grid account in secure storage, starting sign-in...');
       
-      // Check if user already has Grid account in database (existing users)
-      const { data: existingGridData, error: gridDbError } = await supabase
-        .from('users_grid')
-        .select('solana_wallet_address, grid_account_id, account_type')
-        .eq('id', user.id)
-        .single();
-      
-      console.log('🏦 [DEBUG] Database query result:', {
-        hasData: !!existingGridData,
-        hasAddress: !!existingGridData?.solana_wallet_address,
-        accountType: existingGridData?.account_type,
-        error: gridDbError?.message,
-        errorCode: gridDbError?.code,
-      });
-      
-      if (existingGridData?.solana_wallet_address) {
-        console.log('🏦 [DEBUG] Found existing Grid account in database:', {
-          address: existingGridData.solana_wallet_address,
-          accountType: existingGridData.account_type,
-        });
-        
-        // For email-based accounts, try re-authentication
-        console.log('🏦 [DEBUG] Existing Grid account - attempting re-auth');
-        try {
-          const { user: gridUser } = await gridClientService.reauthenticateAccount(user.email);
-          setGridUserForOtp({ ...gridUser, isReauth: true });
-          setShowGridOtpModal(true);
-        } catch (reauthError) {
-          console.warn('⚠️ Re-auth failed, trying account creation as fallback:', reauthError);
-          
-          try {
-            const { user: gridUser } = await gridClientService.createAccount(user.email);
-            setGridUserForOtp({ ...gridUser, isReauth: false });
-            setShowGridOtpModal(true);
-          } catch (createError) {
-            console.error('❌ Both re-auth and creation failed:', createError);
-          }
-        }
-      } else {
-        console.log('🏦 [DEBUG] No Grid account in database - creating new one for email user');
-        
-        // User has email (either Google auth or wallet user who provided email)
-        // Create email-based Grid account
-        try {
-          const { user: gridUser } = await gridClientService.createAccount(user.email);
-          setGridUserForOtp({ ...gridUser, isReauth: false });
-          setShowGridOtpModal(true);
-        } catch (error) {
-          console.error('❌ Failed to create email-based Grid account:', error);
-        }
+      // Start Grid sign-in - backend automatically detects auth level and handles migration
+      try {
+        const { user: gridUser } = await gridClientService.startSignIn(user.email);
+        setGridUserForOtp(gridUser);
+        setShowGridOtpModal(true);
+      } catch (error) {
+        console.error('❌ [Grid] Failed to start Grid sign-in:', error);
+        // Show user-friendly error (could add toast notification here)
       }
     };
     
