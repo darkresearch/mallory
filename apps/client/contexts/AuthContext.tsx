@@ -60,6 +60,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // RACE CONDITION GUARD: Prevent concurrent Grid sign-in attempts
   // This singleton flag ensures only ONE Grid sign-in flow runs at a time
   const isInitiatingGridSignIn = useRef(false);
+  
+  // LOGOUT GUARD: Prevent recursive logout calls
+  // Supabase's signOut() triggers SIGNED_OUT event which can call logout() again
+  const isLoggingOut = useRef(false);
 
   console.log('AuthProvider rendering, user:', user?.email || 'none', 'isLoading:', isLoading);
 
@@ -382,6 +386,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * ═══════════════════════════════════════════════════════════════════════════════
    */
   const logout = async () => {
+    // GUARD: Prevent recursive logout calls
+    // When we call supabase.auth.signOut(), it triggers SIGNED_OUT event
+    // which would call logout() again, causing infinite loop
+    if (isLoggingOut.current) {
+      console.log('🚪 [LOGOUT] Already logging out - skipping recursive call');
+      return;
+    }
+    
+    isLoggingOut.current = true;
+    
     try {
       console.log('🚪 [LOGOUT] Starting comprehensive logout');
       setIsLoading(true);
@@ -475,6 +489,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       router.replace('/(auth)/login');
     } finally {
       setIsLoading(false);
+      isLoggingOut.current = false; // Reset guard flag
     }
   };
 
