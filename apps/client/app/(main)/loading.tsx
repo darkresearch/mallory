@@ -7,19 +7,21 @@ import { createOnboardingConversation } from '@/features/chat';
 
 export default function LoadingScreen() {
   const router = useRouter();
-  const { isLoading, isAuthenticated, isCheckingReauth, user } = useAuth();
+  const { isLoading, isAuthenticated, isCheckingReauth, isSigningIn, user } = useAuth();
 
   console.log('📱 [LoadingScreen] State:', { 
     isLoading, 
     isAuthenticated, 
     isCheckingReauth,
+    isSigningIn, // Now tracking sign-in state
     hasCompletedOnboarding: user?.hasCompletedOnboarding
   });
 
   useEffect(() => {
     const checkAuthAndRedirect = async () => {
       // Once AuthProvider finishes loading and re-auth checking, redirect based on auth state
-      if (!isLoading && !isCheckingReauth) {
+      // BUT: Don't redirect if user is still signing in (e.g., on OTP screen)
+      if (!isLoading && !isCheckingReauth && !isSigningIn) {
         console.log('📱 [LoadingScreen] Redirecting...', { 
           isAuthenticated,
           hasCompletedOnboarding: user?.hasCompletedOnboarding
@@ -34,16 +36,18 @@ export default function LoadingScreen() {
         } else {
           router.replace('/(auth)/login');
         }
+      } else if (isSigningIn) {
+        console.log('📱 [LoadingScreen] Sign-in in progress, waiting...');
       }
     };
 
     checkAuthAndRedirect();
-  }, [isLoading, isAuthenticated, isCheckingReauth, user?.hasCompletedOnboarding]);
+  }, [isLoading, isAuthenticated, isCheckingReauth, isSigningIn, user?.hasCompletedOnboarding]);
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <ActivityIndicator size="large" color="#E67B25" />
+        <ActivityIndicator size="large" color="#FFFFFF" />
         <Text style={styles.text}>
           {isCheckingReauth ? 'Verifying wallet access...' : 'Loading...'}
         </Text>
@@ -55,7 +59,7 @@ export default function LoadingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFEFE3', // Light theme background color
+    backgroundColor: '#E67B25', // Match login/OTP screen orange
   },
   content: {
     flex: 1,
@@ -64,7 +68,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   text: {
-    color: '#000000', // Light theme text color
+    color: '#FFFFFF', // White text on orange background
     fontSize: 16,
     marginTop: 16,
     fontFamily: 'Satoshi',
