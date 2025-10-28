@@ -93,16 +93,16 @@ export default function WalletScreen() {
         // Save pending send for retry after OTP
         setPendingSend({ recipientAddress, amount, tokenAddress });
         
-        // Initiate re-authentication to get gridUser
+        // Start sign-in to get gridUser (backend determines correct flow)
         try {
-          const { user: gridUser } = await gridClientService.reauthenticateAccount(user?.email || '');
-          setGridUserForOtp({ ...gridUser, isReauth: true });
+          const { user: gridUser } = await gridClientService.startSignIn(user?.email || '');
+          setGridUserForOtp(gridUser);
           
           // Close send modal and show OTP modal
           setShowSendModal(false);
           setShowOtpModal(true);
-        } catch (reauthError) {
-          console.error('❌ [WalletScreen] Re-authentication failed:', reauthError);
+        } catch (authError) {
+          console.error('❌ [WalletScreen] Sign-in failed:', authError);
           throw new Error('Session expired. Please try again.');
         }
       } else {
