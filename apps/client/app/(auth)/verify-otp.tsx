@@ -176,6 +176,8 @@ export default function VerifyOtpScreen() {
 
     try {
       console.log('🔐 [OTP Screen] Verifying OTP...');
+
+      console.log('🔐 [OTP Screen]', gridUser, cleanOtp);
       
       const authResult = await gridClientService.completeSignIn(gridUser, cleanOtp);
       
@@ -425,6 +427,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: 'center', // Centered on web (like login)
+    alignItems: 'center',
     paddingHorizontal: 32,
     maxWidth: LAYOUT.AUTH_MAX_WIDTH,
     width: '100%',
@@ -432,6 +435,7 @@ const styles = StyleSheet.create({
   },
   contentMobile: {
     justifyContent: 'space-between', // Space between top group and button on mobile
+    alignItems: 'stretch',
     paddingHorizontal: 24,
     paddingTop: 80,
   },
