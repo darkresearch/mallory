@@ -358,6 +358,7 @@ router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequ
       // NEW USER FLOW (with retry + fallback)
       // ═══════════════════════════════════════════════════════════════════════════
       console.log('🆕 [Grid Verify] New user flow: completeAuthAndCreateAccount() with retry');
+      console.log('🆕 [Grid Verify] User:', user);
 
       const maxRetries = 3;
       const retryDelay = 1000; // 1 second
