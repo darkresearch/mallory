@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet, Animated, View } from 'react-native';
 import { ChainOfThoughtHeaderProps } from './types';
 
 /**
@@ -17,6 +17,7 @@ export const ChainOfThoughtHeader: React.FC<ChainOfThoughtHeaderProps> = ({
   totalDuration,
 }) => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const rotateAnim = useRef(new Animated.Value(isOpen ? 1 : 0)).current;
 
   // Warm pulsing animation while streaming
   useEffect(() => {
@@ -42,6 +43,15 @@ export const ChainOfThoughtHeader: React.FC<ChainOfThoughtHeaderProps> = ({
       pulseAnim.setValue(1);
     }
   }, [isStreaming, pulseAnim]);
+
+  // Rotate chevron when open/closed
+  useEffect(() => {
+    Animated.timing(rotateAnim, {
+      toValue: isOpen ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [isOpen, rotateAnim]);
 
   // Determine text to display
   const getDisplayText = () => {
@@ -74,6 +84,11 @@ export const ChainOfThoughtHeader: React.FC<ChainOfThoughtHeaderProps> = ({
 
   const displayText = getDisplayText();
 
+  const chevronRotation = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg'],
+  });
+
   return (
     <TouchableOpacity
       style={[styles.header, style]}
@@ -90,6 +105,16 @@ export const ChainOfThoughtHeader: React.FC<ChainOfThoughtHeaderProps> = ({
         ]}
       >
         {displayText}
+      </Animated.Text>
+      
+      {/* Subtle chevron indicator */}
+      <Animated.Text
+        style={[
+          styles.chevron,
+          { transform: [{ rotate: chevronRotation }] }
+        ]}
+      >
+        ›
       </Animated.Text>
     </TouchableOpacity>
   );
@@ -108,6 +133,13 @@ const styles = StyleSheet.create({
     color: '#C95900',
     opacity: 0.8,
     fontWeight: '500',
+  },
+  chevron: {
+    fontSize: 16,
+    color: '#C95900',
+    opacity: 0.5,
+    marginLeft: 6,
+    fontWeight: '400',
   },
 });
 

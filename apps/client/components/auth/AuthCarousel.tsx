@@ -198,12 +198,12 @@ export default function AuthCarousel({ onGoogleLogin, isLoading, isMobile }: Aut
 
         {/* Main Button with Swipe Gesture */}
         <GestureDetector gesture={panGesture}>
-          <Animated.View style={animatedStyle}>
+          <Animated.View style={[animatedStyle, isMobile && { width: '100%' }]}>
             <TouchableOpacity
               style={[
                 styles.button,
                 isMobile && styles.buttonMobile,
-                { backgroundColor: currentOption.color }
+                { backgroundColor: 'rgb(251, 251, 251)' }
               ]}
               onPress={handlePress}
               disabled={isLoading}
@@ -290,11 +290,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     borderRadius: 28,
     minWidth: 250,
+    maxWidth: 345, // Match OTP button
   },
   buttonMobile: {
     borderRadius: 28,
     width: '100%',
     minWidth: 0,
+    maxWidth: '100%', // Override maxWidth to ensure full width
     paddingVertical: 16,
   },
   arrowTouchable: {
@@ -332,7 +334,7 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F1F1F', // Dark text on white background
+    color: '#212121', // Updated to match OTP button
     marginLeft: 12,
     fontFamily: 'Satoshi',
   },
