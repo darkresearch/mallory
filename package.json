@@ -11,7 +11,10 @@
     "client": "cd apps/client && bun run web",
     "server": "cd apps/server && bun run dev",
     "dev": "concurrently \"bun run client\" \"bun run server\"",
-    "install:all": "bun install && cd apps/client && bun install && cd ../server && bun install"
+    "install:all": "bun install && cd apps/client && bun install && cd ../server && bun install",
+    "test:e2e:web": "playwright test",
+    "test:e2e:web:ui": "playwright test --ui",
+    "test:e2e:web:debug": "playwright test --debug"
   },
   "dependencies": {
     "@faremeter/fetch": "^0.9.0",
@@ -20,6 +23,7 @@
     "@faremeter/wallet-solana": "^0.9.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "concurrently": "^9.2.1"
   },
   "engines": {
