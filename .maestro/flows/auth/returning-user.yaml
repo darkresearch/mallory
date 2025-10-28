@@ -1,0 +1,52 @@
+# Test: Returning User Login
+# Tests login flow for users who have already completed signup
+#
+# Prerequisites:
+# - Test user has previously completed signup
+# - Test user has Grid account marked as "advanced"
+# - App is not currently logged in
+#
+# Expected behavior:
+# 1. User clicks "Continue with Google"
+# 2. OAuth completes
+# 3. Grid OTP modal appears (returning user verification)
+# 4. User enters OTP
+# 5. User lands directly on chat screen (no onboarding)
+
+appId: ${APP_ID}
+tags:
+  - auth
+  - critical
+  - returning-user
+
+---
+
+# Step 1: Verify we're on login screen
+- assertVisible: "Continue with Google"
+
+# Step 2: Start sign-in
+- tapOn: "Continue with Google"
+- waitForAnimationToEnd:
+    timeout: ${TIMEOUT_LONG}
+
+# Step 3: Grid OTP modal should appear
+- assertVisible:
+    text: "Enter verification code"
+    timeout: ${TIMEOUT_LONG}
+
+# Step 4: Complete OTP
+- inputText: "${TEST_GRID_OTP}"
+- tapOn: "Verify"
+- waitForAnimationToEnd:
+    timeout: ${TIMEOUT_MEDIUM}
+
+# Step 5: Should land on chat (no onboarding for returning users)
+- assertVisible:
+    text: "Chat"
+    timeout: ${TIMEOUT_MEDIUM}
+
+# Step 6: Verify authenticated state
+- assertNotVisible: "Continue with Google"
+
+# SUCCESS: Returning user logged in successfully!
+

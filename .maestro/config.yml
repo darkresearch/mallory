@@ -1,0 +1,28 @@
+# Maestro Configuration
+# This file contains global settings for all Maestro tests
+
+appId: ${APP_ID}  # Will be set per platform (iOS/Android/Web)
+
+# Environment variables available to all tests
+env:
+  # Test mode flag - enables test-specific behaviors in the app
+  TEST_MODE: ${TEST_MODE-false}
+  
+  # Backend API URL
+  BACKEND_URL: ${BACKEND_URL-http://localhost:3001}
+  
+  # Test user credentials
+  TEST_EMAIL: ${TEST_EMAIL}
+  TEST_GRID_OTP: ${TEST_GRID_OTP}
+  
+  # Timeouts (in milliseconds)
+  TIMEOUT_SHORT: 5000
+  TIMEOUT_MEDIUM: 15000
+  TIMEOUT_LONG: 30000
+
+# Tags for organizing tests
+tags:
+  - auth
+  - smoke
+  - regression
+

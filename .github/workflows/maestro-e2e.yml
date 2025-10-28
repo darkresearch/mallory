@@ -1,0 +1,143 @@
+# GitHub Actions Workflow for Maestro E2E Tests
+# 
+# Trigger options:
+# 1. Manual: Click "Run workflow" button in GitHub Actions tab
+# 2. PR: Automatically runs on pull requests to main/develop
+# 3. Push: Automatically runs on push to main
+
+name: E2E Tests (Maestro)
+
+on:
+  workflow_dispatch:  # ⭐ Manual trigger - NO commit needed!
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'auth'
+        type: choice
+        options:
+          - auth
+          - all
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+jobs:
+  maestro-tests:
+    name: Run Maestro E2E Tests
+    runs-on: macos-latest  # macOS has Java pre-installed!
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install Maestro CLI
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "${HOME}/.maestro/bin" >> $GITHUB_PATH
+      
+      - name: Verify Java (pre-installed on macOS runners)
+        run: java -version
+      
+      - name: Create test environment file
+        run: |
+          cat > apps/client/.env.test << 'EOF'
+          MAILOSAUR_API_KEY=${{ secrets.MAILOSAUR_API_KEY }}
+          MAILOSAUR_SERVER_ID=${{ secrets.MAILOSAUR_SERVER_ID }}
+          TEST_SUPABASE_EMAIL=${{ secrets.TEST_EMAIL }}
+          EOF
+      
+      - name: Create Maestro environment file
+        run: |
+          cat > .maestro/.env.local << 'EOF'
+          APP_ID=com.mallory.app
+          BACKEND_URL=${{ secrets.TEST_BACKEND_URL }}
+          TEST_EMAIL=${{ secrets.TEST_EMAIL }}
+          TIMEOUT_SHORT=5000
+          TIMEOUT_MEDIUM=15000
+          TIMEOUT_LONG=30000
+          EOF
+      
+      - name: Setup iOS Simulator
+        run: |
+          # Boot iPhone 15 simulator
+          xcrun simctl boot "iPhone 15" || true
+          xcrun simctl list devices | grep iPhone
+      
+      - name: Install iOS dependencies
+        working-directory: apps/client/ios
+        run: |
+          pod install --repo-update
+      
+      - name: Build iOS App
+        working-directory: apps/client
+        run: |
+          npx expo prebuild -p ios --clean
+          cd ios
+          xcodebuild -workspace Mallory.xcworkspace \
+                     -scheme Mallory \
+                     -configuration Debug \
+                     -sdk iphonesimulator \
+                     -destination 'platform=iOS Simulator,name=iPhone 15' \
+                     -derivedDataPath build \
+                     build
+      
+      - name: Install app on simulator
+        run: |
+          # Find the .app bundle
+          APP_PATH=$(find apps/client/ios/build -name "*.app" | head -1)
+          xcrun simctl install "iPhone 15" "$APP_PATH"
+      
+      - name: Start backend server
+        working-directory: apps/server
+        run: |
+          npm install
+          npm run dev &
+          sleep 10  # Wait for server to start
+          curl http://localhost:3001/health || echo "Backend health check failed"
+      
+      - name: Run Maestro Tests
+        run: |
+          # Determine test suite from input (default: auth)
+          TEST_SUITE="${{ github.event.inputs.test_suite || 'auth' }}"
+          
+          if [ "$TEST_SUITE" = "all" ]; then
+            TEST_PATH=".maestro/flows"
+          else
+            TEST_PATH=".maestro/flows/$TEST_SUITE"
+          fi
+          
+          echo "Running tests from: $TEST_PATH"
+          
+          maestro test \
+            --format junit \
+            --output test-results.xml \
+            "$TEST_PATH"
+      
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-test-results
+          path: |
+            test-results.xml
+            ~/.maestro/tests/**/*
+      
+      - name: Publish Test Report
+        if: always()
+        uses: mikepenz/action-junit-report@v4
+        with:
+          report_paths: 'test-results.xml'
+          check_name: 'Maestro E2E Test Results'
+          fail_on_failure: true
+
