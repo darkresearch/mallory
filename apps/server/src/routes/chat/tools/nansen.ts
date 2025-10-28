@@ -19,13 +19,16 @@ interface X402Context {
 }
 
 /**
- * Grid SDK instance for backend operations
+ * Create a new GridClient instance
+ * GridClient is stateful, so we need to create a fresh instance per use
  */
-const gridClient = new GridClient({
-  environment: (process.env.GRID_ENV || 'production') as 'sandbox' | 'production',
-  apiKey: process.env.GRID_API_KEY!,
-  baseUrl: 'https://grid.squads.xyz'
-});
+function createGridClient(): GridClient {
+  return new GridClient({
+    environment: (process.env.GRID_ENV || 'production') as 'sandbox' | 'production',
+    apiKey: process.env.GRID_API_KEY!,
+    baseUrl: 'https://grid.squads.xyz'
+  });
+}
 
 /**
  * Create Grid token sender for x402 utilities
@@ -34,6 +37,8 @@ const gridClient = new GridClient({
 function createGridSender(sessionSecrets: any, session: any, address: string): GridTokenSender {
   return {
     async sendTokens(params: { recipient: string; amount: string; tokenMint?: string }): Promise<string> {
+      // Create fresh GridClient instance for this sender (GridClient is stateful)
+      const gridClient = createGridClient();
       const { recipient, amount, tokenMint } = params;
       
       // Import Solana dependencies
