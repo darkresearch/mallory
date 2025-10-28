@@ -186,8 +186,10 @@ export default function VerifyOtpScreen() {
         // Clear sessionStorage
         if (Platform.OS === 'web') {
           sessionStorage.removeItem('mallory_grid_user');
+          sessionStorage.removeItem('mallory_oauth_in_progress');
+          sessionStorage.removeItem('mallory_grid_is_existing_user');
         }
-        
+
         // Navigate to main app
         router.replace('/(main)');
       } else {
