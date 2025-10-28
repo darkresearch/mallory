@@ -1,5 +1,5 @@
-# Playwright E2E Tests Configuration
-# Web browser testing for Mallory
+// Playwright E2E Tests Configuration
+// Web browser testing for Mallory
 
 import { defineConfig, devices } from '@playwright/test';
 
