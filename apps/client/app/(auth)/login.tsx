@@ -58,18 +58,39 @@ export default function LoginScreen() {
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
-    // Save original background colors
+    // Save original background colors and theme-color
     const originalHtmlBg = document.documentElement.style.backgroundColor;
     const originalBodyBg = document.body.style.backgroundColor;
+    const originalRootBg = document.getElementById('root')?.style.backgroundColor || '';
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    const originalThemeColor = themeColorMeta?.getAttribute('content') || '';
 
     // Set to dark orange to match login screen
+    // Important: Set on html element to cover safe areas on iOS Safari
     document.documentElement.style.backgroundColor = '#E67B25';
     document.body.style.backgroundColor = '#E67B25';
+    
+    // Also set on root to ensure complete coverage
+    const rootElement = document.getElementById('root');
+    if (rootElement) {
+      rootElement.style.backgroundColor = '#E67B25';
+    }
+
+    // Update theme-color meta tag for Safari iOS status bar
+    if (themeColorMeta) {
+      themeColorMeta.setAttribute('content', '#E67B25');
+    }
 
     // Restore original colors on unmount (when navigating away)
     return () => {
       document.documentElement.style.backgroundColor = originalHtmlBg;
       document.body.style.backgroundColor = originalBodyBg;
+      if (rootElement) {
+        rootElement.style.backgroundColor = originalRootBg;
+      }
+      if (themeColorMeta) {
+        themeColorMeta.setAttribute('content', originalThemeColor);
+      }
     };
   }, []);
 
