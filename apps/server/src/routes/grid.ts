@@ -1,51 +1,51 @@
 /**
  * Grid Proxy Endpoints
- * 
- * Backend-driven Grid authentication with automatic level detection and migration.
- * All complexity lives on the backend - frontend simply calls endpoints.
- * 
+ *
  * ═══════════════════════════════════════════════════════════════════════════════
- * GRID'S TWO-TIER AUTHENTICATION MODEL
+ * STATELESS GRID AUTHENTICATION PATTERN
  * ═══════════════════════════════════════════════════════════════════════════════
- * 
- * Grid uses a two-tier authentication system that determines which API methods to use:
- * 
- * 🆕 BEGINNER LEVEL (First-time users)
- * ────────────────────────────────────
- * - Triggered when: User has never completed Grid account creation
- * - Status: app_metadata['grid-advanced'] = false or undefined
- * - Flow:
- *   1. Send OTP: gridClient.createAccount(email)
- *   2. Verify OTP: gridClient.completeAuthAndCreateAccount(user, otpCode, sessionSecrets)
- * - After success: User is PERMANENTLY upgraded to Advanced level
- * 
- * ✅ ADVANCED LEVEL (Returning users)
- * ───────────────────────────────────
- * - Triggered when: User has previously completed Grid account creation
- * - Status: app_metadata['grid-advanced'] = true
- * - Flow:
- *   1. Send OTP: gridClient.initAuth(email)
- *   2. Verify OTP: gridClient.completeAuth(user, otpCode, sessionSecrets)
- * - Once a user reaches this level, they stay here FOREVER
- * 
- * 🔄 MIGRATION SCENARIO (Existing users without app_metadata)
- * ───────────────────────────────────────────────────────────
- * - Problem: Users who created accounts before we implemented app_metadata tracking
- * - Detection: createAccount() fails with "grid_account_already_exists_for_user"
- * - Solution: 
- *   1. Catch the error
- *   2. Upgrade user to Advanced level in app_metadata
- *   3. Retry with initAuth()
- *   4. Everything happens transparently to the user
- * 
- * 📊 TRACKING METHOD
- * ─────────────────
- * - We track the user's level in Supabase auth app_metadata['grid-advanced']
- * - app_metadata is server-side only (users cannot tamper with it)
- * - This is a security/auth flag, not user preference data
- * - Default: false (beginner level)
- * - Upgraded to: true (advanced level) after first successful verification
- * 
+ *
+ * This implementation uses the STATELESS FLOW HINT pattern for Grid authentication,
+ * eliminating the need for server-side state tracking or database dependencies.
+ *
+ * 🔑 KEY PRINCIPLES
+ * ────────────────
+ * 1. **Stateless Detection**: Grid API is the source of truth, not our database
+ * 2. **Flow Hint Passing**: Client passes `isExistingUser` hint between phases
+ * 3. **Automatic Retry**: 3 retries with 1s delay for new user creation
+ * 4. **Bidirectional Fallback**: Both flows try alternate method if primary fails
+ *
+ * 📋 TWO-PHASE FLOW
+ * ────────────────
+ *
+ * Phase 1: START SIGN-IN (Send OTP)
+ * ─────────────────────────────────
+ * - Try createAccount() first (optimistic for new users)
+ * - If "already exists" error → fallback to initAuth()
+ * - Return { user, isExistingUser } to client
+ * - NO DATABASE LOOKUP REQUIRED
+ *
+ * Phase 2: COMPLETE SIGN-IN (Verify OTP)
+ * ──────────────────────────────────────
+ * - Read isExistingUser hint from request body
+ * - If true → completeAuth() + fallback to completeAuthAndCreateAccount()
+ * - If false → completeAuthAndCreateAccount() (3 retries) + fallback to completeAuth()
+ * - Sync Grid address to database after success
+ *
+ * 🔄 RETRY & FALLBACK LOGIC
+ * ────────────────────────
+ * - New users: 3 retries with 1s delay (handles rate limiting)
+ * - Wrong hint: Bidirectional fallback tries alternate method
+ * - Grid API validates all operations (hint is just optimization)
+ *
+ * 🎯 BENEFITS
+ * ──────────
+ * ✅ No server-side state management
+ * ✅ No Supabase app_metadata dependency
+ * ✅ Works in all environments (dev, test, prod)
+ * ✅ Handles rate limiting gracefully
+ * ✅ Robust against corrupted hints
+ *
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
@@ -70,245 +70,165 @@ const gridClient = new GridClient({
   baseUrl: 'https://grid.squads.xyz'
 });
 
-// Initialize Supabase admin client (shared across all requests)
+// Initialize Supabase admin client (only used for database sync, not auth tracking)
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 /**
- * Helper: Update user's Grid auth level in app_metadata
- * 
- * This function upgrades or downgrades a user between the two Grid auth levels:
- * - false/undefined = BEGINNER level (first-time user)
- * - true = ADVANCED level (returning user)
- * 
- * WHEN TO CALL:
- * 1. After successful beginner verification (upgrade to advanced)
- * 2. During migration when we detect existing Grid account (upgrade to advanced)
- * 
- * SECURITY NOTE:
- * - Uses Supabase Admin API (requires service role key)
- * - app_metadata is server-side only - clients cannot modify it
- * - This prevents users from manipulating their auth level
- * 
- * @param userId - Supabase user ID
- * @param isAdvanced - true = advanced level, false = beginner level
- * @throws Error if Supabase update fails
- */
-async function updateGridAuthLevel(userId: string, isAdvanced: boolean): Promise<void> {
-  const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-    app_metadata: { 'grid-advanced': isAdvanced }
-  });
-  
-  if (error) {
-    console.error('❌ Failed to update grid auth level:', error);
-    throw error;
-  }
-  
-  console.log(`✅ User ${userId} grid level updated to: ${isAdvanced ? 'ADVANCED ✅' : 'BEGINNER 🆕'}`);
-}
-
-/**
- * Helper: Get user's current Grid auth level from app_metadata
- * 
- * Determines which Grid auth flow to use by checking app_metadata['grid-advanced']:
- * - true = ADVANCED level → use initAuth() + completeAuth()
- * - false/undefined = BEGINNER level → use createAccount() + completeAuthAndCreateAccount()
- * 
- * This is the single source of truth for auth level detection.
- * 
- * @param userId - Supabase user ID
- * @returns true if advanced level, false if beginner level
- * @throws Error if user lookup fails (defaults to beginner level on error)
- */
-async function getGridAuthLevel(userId: string): Promise<boolean> {
-  const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
-  
-  if (error || !data?.user) {
-    console.error('❌ Failed to get user auth level:', error);
-    return false; // Default to beginner if we can't determine
-  }
-  
-  return data.user.app_metadata?.['grid-advanced'] === true;
-}
-
-/**
  * POST /api/grid/start-sign-in
- * 
+ *
  * ═══════════════════════════════════════════════════════════════════════════════
- * ENDPOINT: Start Grid Sign-In (Send OTP)
+ * ENDPOINT: Start Grid Sign-In (Send OTP) - STATELESS PATTERN
  * ═══════════════════════════════════════════════════════════════════════════════
- * 
- * This endpoint initiates the Grid sign-in process for both first-time and
- * returning users. It automatically detects which Grid API flow to use based
- * on the user's auth level stored in app_metadata.
- * 
- * FLOW DECISION LOGIC:
- * ───────────────────
- * 1. Check app_metadata['grid-advanced']
- * 2. If false/undefined → BEGINNER: Call gridClient.createAccount(email)
- * 3. If true → ADVANCED: Call gridClient.initAuth(email)
- * 
- * BEGINNER FLOW (First-time users):
- * ─────────────────────────────────
+ *
+ * This endpoint initiates the Grid sign-in process using the STATELESS FLOW HINT
+ * pattern. It automatically detects whether a user is new or returning by attempting
+ * createAccount() first, then falling back to initAuth() if the account exists.
+ *
+ * STATELESS DETECTION LOGIC:
+ * ─────────────────────────
+ * 1. Always try createAccount() first (optimistic path for new users)
+ * 2. If account already exists, catch error and fallback to initAuth()
+ * 3. Return isExistingUser flag to guide completion flow
+ * 4. NO DATABASE LOOKUP REQUIRED - Grid API is the source of truth
+ *
+ * NEW USER FLOW:
+ * ─────────────
  * - API Call: gridClient.createAccount({ email })
- * - Purpose: Creates new Grid account and sends OTP
- * - Next Step: User receives OTP via email
- * - Success: Returns Grid user object for OTP verification
- * 
- * ADVANCED FLOW (Returning users):
- * ────────────────────────────────
- * - API Call: gridClient.initAuth({ email })
- * - Purpose: Re-authenticates existing Grid account and sends OTP
- * - Next Step: User receives OTP via email
- * - Success: Returns Grid user object for OTP verification
- * 
- * MIGRATION SCENARIO:
+ * - Result: Success → OTP sent
+ * - Returns: { user, isExistingUser: false }
+ *
+ * EXISTING USER FLOW:
  * ──────────────────
- * If createAccount() fails with "grid_account_already_exists_for_user":
- * 1. User has existing Grid account but is marked as beginner (data migration case)
- * 2. Automatically upgrade user to advanced level
- * 3. Retry with initAuth() to send OTP
- * 4. Everything happens transparently - frontend doesn't know migration occurred
- * 
+ * - API Call: gridClient.createAccount({ email })
+ * - Result: Error "account already exists"
+ * - Fallback: gridClient.initAuth({ email })
+ * - Result: Success → OTP sent
+ * - Returns: { user, isExistingUser: true }
+ *
+ * FLOW HINT PATTERN:
+ * ────────────────
+ * The isExistingUser flag is a HINT passed from start → complete phase.
+ * - Client stores this hint (sessionStorage on web)
+ * - Client passes hint to complete-sign-in endpoint
+ * - Backend uses hint to choose correct API method
+ * - Bidirectional fallback handles wrong hints gracefully
+ *
  * REQUEST:
  * ───────
  * Body: { email: string }
  * Headers: Authorization: Bearer <token>
- * 
+ *
  * RESPONSE:
  * ────────
- * Success (200): { success: true, user: <Grid user object> }
+ * Success (200): {
+ *   success: true,
+ *   user: <Grid user object>,
+ *   isExistingUser: boolean
+ * }
  * Error (400/500): { success: false, error: string }
- * 
- * The returned user object is needed for OTP verification in /verify-otp endpoint.
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { email } = req.body;
     const userId = req.user!.id;
-    
+
     if (!email) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Email is required' 
+      return res.status(400).json({
+        success: false,
+        error: 'Email is required'
       });
     }
-    
-    console.log('🔐 [Grid Init] Starting for user:', userId);
-    
-    // STEP 1: Determine user's current auth level from app_metadata
-    const isAdvanced = await getGridAuthLevel(userId);
-    
-    console.log(`🔐 [Grid Init] User level: ${isAdvanced ? 'ADVANCED ✅' : 'BEGINNER 🆕'}`);
-    
+
+    console.log('🔐 [Grid Init] Starting sign-in (stateless pattern) for user:', userId);
+
     let response;
-    
-    if (isAdvanced) {
-      // ADVANCED FLOW: Use initAuth (for returning users)
-      console.log('🔄 [Grid Init] Advanced Flow: initAuth()');
-      response = await gridClient.initAuth({ email });
-    } else {
-      // BEGINNER FLOW: Use createAccount (for first-time users)
-      console.log('🆕 [Grid Init] Beginner Flow: createAccount()');
-      
-      try {
-        response = await gridClient.createAccount({ email });
-        
-        // Log the response to see what Grid is actually returning
-        console.log('🔍 [Grid Init] createAccount response:', {
-          success: response.success,
-          hasData: !!response.data,
-          hasError: !!response.error,
-          error: response.error
-        });
-        
-      } catch (error: any) {
-        // MIGRATION SCENARIO: Account already exists but user is marked as beginner
-        // This happens for existing users before we implemented app_metadata tracking
-        //
-        // Grid SDK returns errors in different formats depending on the error type:
-        // - HTTP errors: error.response?.status or error.status
-        // - SDK errors: error.message contains the error text
-        
-        // Log full error structure for debugging
-        console.log('🔍 [Grid Init] Error structure:', {
-          hasResponse: !!error?.response,
-          responseStatus: error?.response?.status,
-          status: error?.status,
-          message: error?.message,
-          fullError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
-        });
-        
-        const errorStatus = error?.response?.status || error?.status;
-        const errorMessage = error?.message || '';
-        
-        // Check for existing account error by status code OR message content
-        const isExistingAccount = 
-          errorStatus === 400 || 
-          errorMessage.includes('grid_account_already_exists_for_user') ||
-          errorMessage.includes('Email associated with grid account already exists');
-        
-        if (isExistingAccount) {
-          console.log('📈 [Grid Migration] Detected existing account - upgrading to advanced level');
-          
-          // Upgrade user to advanced level permanently
-          await updateGridAuthLevel(userId, true);
-          
-          // Retry with advanced flow (initAuth sends OTP automatically)
-          console.log('🔄 [Grid Migration] Retrying with initAuth()');
-          response = await gridClient.initAuth({ email });
-          
-          console.log('✅ [Grid Migration] Successfully migrated user to advanced flow');
-        } else {
-          // Some other error - re-throw
-          console.error('❌ [Grid Init] Unexpected error:', {
-            status: errorStatus,
-            message: error?.message
-          });
-          throw error;
-        }
+    let isExistingUser = false;
+
+    // STEP 1: Always try createAccount() first (optimistic approach for new users)
+    console.log('🆕 [Grid Init] Attempting createAccount() (optimistic path)');
+
+    try {
+      response = await gridClient.createAccount({ email });
+
+      console.log('🔍 [Grid Init] createAccount response:', {
+        success: response.success,
+        hasData: !!response.data,
+        hasError: !!response.error
+      });
+
+      // If createAccount succeeds, this is a NEW user
+      if (response.success && response.data) {
+        isExistingUser = false;
+        console.log('✅ [Grid Init] New user detected - createAccount() succeeded');
       }
-    }
-    
-    // Check if response indicates existing account (Grid might return success: false instead of throwing)
-    if (!response.success && response.error) {
-      const errorMessage = response.error;
-      
-      // Check if this is an "account already exists" error
-      const isExistingAccount = 
+
+    } catch (error: any) {
+      // STEP 2: If createAccount() fails, check if it's because account already exists
+      const errorStatus = error?.response?.status || error?.status;
+      const errorMessage = error?.message || '';
+
+      console.log('🔍 [Grid Init] createAccount failed:', {
+        status: errorStatus,
+        message: errorMessage
+      });
+
+      // Check for existing account error
+      const isExistingAccount =
+        errorStatus === 400 ||
         errorMessage.includes('grid_account_already_exists_for_user') ||
         errorMessage.includes('Email associated with grid account already exists');
-      
-      if (isExistingAccount && !isAdvanced) {
-        console.log('📈 [Grid Migration] Response indicates existing account - upgrading to advanced level');
-        
-        // Upgrade user to advanced level permanently
-        await updateGridAuthLevel(userId, true);
-        
-        // Retry with advanced flow (initAuth sends OTP automatically)
-        console.log('🔄 [Grid Migration] Retrying with initAuth()');
+
+      if (isExistingAccount) {
+        // STEP 3: Account exists - fallback to initAuth()
+        console.log('🔄 [Grid Init] Account exists - falling back to initAuth()');
         response = await gridClient.initAuth({ email });
-        
-        console.log('✅ [Grid Migration] Successfully migrated user to advanced flow');
+        isExistingUser = true;
+
+        console.log('✅ [Grid Init] Existing user authenticated via initAuth()');
+      } else {
+        // Some other error - re-throw
+        console.error('❌ [Grid Init] Unexpected error:', {
+          status: errorStatus,
+          message: errorMessage
+        });
+        throw error;
       }
     }
-    
+
+    // Handle case where Grid returns success: false instead of throwing
+    if (!response.success && response.error) {
+      const errorMessage = response.error;
+
+      const isExistingAccount =
+        errorMessage.includes('grid_account_already_exists_for_user') ||
+        errorMessage.includes('Email associated with grid account already exists');
+
+      if (isExistingAccount) {
+        console.log('🔄 [Grid Init] Response indicates existing account - falling back to initAuth()');
+        response = await gridClient.initAuth({ email });
+        isExistingUser = true;
+        console.log('✅ [Grid Init] Existing user authenticated via initAuth()');
+      }
+    }
+
     if (!response.success || !response.data) {
       return res.status(400).json({
         success: false,
         error: response.error || 'Failed to initialize Grid account'
       });
     }
-    
-    // Return Grid user object (client uses this for OTP verification)
+
+    // Return Grid user object + flow hint for complete-sign-in
     res.json({
       success: true,
-      user: response.data
+      user: response.data,
+      isExistingUser // Flow hint: false for new users, true for existing
     });
-    
+
   } catch (error) {
     console.error('❌ [Grid Init] Error:', error);
     res.status(500).json({
@@ -320,129 +240,192 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
 
 /**
  * POST /api/grid/complete-sign-in
- * 
+ *
  * ═══════════════════════════════════════════════════════════════════════════════
- * ENDPOINT: Complete Grid Sign-In (Verify OTP)
+ * ENDPOINT: Complete Grid Sign-In (Verify OTP) - WITH RETRY & BIDIRECTIONAL FALLBACK
  * ═══════════════════════════════════════════════════════════════════════════════
- * 
- * This endpoint completes the Grid sign-in process by verifying the OTP code.
- * It automatically detects which Grid API flow to use based on the user's auth
- * level, and upgrades beginner users to advanced level after successful verification.
- * 
- * FLOW DECISION LOGIC:
- * ───────────────────
- * 1. Check app_metadata['grid-advanced']
- * 2. If false/undefined → BEGINNER: Call gridClient.completeAuthAndCreateAccount()
- * 3. If true → ADVANCED: Call gridClient.completeAuth()
- * 
- * BEGINNER FLOW (First-time users):
- * ─────────────────────────────────
- * - API Call: gridClient.completeAuthAndCreateAccount({ user, otpCode, sessionSecrets })
- * - Purpose: Verifies OTP and creates Grid account
- * - On Success:
- *   1. Grid account is fully created
- *   2. Backend sets app_metadata['grid-advanced'] = true
- *   3. User is PERMANENTLY upgraded to advanced level
- *   4. Grid address is synced to database
- *   5. Returns authentication data
- * 
- * ADVANCED FLOW (Returning users):
- * ────────────────────────────────
- * - API Call: gridClient.completeAuth({ user, otpCode, sessionSecrets })
- * - Purpose: Verifies OTP and re-authenticates existing Grid account
- * - On Success:
- *   1. Grid account is authenticated
- *   2. Grid address is synced to database (idempotent)
- *   3. Returns authentication data
- * 
- * POST-VERIFICATION ACTIONS:
- * ─────────────────────────
- * After successful verification (both flows):
- * 1. Sync Grid address to users_grid table (with retry logic)
- * 2. Store account data for future transactions
- * 3. Return authentication data to client
- * 
+ *
+ * This endpoint completes the Grid sign-in process using the FLOW HINT from
+ * start-sign-in, with retry logic for rate limiting and bidirectional fallback
+ * for wrong hints.
+ *
+ * FLOW HINT LOGIC:
+ * ───────────────
+ * 1. Read isExistingUser hint from request body
+ * 2. If true → Try completeAuth() (existing user path)
+ * 3. If false → Try completeAuthAndCreateAccount() with retries (new user path)
+ * 4. If primary method fails → Fallback to alternate method
+ *
+ * EXISTING USER FLOW (isExistingUser = true):
+ * ──────────────────────────────────────────
+ * Primary: completeAuth()
+ * - Single attempt (no retry needed for existing users)
+ * - Fallback: If fails, try completeAuthAndCreateAccount()
+ * - Why: Handles case where hint was wrong (corrupted sessionStorage, etc.)
+ *
+ * NEW USER FLOW (isExistingUser = false):
+ * ──────────────────────────────────────
+ * Primary: completeAuthAndCreateAccount()
+ * - 3 retry attempts with 1s delay (handles rate limiting)
+ * - Fallback: After 3 failures, try completeAuth()
+ * - Why: New account creation more prone to rate limiting
+ *
+ * BIDIRECTIONAL FALLBACK:
+ * ──────────────────────
+ * Grid API is the source of truth, not the client hint.
+ * - Hint says "existing" but user is new → completeAuth() fails → completeAuthAndCreateAccount() succeeds
+ * - Hint says "new" but user exists → completeAuthAndCreateAccount() fails 3x → completeAuth() succeeds
+ * - Wrong OTP → Both methods fail → Return error (expected)
+ *
  * REQUEST:
  * ───────
  * Body: {
- *   user: <Grid user object from /init-account>,
+ *   user: <Grid user object from start-sign-in>,
  *   otpCode: string (6-digit code),
- *   sessionSecrets: object (client-generated)
+ *   sessionSecrets: object (client-generated),
+ *   isExistingUser: boolean (flow hint)
  * }
  * Headers: Authorization: Bearer <token>
- * 
+ *
  * RESPONSE:
  * ────────
  * Success (200): { success: true, data: <Grid account with authentication> }
  * Error (400/500): { success: false, error: string }
- * 
- * The returned data includes:
- * - address: Solana wallet address
- * - authentication: Session data for future transactions
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { user, otpCode, sessionSecrets } = req.body;
+    const { user, otpCode, sessionSecrets, isExistingUser } = req.body;
     const userId = req.user!.id;
-    
+
     if (!user || !otpCode || !sessionSecrets) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Missing required fields: user, otpCode, sessionSecrets' 
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: user, otpCode, sessionSecrets'
       });
     }
-    
+
     console.log('🔐 [Grid Verify] Starting OTP verification for user:', userId);
-    
-    // STEP 1: Determine user's current auth level from app_metadata
-    const isAdvanced = await getGridAuthLevel(userId);
-    
-    console.log(`🔐 [Grid Verify] User level: ${isAdvanced ? 'ADVANCED ✅' : 'BEGINNER 🆕'}`);
-    
-    let authResult;
-    
-    if (isAdvanced) {
-      // ADVANCED FLOW: Use completeAuth (for returning users)
-      console.log('🔄 [Grid Verify] Advanced Flow: completeAuth()');
-      authResult = await gridClient.completeAuth({
-        user,
-        otpCode,
-        sessionSecrets
-      });
+    console.log(`🔐 [Grid Verify] Flow hint: ${isExistingUser ? 'EXISTING USER ✅' : 'NEW USER 🆕'}`);
+
+    let authResult: any = { success: false, error: 'Unknown error' };
+
+    if (isExistingUser) {
+      // ═══════════════════════════════════════════════════════════════════════════
+      // EXISTING USER FLOW (with fallback)
+      // ═══════════════════════════════════════════════════════════════════════════
+      console.log('🔄 [Grid Verify] Existing user flow: completeAuth()');
+
+      try {
+        // Primary: Try completeAuth for existing user
+        authResult = await gridClient.completeAuth({
+          user,
+          otpCode,
+          sessionSecrets
+        });
+
+        console.log('🔍 [Grid Verify] completeAuth result:', {
+          success: authResult.success,
+          hasData: !!authResult.data
+        });
+
+        // Fallback: If completeAuth fails, try completeAuthAndCreateAccount
+        // (Handles case where isExistingUser flag was wrong)
+        if (!authResult.success || !authResult.data) {
+          console.log('⚠️ [Grid Verify] completeAuth failed - trying fallback to completeAuthAndCreateAccount');
+          authResult = await gridClient.completeAuthAndCreateAccount({
+            user,
+            otpCode,
+            sessionSecrets
+          });
+
+          if (authResult.success && authResult.data) {
+            console.log('✅ [Grid Verify] Fallback succeeded - user was actually new');
+          }
+        }
+      } catch (error) {
+        // Exception fallback
+        console.log('⚠️ [Grid Verify] completeAuth threw exception - trying fallback');
+        authResult = await gridClient.completeAuthAndCreateAccount({
+          user,
+          otpCode,
+          sessionSecrets
+        });
+      }
+
     } else {
-      // BEGINNER FLOW: Use completeAuthAndCreateAccount (for first-time users)
-      console.log('🆕 [Grid Verify] Beginner Flow: completeAuthAndCreateAccount()');
-      authResult = await gridClient.completeAuthAndCreateAccount({
-        user,
-        otpCode,
-        sessionSecrets
-      });
-      
-      // UPGRADE USER: After successful beginner verification, upgrade to advanced level
-      if (authResult.success && authResult.data) {
-        console.log('📈 [Grid Verify] Beginner flow complete - upgrading to advanced level');
-        await updateGridAuthLevel(userId, true);
+      // ═══════════════════════════════════════════════════════════════════════════
+      // NEW USER FLOW (with retry + fallback)
+      // ═══════════════════════════════════════════════════════════════════════════
+      console.log('🆕 [Grid Verify] New user flow: completeAuthAndCreateAccount() with retry');
+
+      const maxRetries = 3;
+      const retryDelay = 1000; // 1 second
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        console.log(`🔄 [Grid Verify] Attempt ${attempt}/${maxRetries}`);
+
+        authResult = await gridClient.completeAuthAndCreateAccount({
+          user,
+          otpCode,
+          sessionSecrets
+        });
+
+        console.log(`🔍 [Grid Verify] Attempt ${attempt} result:`, {
+          success: authResult.success,
+          hasData: !!authResult.data,
+          error: authResult.error
+        });
+
+        // Success? Break out of retry loop
+        if (authResult.success && authResult.data) {
+          console.log(`✅ [Grid Verify] completeAuthAndCreateAccount succeeded on attempt ${attempt}`);
+          break;
+        }
+
+        // Failed? Wait and retry (unless last attempt)
+        if (attempt < maxRetries) {
+          console.log(`⚠️ [Grid Verify] Attempt ${attempt} failed - retrying in ${retryDelay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        } else {
+          // Final fallback: Try completeAuth in case isExistingUser was wrong
+          console.log('⚠️ [Grid Verify] All retries exhausted - trying fallback to completeAuth');
+          try {
+            const fallbackResult = await gridClient.completeAuth({
+              user,
+              otpCode,
+              sessionSecrets
+            });
+
+            if (fallbackResult.success && fallbackResult.data) {
+              authResult = fallbackResult;
+              console.log('✅ [Grid Verify] Fallback succeeded - user was actually existing');
+            }
+          } catch (fallbackError) {
+            // Keep original error
+            console.log('❌ [Grid Verify] Fallback also failed - keeping original error');
+          }
+        }
       }
     }
-    
-    console.log('🔐 [Grid Verify] Result:', { 
+
+    console.log('🔐 [Grid Verify] Final result:', {
       success: authResult.success,
       hasData: !!authResult.data,
       address: authResult.data?.address
     });
-    
+
     if (!authResult.success || !authResult.data) {
       return res.status(400).json({
         success: false,
         error: authResult.error || 'OTP verification failed'
       });
     }
-    
+
     // STEP 2: Sync Grid address to database (with retry logic)
     const maxRetries = 3;
     let dbError = null;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       const { error } = await supabaseAdmin
         .from('users_grid')
@@ -453,21 +436,21 @@ router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequ
           grid_account_status: 'active',
           updated_at: new Date().toISOString()
         });
-      
+
       if (!error) {
         console.log('✅ Grid address synced to database:', authResult.data.address);
         dbError = null;
         break;
       }
-      
+
       dbError = error;
       console.error(`⚠️ Database sync attempt ${attempt} failed:`, error.message);
-      
+
       if (attempt < maxRetries) {
         await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt - 1)));
       }
     }
-    
+
     if (dbError) {
       console.error('❌ Failed to sync Grid address after all retries');
       return res.status(500).json({
@@ -475,13 +458,13 @@ router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequ
         error: 'Grid account created but database sync failed. Please try logging in again.'
       });
     }
-    
+
     // Return Grid account data
     res.json({
       success: true,
       data: authResult.data
     });
-    
+
   } catch (error) {
     console.error('❌ [Grid Verify] Error:', error);
     res.status(500).json({
