@@ -366,6 +366,12 @@ router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequ
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         console.log(`🔄 [Grid Verify] Attempt ${attempt}/${maxRetries}`);
 
+        console.log('[Grid Verify] completeAuthAndCreateAccount request:', {
+          user,
+          otpCode,
+          sessionSecrets
+        });
+
         authResult = await gridClient.completeAuthAndCreateAccount({
           user,
           otpCode,
