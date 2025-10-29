@@ -9,11 +9,9 @@ import { testStorage } from './test-storage';
 
 const gridEnv = process.env.EXPO_PUBLIC_GRID_ENV || 'sandbox';
 
-// Note: Grid API key is NOT needed for test client operations
-// - generateSessionSecrets() doesn't use the API key
-// - All Grid operations in tests should go through backend API proxy
-// - API key only exists server-side for security
-// - For legacy test scripts that call Grid SDK directly, they should be refactored to use backend
+// Note: Grid API key should NOT be accessible to client code
+// All Grid operations should go through backend API proxy (same as production)
+// This client is only used for generateSessionSecrets() which doesn't need the API key
 
 /**
  * Test Grid Client Service
@@ -25,7 +23,7 @@ class TestGridClientService {
   constructor() {
     this.client = new GridClient({
       environment: gridEnv as 'sandbox' | 'production',
-      apiKey: 'not-used-for-client-operations',
+      apiKey: 'not-used-client-side',
       baseUrl: 'https://grid.squads.xyz'
     });
     

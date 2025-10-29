@@ -172,7 +172,7 @@ jobs:
           MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
           EXPO_PUBLIC_GRID_ENV: production
           
-          # Backend URL for Grid account creation
+          # Backend URL for Grid account creation (backend has GRID_API_KEY)
           TEST_BACKEND_URL: http://localhost:3001
           EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
         

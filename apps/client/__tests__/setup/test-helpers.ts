@@ -306,12 +306,15 @@ export async function completeGridSignupProduction(
   console.log('✅ Grid account verified successfully via backend');
   console.log('   Address:', completeData.data.address);
   
-  // Return Grid session
+  // Cache for reuse
   const gridSession: GridSession = {
     address: completeData.data.address,
     authentication: completeData.data.authentication,
     sessionSecrets: sessionSecrets,
   };
+  
+  // Save to cache for easy access
+  await testStorage.setItem('grid_session_cache', JSON.stringify(gridSession));
   
   return gridSession;
 }
