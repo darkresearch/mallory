@@ -167,8 +167,11 @@ export interface GridSession {
 }
 
 /**
- * Create Grid account (SETUP SCRIPT ONLY - run once)
- * Orchestrates production gridTestClient + Mailosaur for OTP
+ * Create Grid account (LEGACY - OLD DIRECT SDK PATH)
+ * This is the old approach that called Grid SDK directly.
+ * New code should use completeGridSignupProduction() instead.
+ * 
+ * Kept for backwards compatibility with old test scripts.
  */
 export async function createAndCacheGridAccount(email: string): Promise<GridSession> {
   console.log('🏦 Creating Grid account (this should only run once)...');
@@ -196,15 +199,16 @@ export async function createAndCacheGridAccount(email: string): Promise<GridSess
   console.log('✅ Grid account verified');
   console.log('   Address:', result.data.address);
   
-  // Cache for reuse
+  // Store using production pattern (grid_account + grid_session_secrets)
+  await testStorage.setItem('grid_account', JSON.stringify(result.data));
+  await testStorage.setItem('grid_session_secrets', JSON.stringify(sessionSecrets));
+  
+  // Return GridSession for convenience
   const gridSession: GridSession = {
     address: result.data.address,
     authentication: result.data.authentication,
     sessionSecrets: sessionSecrets,
   };
-  
-  // Save to cache for easy access
-  await testStorage.setItem('grid_session_cache', JSON.stringify(gridSession));
   
   return gridSession;
 }
@@ -226,7 +230,7 @@ export async function completeGridSignupProduction(
   console.log('🏦 Starting Grid signup for:', email);
   console.log('   Using PRODUCTION code path (backend API)');
   
-  // Import production Grid client service
+  // Import GridClient for session secret generation only
   const { GridClient } = await import('@sqds/grid');
   const config = {
     backendApiUrl: process.env.TEST_BACKEND_URL || 'http://localhost:3001',
@@ -250,11 +254,21 @@ export async function completeGridSignupProduction(
   
   const startData = await startResponse.json();
   
+  console.log('🔍 [DEBUG] start-sign-in response:', {
+    success: startData.success,
+    hasUser: !!startData.user,
+    userEmail: startData.user?.email,
+    userCreatedAt: startData.user?.created_at,
+    userExpiresAt: startData.user?.expires_at,
+    isExistingUser: startData.isExistingUser
+  });
+  
   if (!startData.success || !startData.user) {
     throw new Error(`Start sign-in failed: ${startData.error || 'Unknown error'}`);
   }
   
   console.log('✅ Backend initiated Grid sign-in, OTP sent to email');
+  console.log(`   User status: ${startData.isExistingUser ? 'EXISTING' : 'NEW'}`);
   console.log('   Waiting for OTP via Mailosaur...');
   
   // Step 2: Get OTP via Mailosaur
@@ -266,11 +280,17 @@ export async function completeGridSignupProduction(
   const otp = await waitForOTP(serverId, email, 90000);
   console.log('✅ OTP received:', otp);
   
+  // Add a small delay to ensure Grid has fully processed the OTP generation
+  // Sometimes the OTP can arrive in email before Grid's backend is ready to verify it
+  console.log('⏱️  Waiting 2 seconds to ensure Grid is ready to verify...');
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
   // Step 3: Generate session secrets (same as production)
+  // Note: API key is NOT used for generateSessionSecrets() - it's client-side only
   console.log('🔐 Generating session secrets...');
   const tempClient = new GridClient({
     environment: (process.env.EXPO_PUBLIC_GRID_ENV as 'sandbox' | 'production') || 'production',
-    apiKey: 'not-used-for-session-secrets',
+    apiKey: 'not-needed-for-session-secrets',
     baseUrl: 'https://grid.squads.xyz'
   });
   const sessionSecrets = await tempClient.generateSessionSecrets();
@@ -278,6 +298,14 @@ export async function completeGridSignupProduction(
   
   // Step 4: Complete sign-in via backend (same as production)
   console.log('🔐 Calling backend /api/grid/complete-sign-in...');
+  console.log('🔍 [DEBUG] Request details:', {
+    email,
+    otpCode: otp,
+    userEmail: startData.user.email,
+    userCreatedAt: startData.user.created_at,
+    userExpiresAt: startData.user.expires_at,
+    isExistingUser: startData.isExistingUser
+  });
   const completeResponse = await fetch(`${config.backendApiUrl}/api/grid/complete-sign-in`, {
     method: 'POST',
     headers: {
@@ -287,7 +315,8 @@ export async function completeGridSignupProduction(
     body: JSON.stringify({
       user: startData.user,
       otpCode: otp,
-      sessionSecrets
+      sessionSecrets,
+      isExistingUser: startData.isExistingUser // Pass the flow hint from start-sign-in
     })
   });
   
@@ -305,7 +334,13 @@ export async function completeGridSignupProduction(
   console.log('✅ Grid account verified successfully via backend');
   console.log('   Address:', completeData.data.address);
   
-  // Return Grid session
+  // Store account data (matching production gridClient.ts behavior)
+  await testStorage.setItem('grid_account', JSON.stringify(completeData.data));
+  
+  // Store session secrets separately (matching production)
+  await testStorage.setItem('grid_session_secrets', JSON.stringify(sessionSecrets));
+  
+  // Return Grid session for convenience
   const gridSession: GridSession = {
     address: completeData.data.address,
     authentication: completeData.data.authentication,
@@ -318,33 +353,37 @@ export async function completeGridSignupProduction(
 /**
  * Load Grid session (TESTS - every run)
  * Tests ONLY load cached session, never create new accounts
+ * Matches production storage pattern: grid_account + grid_session_secrets
  */
 export async function loadGridSession(): Promise<GridSession> {
-  // Try our cache first
-  const cached = await testStorage.getItem('grid_session_cache');
-  if (cached) {
-    return JSON.parse(cached);
+  // Load account data (matches production gridClient.getAccount())
+  const accountJson = await testStorage.getItem('grid_account');
+  if (!accountJson) {
+    throw new Error(
+      'Grid account not found. Run setup script first: bun run test:setup'
+    );
   }
   
-  // Try grid storage
-  const account = await gridTestClient.getAccount();
-  if (account) {
-    const sessionSecretsJson = await testStorage.getItem('grid_session_secrets');
-    if (sessionSecretsJson) {
-      const gridSession: GridSession = {
-        address: account.address,
-        authentication: account.authentication,
-        sessionSecrets: JSON.parse(sessionSecretsJson),
-      };
-      // Cache it
-      await testStorage.setItem('grid_session_cache', JSON.stringify(gridSession));
-      return gridSession;
-    }
+  const account = JSON.parse(accountJson);
+  
+  // Load session secrets (matches production pattern)
+  const sessionSecretsJson = await testStorage.getItem('grid_session_secrets');
+  if (!sessionSecretsJson) {
+    throw new Error(
+      'Grid session secrets not found. Run setup script first: bun run test:setup'
+    );
   }
   
-  throw new Error(
-    'Grid session not found. Run setup script first: bun run test:setup'
-  );
+  const sessionSecrets = JSON.parse(sessionSecretsJson);
+  
+  // Combine into GridSession for convenience
+  const gridSession: GridSession = {
+    address: account.address,
+    authentication: account.authentication,
+    sessionSecrets: sessionSecrets,
+  };
+  
+  return gridSession;
 }
 
 // ============================================

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAIChat } from './useAIChat';
+import { useTransactionGuard } from './useTransactionGuard';
 import { supabase } from '../lib';
 
 interface UseChatStateProps {
@@ -12,6 +13,16 @@ interface UseChatStateProps {
   };
   userHasCompletedOnboarding?: boolean; // To check if user has already received intro message
 }
+
+/**
+ * StreamState - Single discriminated union for all streaming states
+ * Replaces 5+ boolean flags with explicit state machine
+ */
+type StreamState = 
+  | { status: 'idle' }
+  | { status: 'waiting'; startTime: number }
+  | { status: 'reasoning'; startTime: number }
+  | { status: 'responding'; startTime: number }
 
 /**
  * Mark user as having completed onboarding
@@ -40,29 +51,22 @@ async function markUserOnboardingComplete(userId: string): Promise<boolean> {
 }
 
 export function useChatState({ currentConversationId, userId, walletBalance, userHasCompletedOnboarding }: UseChatStateProps) {
-  // State for immediate reasoning feedback
-  const [showImmediateReasoning, setShowImmediateReasoning] = useState(false);
+  // Transaction guard for Grid session validation
+  const { ensureGridSession } = useTransactionGuard();
+  
+  // State machine for streaming states
+  const [streamState, setStreamState] = useState<StreamState>({ status: 'idle' });
+  
+  // Supporting state for UI
   const [liveReasoningText, setLiveReasoningText] = useState('');
-  const [hasInitialReasoning, setHasInitialReasoning] = useState(false);
-  const [thinkingDuration, setThinkingDuration] = useState<number>(0);
-  const [isThinking, setIsThinking] = useState(false); // Simple flag: true from send to done
-  const [hasStreamStarted, setHasStreamStarted] = useState(false); // True when first stream data arrives
-  const [isOnboardingGreeting, setIsOnboardingGreeting] = useState(false); // Track if showing onboarding greeting
-  const thinkingStartTime = useRef<number | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null); // Preserve message during OTP
   const hasTriggeredProactiveMessage = useRef(false);
 
-  // AI Chat using Vercel's useChat hook - with immediate feedback
+  // AI Chat using Vercel's useChat hook
   const aiChatResult = useAIChat({
     conversationId: currentConversationId || 'temp-loading',
     userId: userId || 'unknown', // Pass userId for Supermemory
     walletBalance: walletBalance, // Pass wallet balance for x402 threshold checking
-    onImmediateReasoning: (text) => {
-      console.log('⚡ IMMEDIATE reasoning callback triggered');
-      setShowImmediateReasoning(true);
-    },
-    onImmediateToolCall: (toolName) => {
-      console.log('⚡ IMMEDIATE tool call callback triggered');
-    },
   });
   
   // Only use results when we have a real conversation ID
@@ -74,11 +78,11 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
   const isLoadingHistory = currentConversationId ? aiChatResult.isLoadingHistory : false;
   const stopStreaming = currentConversationId ? aiChatResult.stop : undefined;
 
-  // Create enhanced messages with placeholder when reasoning starts
+  // Create enhanced messages with placeholder when in waiting state
   // Filter out system messages (they're triggers, never displayed)
   const aiMessages = useMemo(() => {
     console.log('🔍 aiMessages useMemo triggered:', {
-      hasInitialReasoning,
+      streamStatus: streamState.status,
       rawMessagesLength: rawMessages.length,
       rawMessagesRoles: rawMessages.map(m => m.role),
       rawMessagesIds: rawMessages.map(m => m.id),
@@ -92,71 +96,80 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
       systemMessagesFiltered: rawMessages.length - displayMessages.length
     });
 
-    if (!hasInitialReasoning) {
-      console.log('📤 No initial reasoning yet - returning filtered messages');
-      return displayMessages;
-    }
-
-    // We have reasoning - check if the last message is from the user
-    const lastMessage = displayMessages[displayMessages.length - 1];
-    const lastMessageIsUser = lastMessage && lastMessage.role === 'user';
-    console.log('🤖 Last message check:', { 
-      hasLastMessage: !!lastMessage, 
-      lastMessageRole: lastMessage?.role,
-      lastMessageIsUser 
-    });
-    
-    if (lastMessageIsUser) {
-      // Create placeholder assistant message immediately after user message
-      // Include an initial reasoning part so Chain of Thought renders immediately
-      const placeholderMessage = {
-        id: 'placeholder-reasoning',
-        role: 'assistant' as const,
-        parts: [
-          {
-            type: 'reasoning',
-            text: '', // Empty reasoning text initially
-            id: 'initial-reasoning'
-          }
-        ],
-        content: '', // Required by useChat interface
-        createdAt: new Date(),
-      };
+    // In waiting state, show placeholder after user's last message
+    if (streamState.status === 'waiting') {
+      const lastMessage = displayMessages[displayMessages.length - 1];
+      const lastMessageIsUser = lastMessage && lastMessage.role === 'user';
       
-      console.log('🎯 Creating placeholder assistant message for immediate reasoning display');
-      console.log('📋 Final aiMessages array will have:', displayMessages.length + 1, 'messages');
-      return [...displayMessages, placeholderMessage];
+      if (lastMessageIsUser) {
+        // Create placeholder assistant message immediately after user message
+        const placeholderMessage = {
+          id: 'placeholder-reasoning',
+          role: 'assistant' as const,
+          parts: [
+            {
+              type: 'reasoning',
+              text: '',
+              id: 'initial-reasoning'
+            }
+          ],
+          content: '',
+          createdAt: new Date(),
+        };
+        
+        console.log('🎯 Creating placeholder assistant message in waiting state');
+        return [...displayMessages, placeholderMessage];
+      }
     }
     
-    console.log('✅ Last message is assistant - returning filtered messages as-is');
+    console.log('✅ Returning filtered messages as-is');
     return displayMessages;
-  }, [rawMessages, hasInitialReasoning]);
+  }, [rawMessages, streamState.status]);
 
-  // Show immediate reasoning indicator as soon as streaming starts
+  // State machine: Transition states based on aiStatus and message content
   useEffect(() => {
     if (aiStatus === 'streaming') {
-      console.log('⚡ Status changed to streaming - first stream data arrived');
-      if (thinkingStartTime.current === null) {
-        thinkingStartTime.current = Date.now();
+      console.log('⚡ Status changed to streaming - analyzing content type');
+      
+      // Determine if we're reasoning or responding based on message content
+      if (aiMessages.length > 0) {
+        const lastMessage = aiMessages[aiMessages.length - 1];
+        
+        if (lastMessage.role === 'assistant') {
+          const hasReasoningParts = lastMessage.parts?.some((p: any) => p.type === 'reasoning');
+          const messageContent = (lastMessage as any).content;
+          const hasTextContent = messageContent && typeof messageContent === 'string' && messageContent.trim().length > 0;
+          
+          // Transition from 'waiting' to first active state
+          if (streamState.status === 'waiting') {
+            if (hasReasoningParts) {
+              console.log('🧠 First content is reasoning - transitioning to reasoning state');
+              setStreamState({ status: 'reasoning', startTime: streamState.startTime });
+            } else if (hasTextContent) {
+              console.log('💬 First content is text - transitioning to responding state');
+              setStreamState({ status: 'responding', startTime: streamState.startTime });
+            }
+          }
+          // Handle alternating between reasoning and responding
+          else if (streamState.status === 'reasoning' && hasTextContent && !hasReasoningParts) {
+            console.log('💬 AI started responding - transitioning from reasoning to responding');
+            setStreamState({ status: 'responding', startTime: streamState.startTime });
+          }
+          else if (streamState.status === 'responding' && hasReasoningParts) {
+            console.log('🧠 AI reasoning again - transitioning from responding to reasoning');
+            setStreamState({ status: 'reasoning', startTime: streamState.startTime });
+          }
+        }
       }
-      setHasStreamStarted(true); // First stream data - hide placeholder
-      setShowImmediateReasoning(true);
     } else if (aiStatus === 'ready') {
-      // Calculate final thinking duration
-      if (thinkingStartTime.current !== null) {
-        const duration = Date.now() - thinkingStartTime.current;
-        console.log(`⏱️ Thinking duration: ${duration}ms`);
-        setThinkingDuration(duration);
-        thinkingStartTime.current = null;
+      // Stream completed - transition back to idle
+      if (streamState.status !== 'idle') {
+        const duration = Date.now() - streamState.startTime;
+        console.log(`✅ Stream completed - transitioning to idle (duration: ${duration}ms)`);
+        setStreamState({ status: 'idle' });
       }
-      console.log('✅ Status changed to ready - hiding thinking indicator and resetting state');
-      setIsThinking(false); // Stop showing thinking
-      setHasStreamStarted(false); // Reset for next message
-      setShowImmediateReasoning(false);
-      setHasInitialReasoning(false); // Reset for next message
-      setIsOnboardingGreeting(false); // Clear onboarding greeting flag
     }
-  }, [aiStatus]);
+  }, [aiStatus, aiMessages, streamState]);
 
   // Extract live reasoning text from streaming messages
   useEffect(() => {
@@ -174,16 +187,11 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
           }
         }
       }
+    } else if (aiStatus === 'ready') {
+      // Clear reasoning text when stream completes
+      setLiveReasoningText('');
     }
   }, [aiMessages, aiStatus, liveReasoningText]);
-
-  // Track when we first get reasoning to show persistent block
-  useEffect(() => {
-    if (liveReasoningText && !hasInitialReasoning) {
-      console.log('🎯 First reasoning detected - enabling persistent reasoning block');
-      setHasInitialReasoning(true);
-    }
-  }, [liveReasoningText, hasInitialReasoning]);
 
   // Trigger proactive message for empty onboarding conversations
   // SAFEGUARDS AGAINST INFINITE LOOPS:
@@ -191,6 +199,9 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
   // 2. Check hasTriggeredProactiveMessage ref (prevents multiple triggers in same session)
   // 3. Check conversation has no messages (rawMessages.length === 0)
   // 4. Mark onboarding complete BEFORE sending message (fail-safe)
+  // 
+  // NOTE: Onboarding conversation creation is now handled by OnboardingConversationHandler component
+  // This effect only triggers the greeting message for existing onboarding conversations
   useEffect(() => {
     const triggerProactiveMessage = async () => {
       // SAFEGUARD #1: User has already received intro message - NEVER send again
@@ -245,15 +256,10 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
         
         console.log('✅ [Proactive] Onboarding marked complete - safe to send intro message');
         
-        // Show placeholder immediately (just like when user sends a message)
+        // Transition to waiting state for proactive message
+        const startTime = Date.now();
+        setStreamState({ status: 'waiting', startTime });
         setLiveReasoningText('');
-        setThinkingDuration(0);
-        setHasStreamStarted(false);
-        thinkingStartTime.current = Date.now();
-        setIsThinking(true);
-        setShowImmediateReasoning(true);
-        setHasInitialReasoning(true); // Create placeholder immediately
-        setIsOnboardingGreeting(true); // Track that this is onboarding greeting
         
         // Send system message to trigger Mallory's streaming greeting
         sendAIMessage({
@@ -268,33 +274,43 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
     triggerProactiveMessage();
   }, [isLoadingHistory, rawMessages.length, currentConversationId, sendAIMessage, aiStatus, userHasCompletedOnboarding, userId]);
 
-  const handleSendMessage = (message: string) => {
+  const handleSendMessage = async (message: string) => {
     if (!sendAIMessage) return;
     
-    console.log('📤 Sending message to AI:', message);
-    // Clear previous reasoning state
+    console.log('📤 [ChatState] Sending message to AI:', message);
+    
+    // Check Grid session before sending (all messages, can't predict x402 usage)
+    const canProceed = await ensureGridSession(
+      'send message',
+      '/(main)/chat',
+      '#FFEFE3', // Chat screen background
+      '#000000'  // Black text on cream background
+    );
+    
+    if (!canProceed) {
+      // User being redirected to OTP, save message for after
+      console.log('💬 [ChatState] Grid session required, saving pending message');
+      setPendingMessage(message);
+      return;
+    }
+    
+    // Transition to waiting state
+    const startTime = Date.now();
+    setStreamState({ status: 'waiting', startTime });
     setLiveReasoningText('');
-    setThinkingDuration(0); // Reset duration for new message
-    setHasStreamStarted(false); // Reset - no stream data yet
-    thinkingStartTime.current = Date.now(); // Start timer immediately
-    // IMMEDIATELY show thinking - no conditions, no delays
-    setIsThinking(true);
-    setShowImmediateReasoning(true);
-    setHasInitialReasoning(true); // Create placeholder immediately
+    
     // Server handles all storage and processing
     sendAIMessage({ text: message });
   };
 
   return {
-    // State
-    showImmediateReasoning,
+    // State machine - single source of truth
+    streamState,
+    
+    // Supporting state
     liveReasoningText,
-    hasInitialReasoning,
     isLoadingHistory,
-    thinkingDuration,
-    isThinking, // Simple flag for immediate UI
-    hasStreamStarted, // True when first stream data arrives
-    isOnboardingGreeting, // True when showing onboarding greeting message
+    pendingMessage,
     
     // AI Chat results
     aiMessages,
@@ -305,5 +321,6 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
     // Actions
     handleSendMessage,
     stopStreaming,
+    clearPendingMessage: () => setPendingMessage(null),
   };
 }

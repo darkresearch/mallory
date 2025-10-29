@@ -67,6 +67,20 @@ class WalletDataService {
       // Test server connection first
       await this.testServerConnection();
 
+      // Get Grid wallet address from secure storage
+      const gridAccount = await gridClientService.getAccount();
+      const walletAddress = gridAccount?.address;
+
+      if (!walletAddress) {
+        console.error('💰 [Mobile] No Grid wallet address available', { requestId });
+        throw new Error('No wallet found. Please complete Grid wallet setup.');
+      }
+
+      console.log('💰 [Mobile] Grid wallet address retrieved', {
+        requestId,
+        address: walletAddress
+      });
+
       // Get auth token
       const token = await this.getAuthToken();
       
@@ -81,13 +95,14 @@ class WalletDataService {
         tokenLength: token.length
       });
 
-      // Make API request to holdings endpoint
-      const url = `${this.baseUrl}/wallet/holdings`;
+      // Make API request to holdings endpoint with wallet address as query param
+      const url = `${this.baseUrl}/wallet/holdings?address=${encodeURIComponent(walletAddress)}`;
       console.log('💰 [Mobile] Making API request', {
         requestId,
         url,
         method: 'GET',
-        hasToken: !!token
+        hasToken: !!token,
+        walletAddress
       });
 
       const response = await fetch(url, {

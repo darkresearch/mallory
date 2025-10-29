@@ -8,11 +8,10 @@ import { GridClient } from '@sqds/grid';
 import { testStorage } from './test-storage';
 
 const gridEnv = process.env.EXPO_PUBLIC_GRID_ENV || 'sandbox';
-const gridApiKey = process.env.EXPO_PUBLIC_GRID_API_KEY;
 
-if (!gridApiKey) {
-  throw new Error('EXPO_PUBLIC_GRID_API_KEY not set');
-}
+// Note: Grid API key should NOT be accessible to client code
+// All Grid operations should go through backend API proxy (same as production)
+// This client is only used for generateSessionSecrets() which doesn't need the API key
 
 /**
  * Test Grid Client Service
@@ -24,7 +23,7 @@ class TestGridClientService {
   constructor() {
     this.client = new GridClient({
       environment: gridEnv as 'sandbox' | 'production',
-      apiKey: gridApiKey,
+      apiKey: 'not-used-client-side',
       baseUrl: 'https://grid.squads.xyz'
     });
     

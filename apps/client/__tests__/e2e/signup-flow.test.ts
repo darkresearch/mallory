@@ -104,7 +104,7 @@ describe('User Signup Flow (Production Path)', () => {
     console.log('Supabase:');
     console.log('  User ID:', supabaseResult.userId);
     console.log('  Email:', supabaseResult.email);
-    console.log('  Password:', testPassword);
+    console.log('  Password: ********');
     console.log();
     console.log('Grid:');
     console.log('  Wallet Address:', gridSession.address);

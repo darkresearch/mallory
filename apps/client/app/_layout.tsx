@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider } from '../contexts/AuthContext';
+import { GridProvider } from '../contexts/GridContext';
 import { ConversationsProvider } from '../contexts/ConversationsContext';
 import { WalletProvider } from '../contexts/WalletContext';
 import AuthGate from '../components/auth/AuthGate';
@@ -60,27 +61,29 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
       <SafeAreaProvider style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
         <AuthProvider>
-          <AuthGate>
-            <ConversationsProvider>
-              <WalletProvider>
-                <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any }}>
-                  <Stack
-                    screenOptions={{
-                      headerShown: false,
-                      contentStyle: { backgroundColor: '#FFEFE3' },
-                      animation: 'fade',
-                    }}
-                  />
-                  {Platform.OS === 'web' && (
-                    <>
-                      <Analytics />
-                      <SpeedInsights />
-                    </>
-                  )}
-                </View>
-              </WalletProvider>
-            </ConversationsProvider>
-          </AuthGate>
+          <GridProvider>
+            <AuthGate>
+              <ConversationsProvider>
+                <WalletProvider>
+                  <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any }}>
+                    <Stack
+                      screenOptions={{
+                        headerShown: false,
+                        contentStyle: { backgroundColor: '#FFEFE3' },
+                        animation: 'fade',
+                      }}
+                    />
+                    {Platform.OS === 'web' && (
+                      <>
+                        <Analytics />
+                        <SpeedInsights />
+                      </>
+                    )}
+                  </View>
+                </WalletProvider>
+              </ConversationsProvider>
+            </AuthGate>
+          </GridProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

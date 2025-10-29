@@ -1,0 +1,396 @@
+name: Comprehensive Tests
+
+on:
+  # Run on pushes to main branch
+  push:
+    branches: [main]
+    
+  # Run on PRs, but only when marked as ready for review
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    
+  # Allow manual trigger
+  workflow_dispatch:
+
+# Cancel in-progress runs for the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Skip if PR is in draft mode
+  check-pr-state:
+    name: Check PR State
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+    steps:
+      - name: Check if should run
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            if [[ "${{ github.event.pull_request.draft }}" == "true" ]]; then
+              echo "should-run=false" >> $GITHUB_OUTPUT
+              echo "⏭️  Skipping tests - PR is in draft mode"
+            else
+              echo "should-run=true" >> $GITHUB_OUTPUT
+              echo "✅ Running tests - PR is ready for review"
+            fi
+          else
+            echo "should-run=true" >> $GITHUB_OUTPUT
+            echo "✅ Running tests - push to main or manual trigger"
+          fi
+
+  # Job 1: Fast unit tests (no secrets, no backend)
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: check-pr-state
+    if: needs.check-pr-state.outputs.should-run == 'true'
+    timeout-minutes: 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+          
+      - name: Install client dependencies
+        run: cd apps/client && bun install
+        
+      - name: Run unit tests
+        run: cd apps/client && bun run test:unit
+        env:
+          # Minimal env vars for unit tests (just checking they exist)
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_GRID_ENV: production
+          TEST_BACKEND_URL: http://localhost:3001
+          # NOTE: EXPO_PUBLIC_GRID_API_KEY is intentionally NOT set
+          # Unit tests verify it's not exposed to client code
+        
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: unit-test-results
+          path: apps/client/__tests__/results/
+          if-no-files-found: ignore
+
+  # Job 2: Integration tests (Supabase + Grid, requires backend for Grid setup)
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: unit-tests  # Run after unit tests pass
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+          
+      - name: Install workspace dependencies
+        run: bun install
+        
+      - name: Install client dependencies
+        run: cd apps/client && bun install
+        
+      - name: Install server dependencies
+        run: cd apps/server && bun install
+        
+      - name: Start backend server
+        run: |
+          cd apps/server
+          # Start server in background
+          bun run dev > server.log 2>&1 &
+          SERVER_PID=$!
+          echo $SERVER_PID > server.pid
+          echo "🚀 Backend server started with PID: $SERVER_PID"
+          
+          # Wait for server to be ready
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            # Check if process is still running
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+              echo "❌ Backend server process died!"
+              cat server.log
+              exit 1
+            fi
+            
+            # Try health check
+            if curl -f -s http://localhost:3001/health > /dev/null 2>&1; then
+              echo "✅ Backend server is ready! (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+              
+              # Verify health check response
+              HEALTH=$(curl -s http://localhost:3001/health)
+              echo "📊 Health check response: $HEALTH"
+              
+              if echo "$HEALTH" | grep -q '"status":"ok"'; then
+                echo "✅ Backend server health check passed!"
+                break
+              fi
+            fi
+            
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "❌ Backend server failed to become ready"
+              cat server.log
+              exit 1
+            fi
+            
+            echo "⏳ Waiting for backend server... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+            sleep 2
+          done
+        env:
+          # Backend-specific secrets
+          GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NODE_ENV: test
+          PORT: 3001
+      
+      - name: Setup test Grid account
+        run: cd apps/client && bun run test:setup
+        env:
+          # Client secrets
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
+          MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
+          EXPO_PUBLIC_GRID_ENV: production
+          
+          # Backend URL for Grid account creation (backend has GRID_API_KEY)
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
+        
+      - name: Run integration tests
+        run: cd apps/client && bun run test:integration
+        env:
+          # Supabase (client-safe)
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          
+          # Test account credentials
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          
+          # Mailosaur (for OTP retrieval)
+          MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
+          MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
+          
+          # Grid environment (not secret)
+          EXPO_PUBLIC_GRID_ENV: production
+          
+          # Backend URL (for Grid operations)
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
+      
+      - name: Stop backend server
+        if: always()
+        run: |
+          if [ -f apps/server/server.pid ]; then
+            kill $(cat apps/server/server.pid) || true
+          fi
+          
+      - name: Upload server logs
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: integration-server-logs
+          path: apps/server/server.log
+          
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: integration-test-results
+          path: apps/client/__tests__/results/
+          if-no-files-found: ignore
+
+  # Job 3: E2E tests with backend server
+  e2e-tests:
+    name: E2E Tests (with Backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: integration-tests  # Run after integration tests pass
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+          
+      - name: Install workspace dependencies
+        run: bun install
+        
+      - name: Install client dependencies
+        run: cd apps/client && bun install
+        
+      - name: Install server dependencies
+        run: cd apps/server && bun install
+        
+      - name: Start backend server
+        run: |
+          cd apps/server
+          # Start server in background with output redirection
+          bun run dev > server.log 2>&1 &
+          SERVER_PID=$!
+          echo $SERVER_PID > server.pid
+          echo "🚀 Backend server started with PID: $SERVER_PID"
+          
+          # Wait for server to be ready with improved health check
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            # Check if process is still running
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+              echo "❌ Backend server process died!"
+              cat server.log
+              exit 1
+            fi
+            
+            # Try health check
+            if curl -f -s http://localhost:3001/health > /dev/null 2>&1; then
+              echo "✅ Backend server is ready! (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+              
+              # Verify health check response
+              HEALTH=$(curl -s http://localhost:3001/health)
+              echo "📊 Health check response: $HEALTH"
+              
+              # Verify server is actually responding correctly
+              if echo "$HEALTH" | grep -q '"status":"ok"'; then
+                echo "✅ Backend server health check passed!"
+                break
+              else
+                echo "⚠️  Health check returned unexpected response"
+              fi
+            fi
+            
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "❌ Backend server failed to become ready after $MAX_ATTEMPTS attempts (60 seconds)"
+              echo "📋 Server logs:"
+              cat server.log
+              exit 1
+            fi
+            
+            echo "⏳ Waiting for backend server... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+            sleep 2
+          done
+        env:
+          # Backend-specific secrets
+          GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
+          
+          # Supabase (backend needs full access)
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          
+          # Other backend config
+          NODE_ENV: test
+          PORT: 3001
+
+      - name: Setup test Grid account
+        run: cd apps/client && bun run test:setup
+        env:
+          # Client secrets (setup script uses production backend proxy pattern)
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
+          MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
+          EXPO_PUBLIC_GRID_ENV: production
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
+          
+      - name: Run E2E auth flow tests
+        run: cd apps/client && bun run test:e2e:auth
+        env:
+          # Client secrets
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
+          MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
+          EXPO_PUBLIC_GRID_ENV: production
+          
+          # Backend URL
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
+          
+      - name: Run OTP persistence tests
+        run: cd apps/client && bun run test:e2e:persistence
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          TEST_BACKEND_URL: http://localhost:3001
+          
+      - name: Stop backend server
+        if: always()
+        run: |
+          if [ -f apps/server/server.pid ]; then
+            kill $(cat apps/server/server.pid) || true
+          fi
+          
+      - name: Upload server logs
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: server-logs
+          path: apps/server/server.log
+          
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: e2e-test-results
+          path: apps/client/__tests__/results/
+          if-no-files-found: ignore
+
+  # Summary job - marks overall success/failure
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, e2e-tests]
+    if: always()
+    
+    steps:
+      - name: Check test results
+        run: |
+          echo "Test Results Summary:"
+          echo "===================="
+          echo "Unit Tests: ${{ needs.unit-tests.result }}"
+          echo "Integration Tests: ${{ needs.integration-tests.result }}"
+          echo "E2E Tests: ${{ needs.e2e-tests.result }}"
+          
+          if [ "${{ needs.unit-tests.result }}" != "success" ] || \
+             [ "${{ needs.integration-tests.result }}" != "success" ] || \
+             [ "${{ needs.e2e-tests.result }}" != "success" ]; then
+            echo "Some tests failed!"
+            exit 1
+          fi
+          
+          echo "All tests passed! ✅"
+
