@@ -81,11 +81,11 @@ jobs:
           name: unit-test-results
           path: apps/client/__tests__/results/
 
-  # Job 2: Integration tests (Supabase + Grid, no backend needed)
+  # Job 2: Integration tests (Supabase + Grid, requires backend for Grid setup)
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     needs: unit-tests  # Run after unit tests pass
     
     steps:
@@ -97,8 +97,84 @@ jobs:
         with:
           bun-version: latest
           
+      - name: Install workspace dependencies
+        run: bun install
+        
       - name: Install client dependencies
         run: cd apps/client && bun install
+        
+      - name: Install server dependencies
+        run: cd apps/server && bun install
+        
+      - name: Start backend server
+        run: |
+          cd apps/server
+          # Start server in background
+          bun run dev > server.log 2>&1 &
+          SERVER_PID=$!
+          echo $SERVER_PID > server.pid
+          echo "🚀 Backend server started with PID: $SERVER_PID"
+          
+          # Wait for server to be ready
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            # Check if process is still running
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+              echo "❌ Backend server process died!"
+              cat server.log
+              exit 1
+            fi
+            
+            # Try health check
+            if curl -f -s http://localhost:3001/health > /dev/null 2>&1; then
+              echo "✅ Backend server is ready! (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+              
+              # Verify health check response
+              HEALTH=$(curl -s http://localhost:3001/health)
+              echo "📊 Health check response: $HEALTH"
+              
+              if echo "$HEALTH" | grep -q '"status":"ok"'; then
+                echo "✅ Backend server health check passed!"
+                break
+              fi
+            fi
+            
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "❌ Backend server failed to become ready"
+              cat server.log
+              exit 1
+            fi
+            
+            echo "⏳ Waiting for backend server... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+            sleep 2
+          done
+        env:
+          # Backend-specific secrets
+          GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NODE_ENV: test
+          PORT: 3001
+      
+      - name: Setup test Grid account
+        run: cd apps/client && bun run test:setup
+        env:
+          # Client secrets
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
+          MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
+          EXPO_PUBLIC_GRID_ENV: production
+          
+          # Backend URL for Grid account creation
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
         
       - name: Run integration tests
         run: cd apps/client && bun run test:integration
@@ -117,6 +193,24 @@ jobs:
           
           # Grid environment (not secret)
           EXPO_PUBLIC_GRID_ENV: production
+          
+          # Backend URL (for Grid operations)
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
+      
+      - name: Stop backend server
+        if: always()
+        run: |
+          if [ -f apps/server/server.pid ]; then
+            kill $(cat apps/server/server.pid) || true
+          fi
+          
+      - name: Upload server logs
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: integration-server-logs
+          path: apps/server/server.log
           
       - name: Upload test results
         if: always()
