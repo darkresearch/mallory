@@ -212,12 +212,19 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
     }
 
     if (!response.success || !response.data) {
+      console.log('❌ [Grid Init] Response validation failed:', {
+        success: response.success,
+        hasData: !!response.data,
+        isExistingUser
+      });
       return res.status(400).json({
         success: false,
         error: response.error || 'Failed to initialize Grid account'
       });
     }
 
+    console.log('✅ [Grid Init] Returning success response with isExistingUser:', isExistingUser);
+    
     // Return Grid user object + flow hint for complete-sign-in
     res.json({
       success: true,
