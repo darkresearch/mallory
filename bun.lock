@@ -32,7 +32,7 @@
         "@react-three/fiber": "^9.3.0",
         "@solana/spl-token": "^0.4.14",
         "@solana/web3.js": "^1.98.4",
-        "@sqds/grid": "^0.1.0",
+        "@sqds/grid": "0.1.2",
         "@stardazed/streams-text-encoding": "^1.0.2",
         "@supabase/supabase-js": "^2.51.0",
         "@types/uuid": "^10.0.0",
@@ -113,7 +113,7 @@
         "@darkresearch/mallory-shared": "workspace:*",
         "@solana/spl-token": "^0.4.9",
         "@solana/web3.js": "^1.95.8",
-        "@sqds/grid": "^0.1.0",
+        "@sqds/grid": "0.1.2",
         "@supabase/supabase-js": "^2.51.0",
         "@supermemory/tools": "latest",
         "ai": "^5.0.50",
@@ -811,7 +811,7 @@
 
     "@solana/web3.js": ["@solana/web3.js@1.98.4", "", { "dependencies": { "@babel/runtime": "^7.25.0", "@noble/curves": "^1.4.2", "@noble/hashes": "^1.4.0", "@solana/buffer-layout": "^4.0.1", "@solana/codecs-numbers": "^2.1.0", "agentkeepalive": "^4.5.0", "bn.js": "^5.2.1", "borsh": "^0.7.0", "bs58": "^4.0.1", "buffer": "6.0.3", "fast-stable-stringify": "^1.0.0", "jayson": "^4.1.1", "node-fetch": "^2.7.0", "rpc-websockets": "^9.0.2", "superstruct": "^2.0.2" } }, "sha512-vv9lfnvjUsRiq//+j5pBdXig0IQdtzA0BRZ3bXEP4KaIyF1CcaydWqgyzQgfZMNIsWNWmG+AUHwPy4AHOD6gpw=="],
 
-    "@sqds/grid": ["@sqds/grid@0.1.0", "", { "dependencies": { "@hpke/chacha20poly1305": "1.7.1", "@hpke/core": "1.7.4", "@noble/ciphers": "1.3.0", "@noble/curves": "1.9.7", "@noble/hashes": "1.8.0", "@privy-io/js-sdk-core": "0.53.4", "@solana/web3.js": "1.98.2", "@turnkey/crypto": "2.5.0", "@turnkey/encoding": "0.5.0", "asn1js": "3.0.6", "buffer": "6.0.3", "canonicalize": "2.1.0", "fast-text-encoding": "1.0.6", "jose": "6.0.13", "react-native-get-random-values": ">=1.9.0", "sha256-uint8array": "0.10.7", "text-encoding-utf-8": "1.0.2", "uuid": "11.1.0" }, "peerDependencies": { "react": ">=16.8.0", "react-native": ">=0.60.0" }, "optionalPeers": ["react-native"] }, "sha512-BgZZAGAmGK0byGWek9CbrqM16zqW/F1v8KAqK3ga1dpI14HhSl6VN9UPOP6Jj3LYhK+2jjQr3BPxup22yS3FCQ=="],
+    "@sqds/grid": ["@sqds/grid@0.1.2", "", { "dependencies": { "@hpke/chacha20poly1305": "1.7.1", "@hpke/core": "1.7.4", "@noble/ciphers": "1.3.0", "@noble/curves": "1.9.7", "@noble/hashes": "1.8.0", "@privy-io/js-sdk-core": "0.53.4", "@solana/web3.js": "1.98.2", "@turnkey/crypto": "2.5.0", "@turnkey/encoding": "0.5.0", "asn1js": "3.0.6", "buffer": "6.0.3", "canonicalize": "2.1.0", "fast-text-encoding": "1.0.6", "jose": "6.0.13", "react-native-get-random-values": ">=1.9.0", "sha256-uint8array": "0.10.7", "text-encoding-utf-8": "1.0.2", "uuid": "11.1.0" }, "peerDependencies": { "react": ">=16.8.0", "react-native": ">=0.60.0" }, "optionalPeers": ["react-native"] }, "sha512-8sQo+bgZE1DCNJmaE74C8eE8cLE0rryjLWUn25JGhWFeCUQipNRAFz0L3XOJjApM3PsudVyKHEh8xjKDCqIdXQ=="],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.0.0", "", {}, "sha512-m2bOd0f2RT9k8QJx1JN85cZYyH1RqFBdlwtkSlf4tBDYLCiiZnv1fIIwacK6cqwXavOydf0NPToMQgpKq+dVlA=="],
 
@@ -831,7 +831,7 @@
 
     "@supabase/supabase-js": ["@supabase/supabase-js@2.76.1", "", { "dependencies": { "@supabase/auth-js": "2.76.1", "@supabase/functions-js": "2.76.1", "@supabase/node-fetch": "2.6.15", "@supabase/postgrest-js": "2.76.1", "@supabase/realtime-js": "2.76.1", "@supabase/storage-js": "2.76.1" } }, "sha512-dYMh9EsTVXZ6WbQ0QmMGIhbXct5+x636tXXaaxUmwjj3kY1jyBTQU8QehxAIfjyRu1mWGV07hoYmTYakkxdSGQ=="],
 
-    "@supermemory/tools": ["@supermemory/tools@1.2.17", "", { "dependencies": { "@ai-sdk/anthropic": "^2.0.25", "@ai-sdk/openai": "^2.0.23", "@ai-sdk/provider": "^2.0.0", "ai": "^5.0.29", "openai": "^4.104.0", "supermemory": "^3.0.0-alpha.26", "zod": "^4.1.5" } }, "sha512-cdAZbA0meTy9lMe5vx18XGtMEU3J9J9s8mwmkq+/aiwGRU3ToKsI+QcN23LrYtvf8XUNLrwsX5jtTe0IY7CtWg=="],
+    "@supermemory/tools": ["@supermemory/tools@1.3.2", "", { "dependencies": { "@ai-sdk/anthropic": "^2.0.25", "@ai-sdk/openai": "^2.0.23", "@ai-sdk/provider": "^2.0.0", "ai": "^5.0.29", "openai": "^4.104.0", "supermemory": "^3.0.0-alpha.26", "zod": "^4.1.5" } }, "sha512-ndUsbpPphtgrfvVIBmqYR/VnexTOoho8fV+882r+IZlmR21dNhfsr5bIJlJpAMKsqqyqy8OG6pBPC4maav+sJA=="],
 
     "@swc/helpers": ["@swc/helpers@0.5.17", "", { "dependencies": { "tslib": "^2.8.0" } }, "sha512-5IKx/Y13RsYd+sauPb2x+U/xZikHjolzfuDgTAl/Tdf3Q8rslRvC19NKDLgAJQ6wsqADk10ntlv08nPFw/gO/A=="],
 

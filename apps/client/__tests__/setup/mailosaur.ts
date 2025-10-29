@@ -122,14 +122,28 @@ async function getLatestEmail(
 
   const data: MailosaurListResponse = await response.json();
   
-  // Find most recent email to our test address
+  // Debug: Log all emails found
+  if (data.items.length > 0) {
+    console.log(`🔍 [DEBUG] Found ${data.items.length} total emails in Mailosaur`);
+    data.items.slice(0, 5).forEach((email, i) => {
+      console.log(`   ${i + 1}. To: ${email.to[0]?.email}, Subject: ${email.subject}, Received: ${email.received}`);
+    });
+  }
+  
+  // Find most recent email to our test address (EXACT match)
   const recentEmails = data.items
     .filter(email => 
       email.to.some(recipient => 
-        recipient.email.toLowerCase().includes(sentTo.toLowerCase())
+        recipient.email.toLowerCase() === sentTo.toLowerCase()
       )
     )
     .sort((a, b) => new Date(b.received).getTime() - new Date(a.received).getTime());
+
+  console.log(`🔍 [DEBUG] Filtering for email: ${sentTo}`);
+  console.log(`🔍 [DEBUG] Found ${recentEmails.length} matching emails`);
+  if (recentEmails[0]) {
+    console.log(`🔍 [DEBUG] Most recent match: To: ${recentEmails[0].to[0]?.email}, Subject: ${recentEmails[0].subject}`);
+  }
 
   return recentEmails[0] || null;
 }

@@ -254,6 +254,15 @@ export async function completeGridSignupProduction(
   
   const startData = await startResponse.json();
   
+  console.log('🔍 [DEBUG] start-sign-in response:', {
+    success: startData.success,
+    hasUser: !!startData.user,
+    userEmail: startData.user?.email,
+    userCreatedAt: startData.user?.created_at,
+    userExpiresAt: startData.user?.expires_at,
+    isExistingUser: startData.isExistingUser
+  });
+  
   if (!startData.success || !startData.user) {
     throw new Error(`Start sign-in failed: ${startData.error || 'Unknown error'}`);
   }
@@ -271,6 +280,11 @@ export async function completeGridSignupProduction(
   const otp = await waitForOTP(serverId, email, 90000);
   console.log('✅ OTP received:', otp);
   
+  // Add a small delay to ensure Grid has fully processed the OTP generation
+  // Sometimes the OTP can arrive in email before Grid's backend is ready to verify it
+  console.log('⏱️  Waiting 2 seconds to ensure Grid is ready to verify...');
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
   // Step 3: Generate session secrets (same as production)
   // Note: API key is NOT used for generateSessionSecrets() - it's client-side only
   console.log('🔐 Generating session secrets...');
@@ -284,6 +298,14 @@ export async function completeGridSignupProduction(
   
   // Step 4: Complete sign-in via backend (same as production)
   console.log('🔐 Calling backend /api/grid/complete-sign-in...');
+  console.log('🔍 [DEBUG] Request details:', {
+    email,
+    otpCode: otp,
+    userEmail: startData.user.email,
+    userCreatedAt: startData.user.created_at,
+    userExpiresAt: startData.user.expires_at,
+    isExistingUser: startData.isExistingUser
+  });
   const completeResponse = await fetch(`${config.backendApiUrl}/api/grid/complete-sign-in`, {
     method: 'POST',
     headers: {

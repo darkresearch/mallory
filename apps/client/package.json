@@ -69,7 +69,7 @@
     "@react-three/fiber": "^9.3.0",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
-    "@sqds/grid": "^0.1.0",
+    "@sqds/grid": "0.1.2",
     "@stardazed/streams-text-encoding": "^1.0.2",
     "@supabase/supabase-js": "^2.51.0",
     "@types/uuid": "^10.0.0",

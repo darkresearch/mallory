@@ -155,6 +155,11 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
         hasData: !!response.data,
         hasError: !!response.error
       });
+      
+      // Log the FULL response data to see what Grid is actually returning
+      if (response.data) {
+        console.log('🔍 [Grid Init] createAccount FULL response.data:', JSON.stringify(response.data, null, 2));
+      }
 
       // If createAccount succeeds, this is a NEW user
       if (response.success && response.data) {
@@ -248,6 +253,7 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
     }
 
     console.log('✅ [Grid Init] Returning success response with isExistingUser:', isExistingUser);
+    console.log('🔍 [Grid Init] User object being returned:', JSON.stringify(response.data, null, 2));
     
     // Return Grid user object + flow hint for complete-sign-in
     res.json({
@@ -407,6 +413,16 @@ router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequ
           otpCode,
           sessionSecrets
         });
+
+        console.log('🔍 [Grid Verify] EXACT PARAMS BEING SENT TO GRID:');
+        console.log('   Email:', user.email);
+        console.log('   OTP Code:', otpCode);
+        console.log('   OTP Type:', typeof otpCode);
+        console.log('   OTP Length:', otpCode.length);
+        console.log('   User Status:', user.status);
+        console.log('   User Type:', user.type);
+        console.log('   User has provider?:', !!user.provider);
+        console.log('   User has otp_id?:', !!user.otp_id);
 
         authResult = await gridClient.completeAuthAndCreateAccount({
           user,
