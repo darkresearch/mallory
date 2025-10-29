@@ -36,12 +36,8 @@ interface MessageListProps {
   aiMessages: any[];
   aiStatus: string;
   aiError: any;
-  hasInitialReasoning: boolean;
+  streamState: { status: 'idle' } | { status: 'waiting'; startTime: number } | { status: 'reasoning'; startTime: number } | { status: 'responding'; startTime: number };
   liveReasoningText: string;
-  thinkingDuration: number;
-  isThinking: boolean;
-  hasStreamStarted: boolean;
-  isOnboardingGreeting: boolean;
   isLoadingHistory?: boolean;
   regenerateMessage?: () => void;
   scrollViewRef: React.RefObject<ScrollView>;
@@ -56,12 +52,8 @@ export const MessageList: React.FC<MessageListProps> = ({
   aiMessages,
   aiStatus,
   aiError,
-  hasInitialReasoning,
+  streamState,
   liveReasoningText,
-  thinkingDuration,
-  isThinking,
-  hasStreamStarted,
-  isOnboardingGreeting,
   isLoadingHistory,
   regenerateMessage,
   scrollViewRef,
@@ -98,7 +90,7 @@ export const MessageList: React.FC<MessageListProps> = ({
     aiMessagesRoles: aiMessages.map(m => m.role),
     aiMessagesIds: aiMessages.map(m => m.id),
     aiStatus,
-    hasInitialReasoning,
+    streamState: streamState.status,
     liveReasoningTextLength: liveReasoningText.length,
     deviceInfo,
   });
@@ -119,8 +111,8 @@ export const MessageList: React.FC<MessageListProps> = ({
           <Text style={styles.loadingText}>Loading conversation history...</Text>
         </View>
       ) : aiMessages.length === 0 ? (
-        // Empty state - only show when no messages AND no reasoning
-        !hasInitialReasoning && (
+        // Empty state - only show when no messages AND not in waiting state
+        streamState.status === 'idle' && (
           <EmptyState
             currentConversationId={currentConversationId}
             conversationParam={conversationParam}
@@ -202,7 +194,8 @@ export const MessageList: React.FC<MessageListProps> = ({
           
           {/* Show M logo immediately with smooth fade transition */}
           {(() => {
-            if (!isThinking) return null;
+            // Show M logo placeholder only in 'waiting' state
+            if (streamState.status !== 'waiting') return null;
             
             // M logo shows when: last message is REAL assistant (not placeholder), streaming, AND has parts
             const lastMessage = aiMessages[aiMessages.length - 1];

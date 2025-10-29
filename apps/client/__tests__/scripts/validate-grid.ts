@@ -61,11 +61,12 @@ async function main() {
   } catch (error) {
     console.error('❌ Phase 4 FAILED:', error);
     console.error('\nTroubleshooting:');
-    console.error('  1. Check EXPO_PUBLIC_GRID_API_KEY in .env.test');
-    console.error('  2. Check EXPO_PUBLIC_GRID_ENV is set to "sandbox"');
+    console.error('  1. Check EXPO_PUBLIC_GRID_ENV in .env.test');
+    console.error('  2. Verify backend server is running if needed');
     console.error('  3. Verify Mailosaur is working (run validate-mailosaur.ts)');
     console.error('  4. Check Grid API status');
     console.error('  5. If OTP timeout, check spam folder or try again');
+    console.error('  Note: GRID_API_KEY is server-side only');
     process.exit(1);
   }
 }

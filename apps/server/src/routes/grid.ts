@@ -155,6 +155,11 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
         hasData: !!response.data,
         hasError: !!response.error
       });
+      
+      // Log the FULL response data to see what Grid is actually returning
+      if (response.data) {
+        console.log('🔍 [Grid Init] createAccount FULL response.data:', JSON.stringify(response.data, null, 2));
+      }
 
       // If createAccount succeeds, this is a NEW user
       if (response.success && response.data) {
@@ -185,6 +190,16 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
         isExistingUser = true;
 
         console.log('✅ [Grid Init] Existing user authenticated via initAuth()');
+        try {
+          console.log('🔍 [Grid Init] initAuth response:', JSON.stringify({
+            success: response?.success,
+            hasData: !!response?.data,
+            hasError: !!response?.error,
+            responseType: typeof response
+          }));
+        } catch (e) {
+          console.log('⚠️ [Grid Init] Failed to log initAuth response:', e);
+        }
       } else {
         // Some other error - re-throw
         console.error('❌ [Grid Init] Unexpected error:', {
@@ -206,18 +221,40 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
       if (isExistingAccount) {
         console.log('🔄 [Grid Init] Response indicates existing account - falling back to initAuth()');
         response = await gridClient.initAuth({ email });
+        console.log('🔑 [Grid Init] CHECKPOINT 1: initAuth() returned');
         isExistingUser = true;
+        console.log('🔑 [Grid Init] CHECKPOINT 2: isExistingUser set to true');
         console.log('✅ [Grid Init] Existing user authenticated via initAuth()');
+        console.log('🔑 [Grid Init] CHECKPOINT 3: About to log response');
+        try {
+          console.log('🔍 [Grid Init] initAuth response:', JSON.stringify({
+            success: response?.success,
+            hasData: !!response?.data,
+            hasError: !!response?.error,
+            responseType: typeof response
+          }));
+        } catch (e) {
+          console.log('⚠️ [Grid Init] Failed to log initAuth response:', e);
+        }
+        console.log('🔑 [Grid Init] CHECKPOINT 4: Finished logging block');
       }
     }
 
     if (!response.success || !response.data) {
+      console.log('❌ [Grid Init] Response validation failed:', {
+        success: response.success,
+        hasData: !!response.data,
+        isExistingUser
+      });
       return res.status(400).json({
         success: false,
         error: response.error || 'Failed to initialize Grid account'
       });
     }
 
+    console.log('✅ [Grid Init] Returning success response with isExistingUser:', isExistingUser);
+    console.log('🔍 [Grid Init] User object being returned:', JSON.stringify(response.data, null, 2));
+    
     // Return Grid user object + flow hint for complete-sign-in
     res.json({
       success: true,
@@ -377,6 +414,16 @@ router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequ
           sessionSecrets
         });
 
+        console.log('🔍 [Grid Verify] EXACT PARAMS BEING SENT TO GRID:');
+        console.log('   Email:', user.email);
+        console.log('   OTP Code:', otpCode);
+        console.log('   OTP Type:', typeof otpCode);
+        console.log('   OTP Length:', otpCode.length);
+        console.log('   User Status:', user.status);
+        console.log('   User Type:', user.type);
+        console.log('   User has provider?:', !!user.provider);
+        console.log('   User has otp_id?:', !!user.otp_id);
+
         authResult = await gridClient.completeAuthAndCreateAccount({
           user,
           otpCode,
@@ -434,44 +481,8 @@ router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequ
       });
     }
 
-    // STEP 2: Sync Grid address to database (with retry logic)
-    const maxRetries = 3;
-    let dbError = null;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      const { error } = await supabaseAdmin
-        .from('users_grid')
-        .upsert({
-          id: userId,
-          solana_wallet_address: authResult.data.address,
-          account_type: 'email',
-          grid_account_status: 'active',
-          updated_at: new Date().toISOString()
-        });
-
-      if (!error) {
-        console.log('✅ Grid address synced to database:', authResult.data.address);
-        dbError = null;
-        break;
-      }
-
-      dbError = error;
-      console.error(`⚠️ Database sync attempt ${attempt} failed:`, error.message);
-
-      if (attempt < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt - 1)));
-      }
-    }
-
-    if (dbError) {
-      console.error('❌ Failed to sync Grid address after all retries');
-      return res.status(500).json({
-        success: false,
-        error: 'Grid account created but database sync failed. Please try logging in again.'
-      });
-    }
-
     // Return Grid account data
+    // Note: Client stores this in secure storage, no database sync needed
     res.json({
       success: true,
       data: authResult.data

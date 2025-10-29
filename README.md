@@ -153,6 +153,35 @@ import type { ChatRequest, HoldingsResponse } from '@darkresearch/mallory-shared
 import { X402PaymentService } from '@darkresearch/mallory-shared';
 ```
 
+## 🧪 Testing
+
+Mallory has comprehensive test coverage: unit tests, integration tests, and E2E tests.
+
+**Run tests:**
+```bash
+cd apps/client
+
+# Fast tests (unit + integration)
+bun test
+
+# E2E tests (requires backend running)
+bun run test:e2e
+
+# AI-powered tests (optional - expensive)
+# These use Claude to verify response completeness and test 200k+ token conversations
+bun test __tests__/e2e/chat-message-flow.test.ts  # ~5-10 min, ~$1-2
+bun test __tests__/e2e/long-context.test.ts       # ~10-20 min, ~$2-3
+```
+
+**CI/CD:**
+- Regular tests run on every PR
+- AI tests only run when `[run-ai-tests]` is in commit message:
+  ```bash
+  git commit -m "fix: improve streaming [run-ai-tests]"
+  ```
+
+See [apps/client/__tests__/CHAT_STATE_TESTS.md](./apps/client/__tests__/CHAT_STATE_TESTS.md) for full testing documentation.
+
 ## 🚢 Deployment
 
 ### Client Deployment

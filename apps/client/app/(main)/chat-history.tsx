@@ -15,6 +15,7 @@ import { useConversations } from '../../contexts/ConversationsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { secureStorage } from '../../lib';
 import { PressableButton } from '../../components/ui/PressableButton';
+import { createNewConversation } from '../../features/chat';
 
 interface ConversationWithPreview {
   id: string;
@@ -63,15 +64,6 @@ export default function ChatHistoryScreen() {
     
     return () => subscription?.remove();
   }, []);
-
-  // Redirect guard: if user is logged out, redirect to login
-  // This provides a safety net if AuthContext navigation fails
-  useEffect(() => {
-    if (!user) {
-      console.log('🚪 [ChatHistoryScreen] User is null, redirecting to login');
-      router.replace('/(auth)/login');
-    }
-  }, [user]);
   
   console.log('📜 ChatHistoryScreen rendered, initialized:', isInitialized, 'conversations:', conversations.length);
   console.log('📜 ChatHistoryScreen conversations metadata:', conversations.map(c => ({ 
@@ -195,6 +187,11 @@ export default function ChatHistoryScreen() {
     };
   });
 
+  // If no user, show nothing while AuthContext handles redirect
+  if (!user) {
+    return null;
+  }
+
   // Helper function to format dates
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -236,7 +233,6 @@ export default function ChatHistoryScreen() {
     
     try {
       // Create new conversation directly with user ID
-      const { createNewConversation } = await import('../../features/chat');
       const conversationData = await createNewConversation(user?.id);
       
       console.log('💬 New conversation created:', conversationData.conversationId);

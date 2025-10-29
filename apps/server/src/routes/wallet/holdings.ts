@@ -138,31 +138,28 @@ async function fetchBirdeyeMetadata(tokenAddresses: string[]): Promise<Map<strin
 
 /**
  * Get wallet holdings with price enrichment
- * GET /api/wallet/holdings
+ * GET /api/wallet/holdings?address=<wallet_address>
+ * 
+ * Query params:
+ * - address: Solana wallet address (required)
  */
 router.get('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
   try {
     const user = req.user!;
+    const walletAddress = req.query.address as string;
     
     console.log('💰 Getting holdings for user:', user.id);
 
-    // Get user's Grid wallet address from database
-    const { data: gridAccount, error: dbError } = await supabase
-      .from('users_grid')
-      .select('solana_wallet_address, grid_account_id')
-      .eq('id', user.id)
-      .single();
-
-    if (dbError || !gridAccount?.solana_wallet_address) {
-      return res.status(404).json({
+    // Validate wallet address is provided
+    if (!walletAddress) {
+      return res.status(400).json({
         success: false,
         holdings: [],
         totalValue: 0,
-        error: 'No wallet found for this user'
+        error: 'Wallet address is required (query param: address)'
       } as HoldingsResponse);
     }
 
-    const walletAddress = gridAccount.solana_wallet_address;
     console.log('💰 Wallet address:', walletAddress);
 
     // Fetch balances from Grid API

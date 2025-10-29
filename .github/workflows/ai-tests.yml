@@ -1,0 +1,366 @@
+name: AI-Powered Tests (Optional)
+
+# Only run when explicitly requested via commit message or PR label
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Check if AI tests should run based on commit message
+  check-should-run:
+    name: Check Commit Message for [run-ai-tests]
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+      reason: ${{ steps.check.outputs.reason }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to check commits
+
+      - name: Check commit messages
+        id: check
+        run: |
+          SHOULD_RUN="false"
+          REASON="No [run-ai-tests] tag found in commit messages"
+          
+          # Check commit message for [run-ai-tests] tag
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # Check all commits in the PR
+            echo "🔍 Checking commits in PR..."
+            COMMITS=$(git log --format=%B ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+            if echo "$COMMITS" | grep -qi "\[run-ai-tests\]"; then
+              SHOULD_RUN="true"
+              REASON="Commit message contains [run-ai-tests] tag"
+            fi
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            # Check the pushed commit
+            echo "🔍 Checking commit message..."
+            if echo "${{ github.event.head_commit.message }}" | grep -qi "\[run-ai-tests\]"; then
+              SHOULD_RUN="true"
+              REASON="Commit message contains [run-ai-tests] tag"
+            fi
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # Manual trigger always runs
+            SHOULD_RUN="true"
+            REASON="Manual workflow trigger"
+          fi
+          
+          # Always run on main branch (post-merge validation)
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            SHOULD_RUN="true"
+            REASON="Automatic run on main branch"
+          fi
+          
+          echo "should-run=$SHOULD_RUN" >> $GITHUB_OUTPUT
+          echo "reason=$REASON" >> $GITHUB_OUTPUT
+          
+          if [[ "$SHOULD_RUN" == "true" ]]; then
+            echo "✅ AI tests WILL run: $REASON"
+          else
+            echo "⏭️  AI tests will be SKIPPED: $REASON"
+            echo ""
+            echo "💡 To trigger AI tests, include [run-ai-tests] in your commit message:"
+            echo "   git commit -m 'feat: add new feature [run-ai-tests]'"
+            echo ""
+            echo "Or trigger manually from GitHub Actions tab"
+          fi
+
+  # Chat state E2E tests (with AI completeness review)
+  chat-ai-tests:
+    name: Chat E2E Tests (AI Review)
+    runs-on: ubuntu-latest
+    needs: check-should-run
+    if: needs.check-should-run.outputs.should-run == 'true'
+    timeout-minutes: 15
+    
+    steps:
+      - name: Log reason for running
+        run: |
+          echo "🤖 Running AI-powered tests"
+          echo "Reason: ${{ needs.check-should-run.outputs.reason }}"
+          echo ""
+          echo "⚠️  These tests:"
+          echo "   - Use Claude API for completeness review"
+          echo "   - Take 5-10 minutes"
+          echo "   - Cost ~$1-2 in API usage"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+          
+      - name: Install workspace dependencies
+        run: bun install
+        
+      - name: Install client dependencies
+        run: cd apps/client && bun install
+        
+      - name: Install server dependencies
+        run: cd apps/server && bun install
+        
+      - name: Start backend server
+        run: |
+          cd apps/server
+          bun run dev > server.log 2>&1 &
+          SERVER_PID=$!
+          echo $SERVER_PID > server.pid
+          echo "🚀 Backend server started with PID: $SERVER_PID"
+          
+          # Wait for server
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+              echo "❌ Backend server process died!"
+              cat server.log
+              exit 1
+            fi
+            
+            if curl -f -s http://localhost:3001/health > /dev/null 2>&1; then
+              echo "✅ Backend server is ready!"
+              break
+            fi
+            
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "❌ Backend server failed to become ready"
+              cat server.log
+              exit 1
+            fi
+            
+            sleep 2
+          done
+        env:
+          GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPERMEMORY_API_KEY: ${{ secrets.SUPERMEMORY_API_KEY }}
+          NODE_ENV: test
+          PORT: 3001
+
+      - name: Setup test Grid account
+        run: cd apps/client && bun run test:setup
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
+          MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
+          EXPO_PUBLIC_GRID_ENV: production
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
+          
+      - name: Run Chat E2E tests with AI completeness review
+        run: cd apps/client && bun test __tests__/e2e/chat-message-flow.test.ts
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          EXPO_PUBLIC_GRID_ENV: production
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # For AI completeness review
+      
+      - name: Stop backend server
+        if: always()
+        run: |
+          if [ -f apps/server/server.pid ]; then
+            kill $(cat apps/server/server.pid) || true
+          fi
+          
+      - name: Upload server logs
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ai-chat-test-server-logs
+          path: apps/server/server.log
+          
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ai-chat-test-results
+          path: apps/client/__tests__/results/
+          if-no-files-found: ignore
+
+  # Long context window tests
+  long-context-ai-tests:
+    name: Long Context Tests (AI Review)
+    runs-on: ubuntu-latest
+    needs: check-should-run
+    if: needs.check-should-run.outputs.should-run == 'true'
+    timeout-minutes: 30  # These are SLOW
+    
+    steps:
+      - name: Log reason for running
+        run: |
+          echo "🤖 Running long context AI tests"
+          echo "Reason: ${{ needs.check-should-run.outputs.reason }}"
+          echo ""
+          echo "⚠️  WARNING: These tests:"
+          echo "   - Take 10-20 minutes"
+          echo "   - Use significant API quota (~$2-3)"
+          echo "   - Test 200k+ token conversations"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+          
+      - name: Install workspace dependencies
+        run: bun install
+        
+      - name: Install client dependencies
+        run: cd apps/client && bun install
+        
+      - name: Install server dependencies
+        run: cd apps/server && bun install
+        
+      - name: Start backend server
+        run: |
+          cd apps/server
+          bun run dev > server.log 2>&1 &
+          SERVER_PID=$!
+          echo $SERVER_PID > server.pid
+          echo "🚀 Backend server started with PID: $SERVER_PID"
+          
+          # Wait for server
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+              echo "❌ Backend server process died!"
+              cat server.log
+              exit 1
+            fi
+            
+            if curl -f -s http://localhost:3001/health > /dev/null 2>&1; then
+              echo "✅ Backend server is ready!"
+              break
+            fi
+            
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "❌ Backend server failed to become ready"
+              cat server.log
+              exit 1
+            fi
+            
+            sleep 2
+          done
+        env:
+          GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPERMEMORY_API_KEY: ${{ secrets.SUPERMEMORY_API_KEY }}
+          NODE_ENV: test
+          PORT: 3001
+
+      - name: Setup test Grid account
+        run: cd apps/client && bun run test:setup
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
+          MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
+          EXPO_PUBLIC_GRID_ENV: production
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
+          
+      - name: Run long context tests
+        run: cd apps/client && bun test __tests__/e2e/long-context.test.ts
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          EXPO_PUBLIC_GRID_ENV: production
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPERMEMORY_API_KEY: ${{ secrets.SUPERMEMORY_API_KEY }}
+      
+      - name: Stop backend server
+        if: always()
+        run: |
+          if [ -f apps/server/server.pid ]; then
+            kill $(cat apps/server/server.pid) || true
+          fi
+          
+      - name: Upload server logs
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ai-long-context-server-logs
+          path: apps/server/server.log
+          
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ai-long-context-test-results
+          path: apps/client/__tests__/results/
+          if-no-files-found: ignore
+
+  # Summary
+  ai-test-summary:
+    name: AI Test Summary
+    runs-on: ubuntu-latest
+    needs: [check-should-run, chat-ai-tests, long-context-ai-tests]
+    if: always()
+    
+    steps:
+      - name: Report results
+        run: |
+          echo "🤖 AI-Powered Test Results"
+          echo "=========================="
+          echo ""
+          echo "Trigger: ${{ needs.check-should-run.outputs.reason }}"
+          echo "Should Run: ${{ needs.check-should-run.outputs.should-run }}"
+          echo ""
+          
+          if [[ "${{ needs.check-should-run.outputs.should-run }}" == "false" ]]; then
+            echo "⏭️  AI tests were skipped (not triggered)"
+            echo ""
+            echo "💡 To run AI tests, include [run-ai-tests] in your commit message:"
+            echo "   git commit -m 'feat: add new feature [run-ai-tests]'"
+            exit 0
+          fi
+          
+          echo "Chat AI Tests: ${{ needs.chat-ai-tests.result }}"
+          echo "Long Context Tests: ${{ needs.long-context-ai-tests.result }}"
+          echo ""
+          
+          if [ "${{ needs.chat-ai-tests.result }}" != "success" ] || \
+             [ "${{ needs.long-context-ai-tests.result }}" != "success" ]; then
+            echo "❌ Some AI tests failed!"
+            exit 1
+          fi
+          
+          echo "✅ All AI tests passed!"
+

@@ -15,25 +15,42 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Clipboard } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWallet } from '../../contexts/WalletContext';
+import { useGrid } from '../../contexts/GridContext';
+import { useTransactionGuard } from '../../hooks/useTransactionGuard';
 import { WalletItem } from '../../components/wallet/WalletItem';
 import DepositModal from '../../components/wallet/DepositModal';
 import SendModal from '../../components/wallet/SendModal';
-import OtpVerificationModal from '../../components/grid/OtpVerificationModal';
 import { sendToken } from '../../features/wallet';
 import { walletService } from '../../features/wallet';
-import { gridClientService } from '../../features/grid/services/gridClient';
 
 
 export default function WalletScreen() {
   const router = useRouter();
   const { user, logout, triggerReauth } = useAuth();
+  const { gridAccount } = useGrid();
+  const { ensureGridSession } = useTransactionGuard();
   const translateX = useSharedValue(Dimensions.get('window').width);
   const [addressCopied, setAddressCopied] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [gridUserForOtp, setGridUserForOtp] = useState<any>(null);
   const [pendingSend, setPendingSend] = useState<{ recipientAddress: string; amount: string; tokenAddress?: string } | null>(null);
+
+  // Load pending send from sessionStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const stored = sessionStorage.getItem('mallory_pending_send');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          console.log('🔄 [WalletScreen] Restored pending send from sessionStorage:', parsed);
+          setPendingSend(parsed);
+        } catch (error) {
+          console.error('❌ [WalletScreen] Failed to parse stored pending send:', error);
+          sessionStorage.removeItem('mallory_pending_send');
+        }
+      }
+    }
+  }, []);
   
   console.log('🏠 [WalletScreen] Component rendering', {
     hasUser: !!user,
@@ -75,36 +92,41 @@ export default function WalletScreen() {
 
 
   const handleSendToken = async (recipientAddress: string, amount: string, tokenAddress?: string) => {
+    console.log('💸 [WalletScreen] handleSendToken called:', { recipientAddress, amount, tokenAddress });
+    
+    // Check Grid session before transaction
+    const canProceed = await ensureGridSession(
+      'send transaction',
+      '/(main)/wallet',
+      '#FFEFE3', // Wallet screen background
+      '#000000'  // Black text on cream background
+    );
+    
+    if (!canProceed) {
+      // User being redirected to OTP, save pending action
+      console.log('💸 [WalletScreen] Grid session required, saving pending send');
+      const pendingSendData = { recipientAddress, amount, tokenAddress };
+      setPendingSend(pendingSendData);
+      
+      // Persist to sessionStorage to survive navigation
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.setItem('mallory_pending_send', JSON.stringify(pendingSendData));
+        console.log('💾 [WalletScreen] Saved pending send to sessionStorage');
+      }
+      
+      setShowSendModal(false); // Close modal while redirecting
+      return;
+    }
+    
+    // Grid session valid, proceed with transaction
     try {
-      console.log('💸 [WalletScreen] handleSendToken called:', { recipientAddress, amount, tokenAddress });
       const result = await sendToken(recipientAddress, amount, tokenAddress);
       console.log('💸 [WalletScreen] sendToken result:', result);
       
       if (result.success) {
         console.log('✅ [WalletScreen] Send successful, closing modal and refreshing wallet');
-        // Close send modal
         setShowSendModal(false);
-        // Refresh wallet data to show updated balance
         refreshWalletData();
-      } else if ((result as any).error === 'SESSION_EXPIRED') {
-        // Session expired - trigger OTP flow
-        console.log('🔐 [WalletScreen] Session expired, showing OTP modal');
-        
-        // Save pending send for retry after OTP
-        setPendingSend({ recipientAddress, amount, tokenAddress });
-        
-        // Start sign-in to get gridUser (backend determines correct flow)
-        try {
-          const { user: gridUser } = await gridClientService.startSignIn(user?.email || '');
-          setGridUserForOtp(gridUser);
-          
-          // Close send modal and show OTP modal
-          setShowSendModal(false);
-          setShowOtpModal(true);
-        } catch (authError) {
-          console.error('❌ [WalletScreen] Sign-in failed:', authError);
-          throw new Error('Session expired. Please try again.');
-        }
       } else {
         throw new Error(result.error || 'Transfer failed');
       }
@@ -114,34 +136,35 @@ export default function WalletScreen() {
     }
   };
 
-  const handleOtpVerified = async () => {
-    console.log('✅ [WalletScreen] OTP verified, retrying pending send');
-    setShowOtpModal(false);
-    setGridUserForOtp(null);
-    
-    // Retry the pending send if one exists
-    if (pendingSend) {
-      try {
-        const result = await sendToken(
-          pendingSend.recipientAddress, 
-          pendingSend.amount, 
-          pendingSend.tokenAddress
-        );
-        
-        if (result.success) {
-          console.log('✅ [WalletScreen] Retry successful');
+  // Resume pending send after OTP completion
+  useEffect(() => {
+    if (pendingSend && gridAccount) {
+      console.log('✅ [WalletScreen] Grid session restored, resuming pending transaction');
+      const { recipientAddress, amount, tokenAddress } = pendingSend;
+      
+      // Execute the pending send
+      sendToken(recipientAddress, amount, tokenAddress)
+        .then((result) => {
+          if (result.success) {
+            console.log('✅ [WalletScreen] Pending send successful');
+            refreshWalletData();
+          } else {
+            console.error('❌ [WalletScreen] Pending send failed:', result.error);
+          }
+        })
+        .catch((error) => {
+          console.error('❌ [WalletScreen] Pending send error:', error);
+        })
+        .finally(() => {
           setPendingSend(null);
-          refreshWalletData();
-        } else {
-          console.error('❌ [WalletScreen] Retry failed:', result.error);
-          setPendingSend(null);
-        }
-      } catch (error) {
-        console.error('❌ [WalletScreen] Retry error:', error);
-        setPendingSend(null);
-      }
+          // Clear from sessionStorage after completion
+          if (typeof window !== 'undefined' && window.sessionStorage) {
+            sessionStorage.removeItem('mallory_pending_send');
+            console.log('🧹 [WalletScreen] Cleared pending send from sessionStorage');
+          }
+        });
     }
-  };
+  }, [gridAccount, pendingSend]);
 
   // Get SOL balance from wallet data
   const getSolBalance = (): number => {
@@ -170,15 +193,6 @@ export default function WalletScreen() {
     });
   }, []);
 
-  // Redirect guard: if user is logged out, redirect to login
-  // This provides a safety net if AuthContext navigation fails
-  useEffect(() => {
-    if (!user) {
-      console.log('🚪 [WalletScreen] User is null, redirecting to login');
-      router.replace('/(auth)/login');
-    }
-  }, [user]);
-
   const handleBack = () => {
     // Slide out to right with callback
     translateX.value = withTiming(
@@ -199,6 +213,11 @@ export default function WalletScreen() {
       transform: [{ translateX: translateX.value }],
     };
   });
+
+  // If no user, show nothing while AuthContext handles redirect
+  if (!user) {
+    return null;
+  }
 
   return (
     <Animated.View style={[styles.outerContainer, animatedStyle]}>
@@ -387,18 +406,11 @@ export default function WalletScreen() {
           solanaAddress={user?.solanaAddress}
         />
         
-        <SendModal
+        <SendModal 
           visible={showSendModal}
           onClose={() => setShowSendModal(false)}
           onSend={handleSendToken}
           holdings={walletData?.holdings || []}
-        />
-
-        <OtpVerificationModal
-          visible={showOtpModal}
-          onClose={handleOtpVerified}
-          userEmail={user?.email || ''}
-          gridUser={gridUserForOtp}
         />
 
       </SafeAreaView>

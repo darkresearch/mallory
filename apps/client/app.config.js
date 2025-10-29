@@ -106,7 +106,6 @@ export default {
       googleIosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
       termsUrl: process.env.EXPO_PUBLIC_TERMS_URL,
       privacyUrl: process.env.EXPO_PUBLIC_PRIVACY_URL,
-      gridApiKey: process.env.EXPO_PUBLIC_GRID_API_KEY,
       gridEnv: process.env.EXPO_PUBLIC_GRID_ENV
     }
   }

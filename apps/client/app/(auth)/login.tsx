@@ -110,12 +110,6 @@ export default function LoginScreen() {
     transform: [{ translateY: termsTranslateY.value }],
   }));
 
-  // Redirect if already authenticated
-  if (isAuthenticated) {
-    router.replace('/(main)');
-    return null;
-  }
-
   const handleLogin = async () => {
     try {
       setIsLoading(true);

@@ -11,13 +11,13 @@ async function main() {
 
   try {
     const gridSession = await loadGridSession();
-    const apiKey = process.env.EXPO_PUBLIC_GRID_API_KEY;
+    // Note: Grid API key not needed - all operations should go through backend proxy
     const gridEnv = process.env.EXPO_PUBLIC_GRID_ENV;
 
     console.log('Grid Config:');
     console.log('  Address:', gridSession.address);
-    console.log('  API Key:', apiKey ? 'loaded' : 'missing');
     console.log('  Environment:', gridEnv);
+    console.log('  Note: Using backend proxy (Grid API key is server-side only)');
     console.log();
 
     // Try Grid API docs format for creating a transfer
