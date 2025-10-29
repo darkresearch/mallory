@@ -117,9 +117,6 @@ export function GridProvider({ children }: { children: ReactNode }) {
             }, 500);
           }
         }
-        
-        // NOTE: Grid sign-in is also reactive (triggered by transaction guard)
-        // For expired sessions, transaction guard handles re-authentication
       } catch (error) {
         console.error('❌ [GridContext] Error loading Grid account:', error);
         // On error, assume no Grid account

@@ -1,4 +1,5 @@
 import { secureStorage, config } from '../../../lib';
+import { gridClientService } from '../../grid';
 
 export interface TokenBalance {
   tokenAddress: string;
