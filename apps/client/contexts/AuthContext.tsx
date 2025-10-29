@@ -159,6 +159,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Auto-redirect based on auth state
+  // Only redirects from root or auth screens, preserves user's current page
+  useEffect(() => {
+    // CRITICAL: Wait for auth state to be resolved before making redirect decisions
+    // On page refresh, user is initially null while session is being restored
+    if (isLoading) {
+      console.log('🔀 [AuthContext] Still loading auth state, waiting...');
+      return;
+    }
+    
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+    
+    if (!user) {
+      // Not authenticated - redirect to login only if not already on auth screen
+      if (!currentPath.includes('/(auth)/')) {
+        console.log('🔀 [AuthContext] Not authenticated, redirecting to login from:', currentPath);
+        router.replace('/(auth)/login');
+      }
+    } else {
+      // Authenticated - only redirect from root or auth screens
+      // Do NOT redirect if user is on wallet, chat-history, or any other main screen
+      const isOnAuthScreen = currentPath.includes('/(auth)/');
+      const isOnRootOnly = currentPath === '/' || currentPath === '/index';
+      
+      if (isOnAuthScreen || isOnRootOnly) {
+        console.log('🔀 [AuthContext] Authenticated, redirecting to chat from:', currentPath);
+        router.replace('/(main)/chat');
+      } else {
+        console.log('🔀 [AuthContext] User on main screen, staying at:', currentPath);
+      }
+      // If user is on /(main)/wallet, /(main)/chat-history, etc - stay there
+    }
+  }, [user, isLoading]);
+
   // Helper function to check and initiate Grid sign-in if needed
   // Grid wallet is REQUIRED - users must complete Grid setup to use the app
   // 

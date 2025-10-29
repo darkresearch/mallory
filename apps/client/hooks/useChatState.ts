@@ -191,6 +191,9 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
   // 2. Check hasTriggeredProactiveMessage ref (prevents multiple triggers in same session)
   // 3. Check conversation has no messages (rawMessages.length === 0)
   // 4. Mark onboarding complete BEFORE sending message (fail-safe)
+  // 
+  // NOTE: Onboarding conversation creation is now handled by OnboardingConversationHandler component
+  // This effect only triggers the greeting message for existing onboarding conversations
   useEffect(() => {
     const triggerProactiveMessage = async () => {
       // SAFEGUARD #1: User has already received intro message - NEVER send again

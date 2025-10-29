@@ -11,6 +11,7 @@ import { ChatHeader } from '../../components/chat/ChatHeader';
 import { MessageList } from '../../components/chat/MessageList';
 import { useChatState } from '../../hooks/useChatState';
 import { useConversationLoader } from '../../hooks/useConversationLoader';
+import { OnboardingConversationHandler } from '../../components/chat/OnboardingConversationHandler';
 
 export default function ChatScreen() {
   const router = useRouter();
@@ -70,15 +71,7 @@ export default function ChatScreen() {
     handleContentSizeChange 
   } = useSmartScroll();
   
-  // Redirect unauthenticated users to login (e.g., when accessing /chat directly on web)
-  React.useEffect(() => {
-    if (!isLoading && !user) {
-      console.log('⚠️ [ChatScreen] No authenticated user, redirecting to login');
-      router.replace('/(auth)/login');
-    }
-  }, [user, isLoading, router]);
-  
-  // If no user, show nothing while redirect happens
+  // If no user, show nothing while AuthContext handles redirect
   // This check happens AFTER all hooks are called
   if (!user) {
     return null;
@@ -96,6 +89,12 @@ export default function ChatScreen() {
       ]}
     >
       <SafeAreaView style={styles.wideContainer} edges={['top', 'bottom']}>
+        {/* Onboarding Conversation Handler - manages onboarding in background */}
+        <OnboardingConversationHandler
+          user={user}
+          currentConversationId={currentConversationId}
+        />
+
         {/* Header with navigation */}
         <ChatHeader user={user} styles={styles} />
 

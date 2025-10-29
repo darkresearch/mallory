@@ -170,15 +170,6 @@ export default function WalletScreen() {
     });
   }, []);
 
-  // Redirect guard: if user is logged out, redirect to login
-  // This provides a safety net if AuthContext navigation fails
-  useEffect(() => {
-    if (!user) {
-      console.log('🚪 [WalletScreen] User is null, redirecting to login');
-      router.replace('/(auth)/login');
-    }
-  }, [user]);
-
   const handleBack = () => {
     // Slide out to right with callback
     translateX.value = withTiming(
@@ -199,6 +190,11 @@ export default function WalletScreen() {
       transform: [{ translateX: translateX.value }],
     };
   });
+
+  // If no user, show nothing while AuthContext handles redirect
+  if (!user) {
+    return null;
+  }
 
   return (
     <Animated.View style={[styles.outerContainer, animatedStyle]}>
