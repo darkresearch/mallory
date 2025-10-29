@@ -255,6 +255,7 @@ export async function completeGridSignupProduction(
   }
   
   console.log('✅ Backend initiated Grid sign-in, OTP sent to email');
+  console.log(`   User status: ${startData.isExistingUser ? 'EXISTING' : 'NEW'}`);
   console.log('   Waiting for OTP via Mailosaur...');
   
   // Step 2: Get OTP via Mailosaur
@@ -288,7 +289,8 @@ export async function completeGridSignupProduction(
     body: JSON.stringify({
       user: startData.user,
       otpCode: otp,
-      sessionSecrets
+      sessionSecrets,
+      isExistingUser: startData.isExistingUser // Pass the flow hint from start-sign-in
     })
   });
   
