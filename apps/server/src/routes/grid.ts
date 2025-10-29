@@ -216,8 +216,11 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
       if (isExistingAccount) {
         console.log('🔄 [Grid Init] Response indicates existing account - falling back to initAuth()');
         response = await gridClient.initAuth({ email });
+        console.log('🔑 [Grid Init] CHECKPOINT 1: initAuth() returned');
         isExistingUser = true;
+        console.log('🔑 [Grid Init] CHECKPOINT 2: isExistingUser set to true');
         console.log('✅ [Grid Init] Existing user authenticated via initAuth()');
+        console.log('🔑 [Grid Init] CHECKPOINT 3: About to log response');
         try {
           console.log('🔍 [Grid Init] initAuth response:', JSON.stringify({
             success: response?.success,
@@ -228,6 +231,7 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
         } catch (e) {
           console.log('⚠️ [Grid Init] Failed to log initAuth response:', e);
         }
+        console.log('🔑 [Grid Init] CHECKPOINT 4: Finished logging block');
       }
     }
 

@@ -318,6 +318,9 @@ export async function completeGridSignupProduction(
   // Save to cache for easy access
   await testStorage.setItem('grid_session_cache', JSON.stringify(gridSession));
   
+  // Also save to grid_account for compatibility with gridTestClient.getAccount()
+  await testStorage.setItem('grid_account', JSON.stringify(completeData.data));
+  
   return gridSession;
 }
 
