@@ -8,6 +8,7 @@ import { secureStorage } from '../lib/storage';
 import { getDeviceInfo } from '../lib/device';
 import { useEffect, useRef, useState } from 'react';
 import { loadGridContextForX402, buildClientContext } from '@darkresearch/mallory-shared';
+import { gridClientService } from '../features/grid';
 
 interface UseAIChatProps {
   conversationId: string;
@@ -67,7 +68,6 @@ export function useAIChat({ conversationId, userId, onImmediateReasoning, onImme
         // Get Grid context for x402 payments (shared utility)
         const { gridSessionSecrets, gridSession } = await loadGridContextForX402({
           getGridAccount: async () => {
-            const { gridClientService } = await import('../features/grid');
             const account = await gridClientService.getAccount();
             console.log('🔐 [useAIChat] Grid account structure:', {
               hasAccount: !!account,

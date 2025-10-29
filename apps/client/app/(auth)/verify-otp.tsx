@@ -12,6 +12,7 @@ import { LAYOUT } from '@/lib';
 import { PressableButton } from '@/components/ui/PressableButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGrid } from '@/contexts/GridContext';
+import { gridClientService } from '@/features/grid';
 
 /**
  * OTP Verification Screen
@@ -218,7 +219,6 @@ export default function VerifyOtpScreen() {
       console.log('🔄 [OTP Screen] Resending OTP via GridContext...');
       
       // Use GridContext to initiate sign-in again
-      const { gridClientService } = await import('@/features/grid');
       const { user: newGridUser } = await gridClientService.startSignIn(params.email);
       
       // Update both state AND sessionStorage

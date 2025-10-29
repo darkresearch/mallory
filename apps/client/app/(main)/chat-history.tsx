@@ -15,6 +15,7 @@ import { useConversations } from '../../contexts/ConversationsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { secureStorage } from '../../lib';
 import { PressableButton } from '../../components/ui/PressableButton';
+import { createNewConversation } from '../../features/chat';
 
 interface ConversationWithPreview {
   id: string;
@@ -232,7 +233,6 @@ export default function ChatHistoryScreen() {
     
     try {
       // Create new conversation directly with user ID
-      const { createNewConversation } = await import('../../features/chat');
       const conversationData = await createNewConversation(user?.id);
       
       console.log('💬 New conversation created:', conversationData.conversationId);

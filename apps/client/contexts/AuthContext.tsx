@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import { supabase, secureStorage, config } from '../lib';
 import { configureGoogleSignIn, signInWithGoogle, signOutFromGoogle } from '../features/auth';
+import { walletDataService } from '../features/wallet';
 
 interface User {
   id: string;
@@ -364,7 +365,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // STEP 5: Clear wallet cache
       try {
-        const { walletDataService } = await import('../features/wallet');
         walletDataService.clearCache();
         console.log('🚪 [LOGOUT] Wallet cache cleared');
       } catch (error) {
@@ -511,7 +511,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // Clear wallet cache to force fresh data fetch
     try {
-      const { walletDataService } = await import('../features/wallet');
       walletDataService.clearCache();
       console.log('🔐 Wallet cache cleared successfully');
     } catch (error) {
