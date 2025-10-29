@@ -12,25 +12,30 @@ Previously, users encountered a `"gridClientService is not defined"` error when 
 
 ### 1. Unit Tests - Wallet Data Service (`__tests__/unit/WalletDataService.test.ts`)
 
-**Purpose:** Verify that `walletDataService` properly imports and uses `gridClientService`.
+**Purpose:** Verify that `walletDataService` properly imports and uses `gridClientService` through static code analysis.
 
 **Test Coverage:**
 - ✅ Verifies `gridClientService` is imported in `data.ts`
-- ✅ Confirms `gridClientService` is exported from grid module
-- ✅ Checks all required methods exist on `gridClientService`
-- ✅ Validates `walletDataService` can be imported without errors
+- ✅ Confirms `gridClientService` is exported from grid/services/index.ts
+- ✅ Checks GridClientService class has all required methods
+- ✅ Validates `walletDataService` is properly exported
 - ✅ Ensures `gridClientService.getAccount()` is called in the code
 - ✅ Verifies correct module dependency order: `lib -> grid -> wallet`
+- ✅ Checks for circular dependencies
+- ✅ Prevents usage without import (regression test for original bug)
 
 **Key Tests:**
 ```typescript
 test('should have gridClientService imported in data.ts')
-test('should export gridClientService from grid/services')
-test('should have all required methods on gridClientService')
-test('should be able to import walletDataService without errors')
-test('should have gridClientService.getAccount called in data.ts')
+test('should export gridClientService from grid/services/index.ts')
+test('should have gridClientService class defined in gridClient.ts')
+test('should use gridClientService.getAccount in data.ts')
 test('should maintain correct import order: lib -> grid -> wallet')
+test('should not have circular dependencies')
+test('should not use gridClientService without importing it')
 ```
+
+**Note:** These tests use static file analysis (reading source files) rather than runtime imports to avoid initialization side effects and ensure tests run reliably in CI.
 
 ### 2. Unit Tests - Grid Context Mount Behavior (`__tests__/unit/GridContextMount.test.tsx`)
 

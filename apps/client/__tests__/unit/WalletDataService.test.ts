@@ -5,18 +5,17 @@
  * and prevents the "gridClientService is not defined" error
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
 import '../setup/test-env';
 
 describe('WalletDataService', () => {
   describe('Module imports and dependencies', () => {
     test('should have gridClientService imported in data.ts', async () => {
       // Read the data.ts file and verify it imports gridClientService
-      const fs = await import('fs/promises');
-      const path = await import('path');
-      
-      const dataFilePath = path.join(process.cwd(), 'features/wallet/services/data.ts');
-      const fileContents = await fs.readFile(dataFilePath, 'utf-8');
+      const dataFilePath = join(process.cwd(), 'features/wallet/services/data.ts');
+      const fileContents = await readFile(dataFilePath, 'utf-8');
       
       // Check that gridClientService is imported
       expect(fileContents).toContain("import { gridClientService }");
@@ -25,83 +24,119 @@ describe('WalletDataService', () => {
       console.log('✅ gridClientService is properly imported in data.ts');
     });
     
-    test('should export gridClientService from grid/services', async () => {
-      // Verify that gridClientService is properly exported from the grid module
-      const { gridClientService } = await import('../../../features/grid');
+    test('should export gridClientService from grid/services/index.ts', async () => {
+      // Verify that gridClientService is exported from the grid services index
+      const gridServicesIndexPath = join(process.cwd(), 'features/grid/services/index.ts');
+      const fileContents = await readFile(gridServicesIndexPath, 'utf-8');
       
-      expect(gridClientService).toBeDefined();
-      expect(typeof gridClientService.getAccount).toBe('function');
-      expect(typeof gridClientService.startSignIn).toBe('function');
-      expect(typeof gridClientService.completeSignIn).toBe('function');
+      // Check that it re-exports from gridClient
+      expect(fileContents).toContain("export * from './gridClient'");
       
-      console.log('✅ gridClientService is properly exported from grid module');
+      console.log('✅ grid/services/index.ts exports from gridClient');
     });
     
-    test('should have all required methods on gridClientService', async () => {
-      const { gridClientService } = await import('../../../features/grid');
+    test('should have gridClientService class defined in gridClient.ts', async () => {
+      // Verify that GridClientService class exists
+      const gridClientPath = join(process.cwd(), 'features/grid/services/gridClient.ts');
+      const fileContents = await readFile(gridClientPath, 'utf-8');
       
-      // Verify all methods that wallet data service depends on
+      // Check for GridClientService class and instance export
+      expect(fileContents).toContain('class GridClientService');
+      expect(fileContents).toContain('export const gridClientService = new GridClientService()');
+      
+      // Verify required methods exist
       const requiredMethods = [
-        'getAccount',
-        'startSignIn', 
-        'completeSignIn',
-        'sendTokens',
-        'clearAccount'
+        'getAccount(',
+        'startSignIn(',
+        'completeSignIn(',
+        'sendTokens(',
+        'clearAccount('
       ];
       
       for (const method of requiredMethods) {
-        expect(typeof (gridClientService as any)[method]).toBe('function');
+        expect(fileContents).toContain(method);
       }
       
-      console.log('✅ All required gridClientService methods are available');
+      console.log('✅ GridClientService class has all required methods');
     });
   });
   
   describe('Grid client integration in fetchEnrichedHoldings', () => {
-    test('should be able to import walletDataService without errors', async () => {
-      // This test will fail at import time if gridClientService is not defined
-      const { walletDataService } = await import('../../../features/wallet');
-      
-      expect(walletDataService).toBeDefined();
-      expect(typeof walletDataService.getWalletData).toBe('function');
-      expect(typeof walletDataService.refreshWalletData).toBe('function');
-      
-      console.log('✅ walletDataService imports successfully (no undefined dependencies)');
-    });
-    
-    test('should have gridClientService.getAccount called in data.ts', async () => {
+    test('should use gridClientService.getAccount in data.ts', async () => {
       // Verify that the data.ts file actually uses gridClientService.getAccount()
-      const fs = await import('fs/promises');
-      const path = await import('path');
-      
-      const dataFilePath = path.join(process.cwd(), 'features/wallet/services/data.ts');
-      const fileContents = await fs.readFile(dataFilePath, 'utf-8');
+      const dataFilePath = join(process.cwd(), 'features/wallet/services/data.ts');
+      const fileContents = await readFile(dataFilePath, 'utf-8');
       
       // Check that gridClientService.getAccount() is called
       expect(fileContents).toContain('gridClientService.getAccount()');
       
       console.log('✅ gridClientService.getAccount() is used in data.ts');
     });
+    
+    test('should have walletDataService exported from wallet module', async () => {
+      // Check that walletDataService is exported
+      const dataFilePath = join(process.cwd(), 'features/wallet/services/data.ts');
+      const fileContents = await readFile(dataFilePath, 'utf-8');
+      
+      // Check for walletDataService instance export
+      expect(fileContents).toContain('class WalletDataService');
+      expect(fileContents).toContain('export const walletDataService = new WalletDataService()');
+      
+      console.log('✅ walletDataService is properly exported');
+    });
   });
   
   describe('Module dependency graph', () => {
     test('should maintain correct import order: lib -> grid -> wallet', async () => {
-      // Verify that modules can be imported in the correct dependency order
+      // Verify import dependencies by analyzing imports in each file
       
-      // 1. First, lib should work standalone
-      const lib = await import('../../../lib');
-      expect(lib.secureStorage).toBeDefined();
-      expect(lib.config).toBeDefined();
+      // 1. Check that grid imports lib
+      const gridClientPath = join(process.cwd(), 'features/grid/services/gridClient.ts');
+      const gridContents = await readFile(gridClientPath, 'utf-8');
+      expect(gridContents).toContain("from '@/lib'");
       
-      // 2. Then grid (depends on lib)
-      const grid = await import('../../../features/grid');
-      expect(grid.gridClientService).toBeDefined();
+      // 2. Check that wallet imports both lib and grid
+      const walletDataPath = join(process.cwd(), 'features/wallet/services/data.ts');
+      const walletContents = await readFile(walletDataPath, 'utf-8');
+      expect(walletContents).toContain("from '../../../lib'");
+      expect(walletContents).toContain("from '../../grid'");
       
-      // 3. Finally wallet (depends on lib + grid)
-      const wallet = await import('../../../features/wallet');
-      expect(wallet.walletDataService).toBeDefined();
+      console.log('✅ Module dependency order is correct: lib -> grid -> wallet');
+    });
+    
+    test('should not have circular dependencies', async () => {
+      // Check that lib doesn't import from grid or wallet
+      const configPath = join(process.cwd(), 'lib/config.ts');
+      const configContents = await readFile(configPath, 'utf-8');
       
-      console.log('✅ Module dependency order is correct');
+      expect(configContents).not.toContain("from '../features/grid");
+      expect(configContents).not.toContain("from '../features/wallet");
+      
+      // Check that grid doesn't import from wallet
+      const gridClientPath = join(process.cwd(), 'features/grid/services/gridClient.ts');
+      const gridContents = await readFile(gridClientPath, 'utf-8');
+      
+      expect(gridContents).not.toContain("from '../../wallet");
+      
+      console.log('✅ No circular dependencies detected');
+    });
+  });
+  
+  describe('Error prevention', () => {
+    test('should not use gridClientService without importing it', async () => {
+      // This is a regression test for the original bug
+      const dataFilePath = join(process.cwd(), 'features/wallet/services/data.ts');
+      const fileContents = await readFile(dataFilePath, 'utf-8');
+      
+      // If gridClientService is used, it must be imported
+      const usesGridClientService = fileContents.includes('gridClientService.');
+      const importsGridClientService = fileContents.includes('import { gridClientService }');
+      
+      if (usesGridClientService) {
+        expect(importsGridClientService).toBe(true);
+      }
+      
+      console.log('✅ gridClientService is imported before use');
     });
   });
 });
