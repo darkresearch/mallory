@@ -1,6 +1,5 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import { GridClient } from '@sqds/grid';
 import { 
   NansenUtils, 
   X402_CONSTANTS, 
@@ -8,6 +7,7 @@ import {
   type X402PaymentRequirement,
   type GridTokenSender 
 } from '@darkresearch/mallory-shared';
+import { createGridClient } from '../../../lib/gridClient';
 
 /**
  * X402 Context passed from chat endpoint
@@ -16,18 +16,6 @@ import {
 interface X402Context {
   gridSessionSecrets: any;
   gridSession: any;
-}
-
-/**
- * Create a new GridClient instance
- * GridClient is stateful, so we need to create a fresh instance per use
- */
-function createGridClient(): GridClient {
-  return new GridClient({
-    environment: (process.env.GRID_ENV || 'production') as 'sandbox' | 'production',
-    apiKey: process.env.GRID_API_KEY!,
-    baseUrl: 'https://grid.squads.xyz'
-  });
 }
 
 /**

@@ -50,9 +50,9 @@
  */
 
 import { Router, type Request, type Response } from 'express';
-import { GridClient } from '@sqds/grid';
 import { createClient } from '@supabase/supabase-js';
 import { authenticateUser } from '../middleware/auth';
+import { createGridClient } from '../lib/gridClient';
 
 const router: Router = Router();
 
@@ -61,18 +61,6 @@ interface AuthenticatedRequest extends Request {
     id: string;
     email: string;
   };
-}
-
-/**
- * Create a new GridClient instance for each request
- * GridClient is stateful, so we need to create a fresh instance per endpoint
- */
-function createGridClient(): GridClient {
-  return new GridClient({
-    environment: (process.env.GRID_ENV || 'production') as 'sandbox' | 'production',
-    apiKey: process.env.GRID_API_KEY!,
-    baseUrl: 'https://grid.squads.xyz'
-  });
 }
 
 // Initialize Supabase admin client (only used for database sync, not auth tracking)
