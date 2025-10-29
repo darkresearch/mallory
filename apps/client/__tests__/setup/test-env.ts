@@ -1,7 +1,7 @@
 /**
  * Test Environment Setup
  * 
- * Load environment variables from .env.test
+ * Load environment variables from .env.test (local) or from environment (CI)
  */
 
 import { readFileSync } from 'fs';
@@ -10,6 +10,9 @@ import { join } from 'path';
 /**
  * Load .env.test file (or fall back to .env)
  * Looks in client root directory (apps/client/)
+ * 
+ * In CI/CD, environment variables are already set by GitHub Actions,
+ * so this will gracefully skip if .env.test doesn't exist.
  */
 export function loadTestEnv(): void {
   // Client root is always the parent of __tests__
@@ -36,8 +39,10 @@ export function loadTestEnv(): void {
           const key = match[1].trim();
           const value = match[2].trim();
           
-          // ALWAYS override for test environment
-          process.env[key] = value;
+          // Only set if not already in environment (CI takes precedence)
+          if (!process.env[key]) {
+            process.env[key] = value;
+          }
         }
       });
       
@@ -45,13 +50,14 @@ export function loadTestEnv(): void {
       console.log(`✅ Loaded ${path.includes('.env.test') ? '.env.test' : '.env'}`);
       break;
     } catch (error) {
-      // Try next file
+      // File doesn't exist, try next or skip (CI will have env vars set)
       continue;
     }
   }
   
+  // In CI, env vars are set by GitHub Actions, so it's OK if no file is found
   if (!loadedFrom) {
-    console.warn('⚠️  Could not load .env.test or .env');
+    console.log('ℹ️  No .env file found (using environment variables from CI)');
   }
 }
 

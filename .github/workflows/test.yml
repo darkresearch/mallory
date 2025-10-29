@@ -63,6 +63,16 @@ jobs:
         
       - name: Run unit tests
         run: cd apps/client && bun run test:unit
+        env:
+          # Minimal env vars for unit tests (just checking they exist)
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_GRID_ENV: production
+          TEST_BACKEND_URL: http://localhost:3001
+          # NOTE: EXPO_PUBLIC_GRID_API_KEY is intentionally NOT set
+          # Unit tests verify it's not exposed to client code
         
       - name: Upload test results
         if: always()
@@ -94,8 +104,8 @@ jobs:
         run: cd apps/client && bun run test:integration
         env:
           # Supabase (client-safe)
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
           
           # Test account credentials
           TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
@@ -195,7 +205,7 @@ jobs:
           GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
           
           # Supabase (backend needs full access)
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           
           # Other backend config
@@ -206,8 +216,8 @@ jobs:
         run: cd apps/client && bun run test:e2e:auth
         env:
           # Client secrets
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
           TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
           TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
           MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
@@ -221,8 +231,8 @@ jobs:
       - name: Run OTP persistence tests
         run: cd apps/client && bun run test:e2e:persistence
         env:
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
           TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
           TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
           TEST_BACKEND_URL: http://localhost:3001
