@@ -9,6 +9,7 @@ import { describe, test, expect, beforeAll } from 'bun:test';
 import { setupTestUserSession, supabase, gridTestClient, cleanupTestData } from '../integration/setup';
 import { signupNewUser, completeGridSignupProduction } from '../setup/test-helpers';
 import { generateTestEmail, generateTestPassword } from '../utils/mailosaur-helpers';
+import { testStorage } from '../setup/test-storage';
 
 describe('E2E Auth Flows', () => {
   describe('Existing User Login Flow', () => {
@@ -53,17 +54,11 @@ describe('E2E Auth Flows', () => {
       expect(userData).not.toBe(null);
       console.log('✅ Step 3: User data fetched from database');
 
-      // Step 4: Verify Grid data in database
-      const { data: gridData, error: gridError } = await supabase
-        .from('users_grid')
-        .select('*')
-        .eq('id', testSession.userId)
-        .single();
-
-      expect(gridError).toBe(null);
-      expect(gridData?.solana_wallet_address).toBe(testSession.gridSession.address);
-      expect(gridData?.grid_account_status).toBe('active');
-      console.log('✅ Step 4: Grid data synced in database');
+      // Step 4: Verify Grid account in secure storage (not database)
+      const storedAccount = await gridTestClient.getAccount();
+      expect(storedAccount).not.toBe(null);
+      expect(storedAccount?.address).toBe(testSession.gridSession.address);
+      console.log('✅ Step 4: Grid data loaded from secure storage');
 
       console.log('✅ Complete: Existing user login flow successful\n');
     });
@@ -90,16 +85,14 @@ describe('E2E Auth Flows', () => {
       console.log('🚀 Testing concurrent operations\n');
 
       // Simulate multiple operations happening simultaneously
-      const [session, userData, gridData, gridAccount] = await Promise.all([
+      const [session, userData, gridAccount] = await Promise.all([
         supabase.auth.getSession(),
         supabase.from('users').select('*').eq('id', testSession.userId).single(),
-        supabase.from('users_grid').select('*').eq('id', testSession.userId).single(),
         gridTestClient.getAccount(),
       ]);
 
       expect(session.data.session).not.toBe(null);
       expect(userData.data).not.toBe(null);
-      expect(gridData.data).not.toBe(null);
       expect(gridAccount).not.toBe(null);
 
       console.log('✅ All concurrent operations completed successfully\n');
@@ -139,18 +132,15 @@ describe('E2E Auth Flows', () => {
       expect(gridSession.authentication).toBeDefined();
       console.log('✅ Grid wallet created:', gridSession.address);
 
-      // Step 3: Verify data is in database
-      console.log('\nStep 3: Verifying database sync...');
+      // Step 3: Verify Grid account is stored in secure storage (not database)
+      console.log('\nStep 3: Verifying Grid account in storage...');
       
-      const { data: gridData } = await supabase
-        .from('users_grid')
-        .select('*')
-        .eq('id', supabaseResult.userId)
-        .single();
-
-      expect(gridData).not.toBe(null);
-      expect(gridData?.solana_wallet_address).toBe(gridSession.address);
-      console.log('✅ Grid data synced to database');
+      // Grid data is stored in secure storage, not in database
+      // This matches production architecture - no database sync needed
+      const storedAccount = await gridTestClient.getAccount();
+      expect(storedAccount).not.toBe(null);
+      expect(storedAccount?.address).toBe(gridSession.address);
+      console.log('✅ Grid data stored in secure storage');
 
       console.log('\n✅ Complete: New user signup successful');
       console.log('   User ID:', supabaseResult.userId);
@@ -175,18 +165,16 @@ describe('E2E Auth Flows', () => {
       console.log('🚀 Testing recovery from app crash\n');
 
       // Simulate cold start by fetching everything fresh
-      const [session, gridAccount, userData, gridData] = await Promise.all([
+      const [session, gridAccount, userData] = await Promise.all([
         supabase.auth.getSession(),
         gridTestClient.getAccount(),
         supabase.from('users').select('*').eq('id', testSession.userId).single(),
-        supabase.from('users_grid').select('*').eq('id', testSession.userId).single(),
       ]);
 
       // All data should be recoverable
       expect(session.data.session).not.toBe(null);
       expect(gridAccount).not.toBe(null);
       expect(userData.data).not.toBe(null);
-      expect(gridData.data).not.toBe(null);
 
       // Data should match expected values
       expect(session.data.session?.user.id).toBe(testSession.userId);
@@ -288,7 +276,6 @@ describe('E2E Auth Flows', () => {
 
       const operations = [
         supabase.from('users').select('*').eq('id', testSession.userId).single(),
-        supabase.from('users_grid').select('*').eq('id', testSession.userId).single(),
         supabase.from('conversations').select('*').eq('user_id', testSession.userId),
         supabase.from('users').select('id').eq('id', testSession.userId).single(),
       ];
@@ -322,15 +309,13 @@ describe('E2E Auth Flows', () => {
     test('should handle missing Grid account gracefully', async () => {
       console.log('🚀 Testing missing Grid account handling\n');
 
-      // Try to fetch Grid data for non-existent user
-      const { data, error } = await supabase
-        .from('users_grid')
-        .select('*')
-        .eq('id', 'non-existent-user')
-        .single();
-
-      expect(data).toBe(null);
-      expect(error).not.toBe(null);
+      // Grid data is stored in secure storage, not database
+      // We'll test by clearing storage and expecting null
+      await testStorage.removeItem('grid_account');
+      
+      const gridAccount = await gridTestClient.getAccount();
+      expect(gridAccount).toBe(null);
+      
       console.log('✅ Missing Grid account handled correctly\n');
     });
   });
