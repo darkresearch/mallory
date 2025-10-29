@@ -185,12 +185,16 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
         isExistingUser = true;
 
         console.log('✅ [Grid Init] Existing user authenticated via initAuth()');
-        console.log('🔍 [Grid Init] initAuth response:', JSON.stringify({
-          success: response.success,
-          hasData: !!response.data,
-          hasError: !!response.error,
-          responseType: typeof response
-        }));
+        try {
+          console.log('🔍 [Grid Init] initAuth response:', JSON.stringify({
+            success: response?.success,
+            hasData: !!response?.data,
+            hasError: !!response?.error,
+            responseType: typeof response
+          }));
+        } catch (e) {
+          console.log('⚠️ [Grid Init] Failed to log initAuth response:', e);
+        }
       } else {
         // Some other error - re-throw
         console.error('❌ [Grid Init] Unexpected error:', {
@@ -214,12 +218,16 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
         response = await gridClient.initAuth({ email });
         isExistingUser = true;
         console.log('✅ [Grid Init] Existing user authenticated via initAuth()');
-        console.log('🔍 [Grid Init] initAuth response:', JSON.stringify({
-          success: response.success,
-          hasData: !!response.data,
-          hasError: !!response.error,
-          responseType: typeof response
-        }));
+        try {
+          console.log('🔍 [Grid Init] initAuth response:', JSON.stringify({
+            success: response?.success,
+            hasData: !!response?.data,
+            hasError: !!response?.error,
+            responseType: typeof response
+          }));
+        } catch (e) {
+          console.log('⚠️ [Grid Init] Failed to log initAuth response:', e);
+        }
       }
     }
 
