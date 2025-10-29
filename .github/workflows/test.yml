@@ -80,6 +80,7 @@ jobs:
         with:
           name: unit-test-results
           path: apps/client/__tests__/results/
+          if-no-files-found: ignore
 
   # Job 2: Integration tests (Supabase + Grid, requires backend for Grid setup)
   integration-tests:
@@ -218,6 +219,7 @@ jobs:
         with:
           name: integration-test-results
           path: apps/client/__tests__/results/
+          if-no-files-found: ignore
 
   # Job 3: E2E tests with backend server
   e2e-tests:
@@ -365,6 +367,7 @@ jobs:
         with:
           name: e2e-test-results
           path: apps/client/__tests__/results/
+          if-no-files-found: ignore
 
   # Summary job - marks overall success/failure
   test-summary:
