@@ -35,13 +35,13 @@
 ### `.env.test` (Local Development)
 ```env
 TEST_SUPABASE_EMAIL=github-actions@7kboxsdj.mailosaur.net
-TEST_SUPABASE_PASSWORD=34aa15f6-c29f-43fd-949a-41c3c60ee649
+TEST_SUPABASE_PASSWORD=********  # Get from secure password manager
 ```
 
 ### GitHub Actions Secrets
 ```
 TEST_SUPABASE_EMAIL=github-actions@7kboxsdj.mailosaur.net
-TEST_SUPABASE_PASSWORD=34aa15f6-c29f-43fd-949a-41c3c60ee649
+TEST_SUPABASE_PASSWORD=********  # Stored in GitHub Secrets
 ```
 
 ---
