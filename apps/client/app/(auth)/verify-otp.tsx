@@ -591,9 +591,14 @@ const styles = StyleSheet.create({
   
   // Web Footer
   webFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     alignItems: 'center',
     paddingVertical: 24,
     paddingBottom: 32,
+    zIndex: 10,
   },
 });
 
