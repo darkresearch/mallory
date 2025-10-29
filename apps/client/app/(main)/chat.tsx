@@ -48,12 +48,14 @@ export default function ChatScreen() {
     isThinking,
     hasStreamStarted,
     isOnboardingGreeting,
+    pendingMessage,
     aiMessages,
     aiError,
     aiStatus,
     regenerateMessage,
     handleSendMessage,
     stopStreaming,
+    clearPendingMessage,
   } = useChatState({ 
     currentConversationId,
     userId: user?.id,  // Pass userId for Supermemory memory management

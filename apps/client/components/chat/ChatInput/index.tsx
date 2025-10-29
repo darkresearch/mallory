@@ -12,6 +12,8 @@ interface ChatInputProps {
   disabled?: boolean;
   hasMessages?: boolean;
   isStreaming?: boolean;
+  pendingMessage?: string | null;
+  onPendingMessageCleared?: () => void;
 }
 
 export function ChatInput({
@@ -22,11 +24,22 @@ export function ChatInput({
   placeholder = "Ask me anything",
   disabled = false,
   hasMessages = false,
-  isStreaming = false
+  isStreaming = false,
+  pendingMessage = null,
+  onPendingMessageCleared
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [height, setHeight] = useState(44); // Starting height as specified
   const textInputRef = useRef<TextInput>(null);
+  
+  // Restore pending message after OTP completion
+  useEffect(() => {
+    if (pendingMessage) {
+      console.log('📝 [ChatInput] Restoring pending message:', pendingMessage);
+      setText(pendingMessage);
+      onPendingMessageCleared?.();
+    }
+  }, [pendingMessage, onPendingMessageCleared]);
 
   const handleSend = () => {
     const messageText = text.trim();

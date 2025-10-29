@@ -10,8 +10,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LAYOUT } from '@/lib';
 import { PressableButton } from '@/components/ui/PressableButton';
-import { gridClientService } from '@/features/grid';
 import { useAuth } from '@/contexts/AuthContext';
+import { useGrid } from '@/contexts/GridContext';
 
 /**
  * OTP Verification Screen
@@ -29,12 +29,23 @@ import { useAuth } from '@/contexts/AuthContext';
  */
 export default function VerifyOtpScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ email: string }>();
+  const params = useLocalSearchParams<{ 
+    email: string;
+    backgroundColor?: string;
+    textColor?: string;
+    returnPath?: string;
+  }>();
   const { width } = useWindowDimensions();
   const { logout } = useAuth();
+  const { completeGridSignIn } = useGrid();
   
   // Mobile detection
   const isMobile = Platform.OS === 'ios' || Platform.OS === 'android' || width < 768;
+  
+  // Dynamic background color (defaults to orange for login flow)
+  const bgColor = params.backgroundColor || '#E67B25';
+  // Dynamic text color (defaults to white for login flow)
+  const textColor = params.textColor || '#FFFFFF';
 
   // State
   const [otp, setOtp] = useState('');
@@ -93,21 +104,21 @@ export default function VerifyOtpScreen() {
     buttonsTranslateY.value = withDelay(200, withTiming(0, fadeInConfig));
   }, []);
 
-  // Fix background color for web
+  // Fix background color for web - use dynamic color
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
     const originalHtmlBg = document.documentElement.style.backgroundColor;
     const originalBodyBg = document.body.style.backgroundColor;
 
-    document.documentElement.style.backgroundColor = '#E67B25';
-    document.body.style.backgroundColor = '#E67B25';
+    document.documentElement.style.backgroundColor = bgColor;
+    document.body.style.backgroundColor = bgColor;
 
     return () => {
       document.documentElement.style.backgroundColor = originalHtmlBg;
       document.body.style.backgroundColor = originalBodyBg;
     };
-  }, []);
+  }, [bgColor]);
 
   // Load gridUser from sessionStorage on mount
   useEffect(() => {
@@ -175,28 +186,12 @@ export default function VerifyOtpScreen() {
     setError('');
 
     try {
-      console.log('🔐 [OTP Screen] Verifying OTP...');
-
-      console.log('🔐 [OTP Screen]', gridUser, cleanOtp);
+      console.log('🔐 [OTP Screen] Verifying OTP via GridContext...');
       
-      const authResult = await gridClientService.completeSignIn(gridUser, cleanOtp);
+      // Use GridContext to complete sign-in (it handles navigation)
+      await completeGridSignIn(gridUser, cleanOtp);
       
-      if (authResult.success && authResult.data) {
-        console.log('✅ [OTP Screen] Verification successful!');
-        console.log('   Address:', authResult.data.address);
-        
-        // Clear sessionStorage
-        if (Platform.OS === 'web') {
-          sessionStorage.removeItem('mallory_grid_user');
-          sessionStorage.removeItem('mallory_oauth_in_progress');
-          sessionStorage.removeItem('mallory_grid_is_existing_user');
-        }
-
-        // Navigate to main app
-        router.replace('/(main)');
-      } else {
-        setError('Verification failed. Please try again.');
-      }
+      console.log('✅ [OTP Screen] Verification successful!');
     } catch (err: any) {
       console.error('❌ [OTP Screen] Verification error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Verification failed';
@@ -220,8 +215,10 @@ export default function VerifyOtpScreen() {
     setOtp('');
 
     try {
-      console.log('🔄 [OTP Screen] Resending OTP...');
+      console.log('🔄 [OTP Screen] Resending OTP via GridContext...');
       
+      // Use GridContext to initiate sign-in again
+      const { gridClientService } = await import('@/features/grid');
       const { user: newGridUser } = await gridClientService.startSignIn(params.email);
       
       // Update both state AND sessionStorage
@@ -309,6 +306,7 @@ export default function VerifyOtpScreen() {
       <View 
         style={[
           styles.container,
+          { backgroundColor: bgColor },
           Platform.OS === 'web' && {
             height: '100dvh' as any,
             maxHeight: '100dvh' as any,
@@ -319,7 +317,7 @@ export default function VerifyOtpScreen() {
       {isMobile && (
         <View style={styles.mobileHeader}>
           <TouchableOpacity onPress={handleSignOut} style={styles.signOutButtonMobile}>
-            <Text style={styles.signOutText}>Sign Out</Text>
+            <Text style={[styles.signOutText, { color: textColor }]}>Sign Out</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -343,15 +341,16 @@ export default function VerifyOtpScreen() {
                       isMobile && styles.digitBoxMobile
                     ]}
                   >
-                    <Text style={styles.digitText}>
+                    <Text style={[styles.digitText, { color: textColor }]}>
                       {otp[index] || ''}
                     </Text>
                     {/* Show cursor on active position */}
                     {isActive && (
-                      <Animated.View style={[styles.cursor, cursorAnimatedStyle]} />
+                      <Animated.View style={[styles.cursor, { backgroundColor: textColor }, cursorAnimatedStyle]} />
                     )}
                     <View style={[
                       styles.digitUnderline,
+                      { backgroundColor: textColor, opacity: 0.3 },
                       isActive && styles.digitUnderlineActive
                     ]} />
                   </View>
@@ -373,7 +372,7 @@ export default function VerifyOtpScreen() {
           />
 
           {/* Instruction Text - grouped with OTP like tagline with lockup */}
-          <Text style={[styles.instruction, isMobile && styles.instructionMobile]}>
+          <Text style={[styles.instruction, isMobile && styles.instructionMobile, { color: textColor, opacity: 0.8 }]}>
             {isVerifying 
               ? 'Verifying your code...'
               : `We've sent a 6-digit code to ${params.email}`
@@ -382,7 +381,7 @@ export default function VerifyOtpScreen() {
           
           {/* Error only - no hint */}
           {error && (
-            <Text style={styles.error}>{error}</Text>
+            <Text style={[styles.error, { color: textColor, opacity: 0.9 }]}>{error}</Text>
           )}
         </Animated.View>
 
@@ -407,13 +406,13 @@ export default function VerifyOtpScreen() {
       </View>
 
       {/* Web footer with centered sign out */}
-      {!isMobile && (
-        <View style={styles.webFooter}>
-          <TouchableOpacity onPress={handleSignOut} style={styles.signOutButtonWeb}>
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        {!isMobile && (
+          <View style={styles.webFooter}>
+            <TouchableOpacity onPress={handleSignOut} style={styles.signOutButtonWeb}>
+              <Text style={[styles.signOutText, { color: textColor }]}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -422,7 +421,7 @@ export default function VerifyOtpScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E67B25',
+    // backgroundColor now set dynamically via inline style
   },
   content: {
     flex: 1,

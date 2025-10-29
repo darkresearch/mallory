@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAIChat } from './useAIChat';
+import { useTransactionGuard } from './useTransactionGuard';
 import { supabase } from '../lib';
 
 interface UseChatStateProps {
@@ -40,6 +41,9 @@ async function markUserOnboardingComplete(userId: string): Promise<boolean> {
 }
 
 export function useChatState({ currentConversationId, userId, walletBalance, userHasCompletedOnboarding }: UseChatStateProps) {
+  // Transaction guard for Grid session validation
+  const { ensureGridSession } = useTransactionGuard();
+  
   // State for immediate reasoning feedback
   const [showImmediateReasoning, setShowImmediateReasoning] = useState(false);
   const [liveReasoningText, setLiveReasoningText] = useState('');
@@ -48,6 +52,7 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
   const [isThinking, setIsThinking] = useState(false); // Simple flag: true from send to done
   const [hasStreamStarted, setHasStreamStarted] = useState(false); // True when first stream data arrives
   const [isOnboardingGreeting, setIsOnboardingGreeting] = useState(false); // Track if showing onboarding greeting
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null); // Preserve message during OTP
   const thinkingStartTime = useRef<number | null>(null);
   const hasTriggeredProactiveMessage = useRef(false);
 
@@ -271,10 +276,26 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
     triggerProactiveMessage();
   }, [isLoadingHistory, rawMessages.length, currentConversationId, sendAIMessage, aiStatus, userHasCompletedOnboarding, userId]);
 
-  const handleSendMessage = (message: string) => {
+  const handleSendMessage = async (message: string) => {
     if (!sendAIMessage) return;
     
-    console.log('📤 Sending message to AI:', message);
+    console.log('📤 [ChatState] Sending message to AI:', message);
+    
+    // Check Grid session before sending (all messages, can't predict x402 usage)
+    const canProceed = await ensureGridSession(
+      'send message',
+      '/(main)/chat',
+      '#FFEFE3', // Chat screen background
+      '#000000'  // Black text on cream background
+    );
+    
+    if (!canProceed) {
+      // User being redirected to OTP, save message for after
+      console.log('💬 [ChatState] Grid session required, saving pending message');
+      setPendingMessage(message);
+      return;
+    }
+    
     // Clear previous reasoning state
     setLiveReasoningText('');
     setThinkingDuration(0); // Reset duration for new message
@@ -298,6 +319,7 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
     isThinking, // Simple flag for immediate UI
     hasStreamStarted, // True when first stream data arrives
     isOnboardingGreeting, // True when showing onboarding greeting message
+    pendingMessage, // Message saved during OTP flow
     
     // AI Chat results
     aiMessages,
@@ -308,5 +330,6 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
     // Actions
     handleSendMessage,
     stopStreaming,
+    clearPendingMessage: () => setPendingMessage(null),
   };
 }
