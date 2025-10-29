@@ -50,9 +50,9 @@
  */
 
 import { Router, type Request, type Response } from 'express';
-import { GridClient } from '@sqds/grid';
 import { createClient } from '@supabase/supabase-js';
 import { authenticateUser } from '../middleware/auth';
+import { createGridClient } from '../lib/gridClient';
 
 const router: Router = Router();
 
@@ -62,13 +62,6 @@ interface AuthenticatedRequest extends Request {
     email: string;
   };
 }
-
-// Initialize Grid client (shared across all requests)
-const gridClient = new GridClient({
-  environment: (process.env.GRID_ENV || 'production') as 'sandbox' | 'production',
-  apiKey: process.env.GRID_API_KEY!,
-  baseUrl: 'https://grid.squads.xyz'
-});
 
 // Initialize Supabase admin client (only used for database sync, not auth tracking)
 const supabaseAdmin = createClient(
@@ -132,6 +125,9 @@ const supabaseAdmin = createClient(
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+  // Create fresh GridClient instance for this request (GridClient is stateful)
+  const gridClient = createGridClient();
+  
   try {
     const { email } = req.body;
     const userId = req.user!.id;
@@ -294,6 +290,9 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+  // Create fresh GridClient instance for this request (GridClient is stateful)
+  const gridClient = createGridClient();
+  
   try {
     const { user, otpCode, sessionSecrets, isExistingUser } = req.body;
     const userId = req.user!.id;
@@ -504,6 +503,9 @@ router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequ
  * Returns: { success: boolean, signature?: string, error?: string }
  */
 router.post('/send-tokens', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+  // Create fresh GridClient instance for this request (GridClient is stateful)
+  const gridClient = createGridClient();
+  
   try {
     const { recipient, amount, tokenMint, sessionSecrets, session, address } = req.body;
     

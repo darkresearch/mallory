@@ -7,7 +7,6 @@
  * Usage: bun run test-grid-signing.ts
  */
 
-import { GridClient } from '@sqds/grid';
 import {
   PublicKey,
   SystemProgram,
@@ -23,15 +22,12 @@ import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
-
-// Grid SDK instance
-const gridClient = new GridClient({
-  environment: (process.env.GRID_ENV || 'production') as 'sandbox' | 'production',
-  apiKey: process.env.GRID_API_KEY!,
-  baseUrl: 'https://grid.squads.xyz'
-});
+import { createGridClient } from './src/lib/gridClient';
 
 async function testGridSigning() {
+  // Create fresh GridClient instance for this test (GridClient is stateful)
+  const gridClient = createGridClient();
+  
   console.log('🧪 Testing Grid Signing for x402 Payments');
   console.log('==========================================\n');
 
