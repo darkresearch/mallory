@@ -13,10 +13,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Skip if PR is in draft mode
+  check-pr-state:
+    name: Check PR State
+    runs-on: ubuntu-latest
+    outputs:
+      is-ready: ${{ steps.check.outputs.is-ready }}
+    steps:
+      - name: Check if PR is ready
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            if [[ "${{ github.event.pull_request.draft }}" == "true" ]]; then
+              echo "is-ready=false" >> $GITHUB_OUTPUT
+              echo "⏭️  Skipping AI tests - PR is in draft mode"
+            else
+              echo "is-ready=true" >> $GITHUB_OUTPUT
+              echo "✅ PR is ready for review - will check for [run-ai-tests] tag"
+            fi
+          else
+            echo "is-ready=true" >> $GITHUB_OUTPUT
+            echo "✅ Not a PR - will check for [run-ai-tests] tag"
+          fi
+
   # Check if AI tests should run based on commit message
   check-should-run:
     name: Check Commit Message for [run-ai-tests]
     runs-on: ubuntu-latest
+    needs: check-pr-state
+    if: needs.check-pr-state.outputs.is-ready == 'true'
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
       reason: ${{ steps.check.outputs.reason }}
@@ -331,7 +356,7 @@ jobs:
   ai-test-summary:
     name: AI Test Summary
     runs-on: ubuntu-latest
-    needs: [check-should-run, chat-ai-tests, long-context-ai-tests]
+    needs: [check-pr-state, check-should-run, chat-ai-tests, long-context-ai-tests]
     if: always()
     
     steps:
@@ -340,6 +365,15 @@ jobs:
           echo "🤖 AI-Powered Test Results"
           echo "=========================="
           echo ""
+          
+          # Check if PR was in draft mode
+          if [[ "${{ needs.check-pr-state.outputs.is-ready }}" == "false" ]]; then
+            echo "⏭️  AI tests were skipped - PR is in draft mode"
+            echo ""
+            echo "💡 Mark PR as 'Ready for Review' to enable AI tests"
+            exit 0
+          fi
+          
           echo "Trigger: ${{ needs.check-should-run.outputs.reason }}"
           echo "Should Run: ${{ needs.check-should-run.outputs.should-run }}"
           echo ""
