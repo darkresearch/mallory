@@ -58,3 +58,30 @@ export function loadTestEnv(): void {
 // Auto-load on import
 loadTestEnv();
 
+// Polyfill sessionStorage for Node.js test environment
+if (typeof (globalThis as any).sessionStorage === 'undefined') {
+  const storage = new Map<string, string>();
+  
+  (globalThis as any).sessionStorage = {
+    getItem(key: string): string | null {
+      return storage.get(key) || null;
+    },
+    setItem(key: string, value: string): void {
+      storage.set(key, value);
+    },
+    removeItem(key: string): void {
+      storage.delete(key);
+    },
+    clear(): void {
+      storage.clear();
+    },
+    key(index: number): string | null {
+      const keys = Array.from(storage.keys());
+      return keys[index] || null;
+    },
+    get length(): number {
+      return storage.size;
+    },
+  };
+}
+

@@ -34,6 +34,23 @@ export default function WalletScreen() {
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [pendingSend, setPendingSend] = useState<{ recipientAddress: string; amount: string; tokenAddress?: string } | null>(null);
+
+  // Load pending send from sessionStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const stored = sessionStorage.getItem('mallory_pending_send');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          console.log('🔄 [WalletScreen] Restored pending send from sessionStorage:', parsed);
+          setPendingSend(parsed);
+        } catch (error) {
+          console.error('❌ [WalletScreen] Failed to parse stored pending send:', error);
+          sessionStorage.removeItem('mallory_pending_send');
+        }
+      }
+    }
+  }, []);
   
   console.log('🏠 [WalletScreen] Component rendering', {
     hasUser: !!user,
@@ -88,7 +105,15 @@ export default function WalletScreen() {
     if (!canProceed) {
       // User being redirected to OTP, save pending action
       console.log('💸 [WalletScreen] Grid session required, saving pending send');
-      setPendingSend({ recipientAddress, amount, tokenAddress });
+      const pendingSendData = { recipientAddress, amount, tokenAddress };
+      setPendingSend(pendingSendData);
+      
+      // Persist to sessionStorage to survive navigation
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.setItem('mallory_pending_send', JSON.stringify(pendingSendData));
+        console.log('💾 [WalletScreen] Saved pending send to sessionStorage');
+      }
+      
       setShowSendModal(false); // Close modal while redirecting
       return;
     }
@@ -132,6 +157,11 @@ export default function WalletScreen() {
         })
         .finally(() => {
           setPendingSend(null);
+          // Clear from sessionStorage after completion
+          if (typeof window !== 'undefined' && window.sessionStorage) {
+            sessionStorage.removeItem('mallory_pending_send');
+            console.log('🧹 [WalletScreen] Cleared pending send from sessionStorage');
+          }
         });
     }
   }, [gridAccount, pendingSend]);

@@ -78,8 +78,8 @@ Ensure `.env.test` has:
 - `MAILOSAUR_SERVER_ID`
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-- `EXPO_PUBLIC_GRID_API_KEY`
 - `EXPO_PUBLIC_GRID_ENV`
+- Note: `GRID_API_KEY` is server-side only
 - `TEST_BACKEND_URL` (default: http://localhost:3001)
 
 ## Test Output

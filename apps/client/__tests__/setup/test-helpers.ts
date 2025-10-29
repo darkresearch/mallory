@@ -226,7 +226,7 @@ export async function completeGridSignupProduction(
   console.log('🏦 Starting Grid signup for:', email);
   console.log('   Using PRODUCTION code path (backend API)');
   
-  // Import production Grid client service
+  // Import GridClient for session secret generation only
   const { GridClient } = await import('@sqds/grid');
   const config = {
     backendApiUrl: process.env.TEST_BACKEND_URL || 'http://localhost:3001',
@@ -267,10 +267,11 @@ export async function completeGridSignupProduction(
   console.log('✅ OTP received:', otp);
   
   // Step 3: Generate session secrets (same as production)
+  // Note: API key is NOT used for generateSessionSecrets() - it's client-side only
   console.log('🔐 Generating session secrets...');
   const tempClient = new GridClient({
     environment: (process.env.EXPO_PUBLIC_GRID_ENV as 'sandbox' | 'production') || 'production',
-    apiKey: 'not-used-for-session-secrets',
+    apiKey: 'not-needed-for-session-secrets',
     baseUrl: 'https://grid.squads.xyz'
   });
   const sessionSecrets = await tempClient.generateSessionSecrets();

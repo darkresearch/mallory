@@ -1,3 +1,24 @@
-[test]
-timeout = 120000  # 120 seconds for tests (AI + Grid transactions can be slow)
+# Bun configuration for testing
 
+[test]
+# Preload test environment setup
+preload = ["./__tests__/setup/test-env.ts"]
+
+# Set up test coverage
+coverage = false
+
+# Timeout for tests (ms)
+timeout = 30000
+
+# Mock mappings for React Native ecosystem
+[[test.mock]]
+name = "react-native"
+path = "./__tests__/setup/mocks/react-native.ts"
+
+[[test.mock]]
+name = "expo-router"
+path = "./__tests__/setup/mocks/expo-router.ts"
+
+[[test.mock]]
+name = "expo-secure-store"
+path = "./__tests__/setup/mocks/expo-secure-store.ts"

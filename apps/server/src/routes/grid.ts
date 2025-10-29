@@ -434,44 +434,8 @@ router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequ
       });
     }
 
-    // STEP 2: Sync Grid address to database (with retry logic)
-    const maxRetries = 3;
-    let dbError = null;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      const { error } = await supabaseAdmin
-        .from('users_grid')
-        .upsert({
-          id: userId,
-          solana_wallet_address: authResult.data.address,
-          account_type: 'email',
-          grid_account_status: 'active',
-          updated_at: new Date().toISOString()
-        });
-
-      if (!error) {
-        console.log('✅ Grid address synced to database:', authResult.data.address);
-        dbError = null;
-        break;
-      }
-
-      dbError = error;
-      console.error(`⚠️ Database sync attempt ${attempt} failed:`, error.message);
-
-      if (attempt < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt - 1)));
-      }
-    }
-
-    if (dbError) {
-      console.error('❌ Failed to sync Grid address after all retries');
-      return res.status(500).json({
-        success: false,
-        error: 'Grid account created but database sync failed. Please try logging in again.'
-      });
-    }
-
     // Return Grid account data
+    // Note: Client stores this in secure storage, no database sync needed
     res.json({
       success: true,
       data: authResult.data

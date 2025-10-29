@@ -101,8 +101,8 @@ MAILOSAUR_API_KEY=1LfTVNH3bCPqakZm6xmu6BWecWwnrAsP
 MAILOSAUR_SERVER_ID=7kboxsdj
 
 # Grid
-EXPO_PUBLIC_GRID_API_KEY=<your-key>
 EXPO_PUBLIC_GRID_ENV=production
+# Note: GRID_API_KEY is server-side only, not needed in client tests
 
 # Server
 TEST_BACKEND_URL=http://localhost:3001

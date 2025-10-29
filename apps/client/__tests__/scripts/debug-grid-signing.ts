@@ -20,11 +20,17 @@ import {
 } from '@solana/web3.js';
 
 // Grid SDK instance
+// Note: This debug script should ideally use backend API proxy instead of direct SDK
+// Grid API key should never be in client-side code
+// For debugging purposes only - DO NOT use this pattern in production
 const gridClient = new GridClient({
   environment: (process.env.EXPO_PUBLIC_GRID_ENV || 'production') as 'sandbox' | 'production',
-  apiKey: process.env.EXPO_PUBLIC_GRID_API_KEY!,
+  apiKey: 'debug-script-should-use-backend-proxy',
   baseUrl: 'https://grid.squads.xyz'
 });
+
+console.warn('⚠️  WARNING: This debug script should be refactored to use backend API proxy');
+console.warn('⚠️  Grid API key should NEVER be in client-side code');
 
 async function testGridSigning() {
   console.log('🧪 Testing Grid Signing (Debug x402 Issue)');

@@ -154,6 +154,8 @@ export default function ChatScreen() {
               disabled={false} // No loading state needed - useChat handles it
               hasMessages={aiMessages.length > 0}
               isStreaming={aiStatus === 'streaming'}
+              pendingMessage={pendingMessage}
+              onPendingMessageCleared={clearPendingMessage}
             />
           )}
         </KeyboardAvoidingView>

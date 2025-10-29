@@ -68,25 +68,20 @@ export function GridProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        // Load from client-side secure storage
+        // Load from client-side secure storage (ONLY source for wallet address)
         const account = await gridClientService.getAccount();
         if (account) {
           console.log('🏦 [GridContext] Grid account loaded from secure storage');
           setGridAccount(account);
-          setSolanaAddress(account.address);
-        }
-
-        // Also load Grid data from database
-        const { data: gridData, error: gridError } = await supabase
-          .from('users_grid')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        
-        if (gridData && !gridError) {
-          setSolanaAddress(gridData.solana_wallet_address || account?.address || null);
-          setGridAccountStatus(gridData.grid_account_status || 'not_created');
-          setGridAccountId(gridData.grid_account_id || null);
+          setSolanaAddress(account.address);  // Wallet address from Grid SDK
+          setGridAccountStatus('active');  // If account exists, it's active
+          setGridAccountId(account.address);  // Use address as ID
+        } else {
+          // No Grid account in secure storage
+          setGridAccount(null);
+          setSolanaAddress(null);
+          setGridAccountStatus('not_created');
+          setGridAccountId(null);
         }
         
         // NOTE: Grid sign-in is now reactive (triggered by transaction guard)
@@ -94,11 +89,16 @@ export function GridProvider({ children }: { children: ReactNode }) {
         // For expired sessions, transaction guard handles re-authentication
       } catch (error) {
         console.error('❌ [GridContext] Error loading Grid account:', error);
+        // On error, assume no Grid account
+        setGridAccount(null);
+        setSolanaAddress(null);
+        setGridAccountStatus('not_created');
+        setGridAccountId(null);
       }
     };
 
     loadGridAccount();
-  }, [user?.id, user?.email]); // Add user.email to dependencies
+  }, [user?.id, user?.email]);
 
   /**
    * Initiate Grid Sign-In
