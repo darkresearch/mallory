@@ -13,8 +13,6 @@ import { gridClientService } from '../features/grid';
 interface UseAIChatProps {
   conversationId: string;
   userId: string; // Required for Supermemory user-scoped memory
-  onImmediateReasoning?: (text: string) => void;
-  onImmediateToolCall?: (toolName: string) => void;
   walletBalance?: {
     sol?: number;
     usdc?: number;
@@ -26,7 +24,7 @@ interface UseAIChatProps {
  * AI Chat hook with required context
  * Server needs conversationId and clientContext for proper functionality
  */
-export function useAIChat({ conversationId, userId, onImmediateReasoning, onImmediateToolCall, walletBalance }: UseAIChatProps) {
+export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatProps) {
   const previousStatusRef = useRef<string>('ready');
   const [initialMessages, setInitialMessages] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -133,21 +131,9 @@ export function useAIChat({ conversationId, userId, onImmediateReasoning, onImme
     }),
     id: conversationId,
     onError: error => console.error(error, 'AI Chat Error'),
-    onData: (dataPart) => {
-      console.log('🔄 useAIChat onData - IMMEDIATE:', dataPart.type, {
-        hasText: !!(dataPart as any).text,
-        textLength: (dataPart as any).text?.length || 0,
-        timestamp: new Date().toISOString(),
-        fullDataPart: dataPart
-      });
-      
-      // The onData callback receives custom data, not reasoning parts
-      // But we can use it to detect ANY streaming activity and show immediate feedback
-      onImmediateReasoning?.('streaming detected');
-    },
     
-    // Add experimental throttling to see if it helps with immediate updates
-    experimental_throttle: 100, // Update every 100ms instead of default
+    // Add experimental throttling for smoother updates
+    experimental_throttle: 100, // Update every 100ms
   });
 
   // Set initial messages after loading from database

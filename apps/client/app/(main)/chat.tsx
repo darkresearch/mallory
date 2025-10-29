@@ -40,14 +40,9 @@ export default function ChatScreen() {
 
   // Chat state management
   const {
-    showImmediateReasoning,
+    streamState,
     liveReasoningText,
-    hasInitialReasoning,
     isLoadingHistory,
-    thinkingDuration,
-    isThinking,
-    hasStreamStarted,
-    isOnboardingGreeting,
     pendingMessage,
     aiMessages,
     aiError,
@@ -112,12 +107,8 @@ export default function ChatScreen() {
             aiMessages={aiMessages}
             aiStatus={aiStatus}
             aiError={aiError}
-            hasInitialReasoning={hasInitialReasoning}
+            streamState={streamState}
             liveReasoningText={liveReasoningText}
-            thinkingDuration={thinkingDuration}
-            isThinking={isThinking}
-            hasStreamStarted={hasStreamStarted}
-            isOnboardingGreeting={isOnboardingGreeting}
             isLoadingHistory={isLoadingHistory}
             regenerateMessage={regenerateMessage}
             scrollViewRef={scrollViewRef}
