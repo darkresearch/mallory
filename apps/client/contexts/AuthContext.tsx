@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Platform } from 'react-native';
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { supabase, secureStorage, config } from '../lib';
 import { configureGoogleSignIn, signInWithGoogle, signOutFromGoogle } from '../features/auth';
 import { walletDataService } from '../features/wallet';
@@ -47,6 +47,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [needsReauth, setNeedsReauth] = useState(false);
   const [isCheckingReauth, setIsCheckingReauth] = useState(false);
   const hasCheckedReauth = useRef(false);
+  
+  // Get normalized pathname from Expo Router (e.g., /auth/login, not /(auth)/login)
+  const pathname = usePathname();
   
   // Grid OTP - now uses screen instead of modal
   // No more modal state needed!
@@ -148,18 +151,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     
-    const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+    // Use normalized pathname from Expo Router (e.g., /auth/login, not /(auth)/login)
+    const currentPath = pathname || '/';
     
     if (!user) {
       // Not authenticated - redirect to login only if not already on auth screen
-      if (!currentPath.includes('/(auth)/')) {
+      // Check for /auth/ or /verify-otp paths (normalized web paths)
+      if (!currentPath.includes('/auth/')) {
         console.log('🔀 [AuthContext] Not authenticated, redirecting to login from:', currentPath);
         router.replace('/(auth)/login');
       }
     } else {
       // Authenticated - only redirect from root or auth screens
       // Do NOT redirect if user is on wallet, chat-history, or any other main screen
-      const isOnAuthScreen = currentPath.includes('/(auth)/');
+      const isOnAuthScreen = currentPath.includes('/auth/');
       const isOnRootOnly = currentPath === '/' || currentPath === '/index';
       
       if (isOnAuthScreen || isOnRootOnly) {
@@ -170,7 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       // If user is on /(main)/wallet, /(main)/chat-history, etc - stay there
     }
-  }, [user, isLoading]);
+  }, [user, isLoading, pathname]);
 
   // Grid sign-in logic moved to GridContext
   // AuthContext now only handles Supabase authentication
@@ -279,7 +284,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(user);
       console.log('✅ User set successfully');
       
-      // Note: Grid sign-in is now handled by GridContext, not AuthContext
+      // Set flag for GridContext to auto-initiate sign-in for unified authentication flow
+      // This avoids circular dependency while enabling automatic Grid sign-in for new users
+      if (!gridData?.solana_wallet_address && user.email) {
+        console.log('🏦 No Grid wallet found, setting flag for GridContext to initiate sign-in');
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          window.sessionStorage.setItem('mallory_auto_initiate_grid', 'true');
+          window.sessionStorage.setItem('mallory_auto_initiate_email', user.email);
+        }
+      }
+      
       // Clear signing-in state - Grid flow is separate
       setIsSigningIn(false);
     } catch (error) {

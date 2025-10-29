@@ -41,16 +41,19 @@ export function ChatInput({
     }
   }, [pendingMessage, onPendingMessageCleared]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const messageText = text.trim();
     if (!messageText) return;
 
-    // Clear input immediately for better UX
+    // Send to parent first - wait for async Grid session validation
+    // Only clear input after successful send or OTP navigation
+    if (onSend) {
+      await onSend(messageText);
+    }
+
+    // Clear input after async validation completes
     setText('');
     setHeight(44); // Reset to starting height
-
-    // Send to parent - server handles all storage
-    onSend?.(messageText);
   };
 
   const handleStop = () => {

@@ -64,6 +64,16 @@ export function GridProvider({ children }: { children: ReactNode }) {
         setSolanaAddress(null);
         setGridAccountStatus('not_created');
         setGridAccountId(null);
+        
+        // SECURITY FIX: Clear Grid credentials from secure storage on logout
+        // This prevents the next user from accessing the previous user's Grid wallet
+        try {
+          await clearGridAccount();
+          console.log('🔒 [GridContext] Grid credentials cleared from secure storage on logout');
+        } catch (error) {
+          console.log('🔒 [GridContext] Error clearing Grid credentials (non-critical):', error);
+        }
+        
         return;
       }
 
@@ -84,8 +94,31 @@ export function GridProvider({ children }: { children: ReactNode }) {
           setGridAccountId(null);
         }
         
-        // NOTE: Grid sign-in is now reactive (triggered by transaction guard)
-        // Auto-initiate only on first login (handled by initiateGridSignIn from AuthContext)
+        // Check for auto-initiate flag from AuthContext (unified authentication flow)
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          const shouldAutoInitiate = sessionStorage.getItem('mallory_auto_initiate_grid') === 'true';
+          const autoInitiateEmail = sessionStorage.getItem('mallory_auto_initiate_email');
+          
+          if (shouldAutoInitiate && autoInitiateEmail && user?.email === autoInitiateEmail) {
+            console.log('🏦 [GridContext] Auto-initiating Grid sign-in for unified flow');
+            // Clear the flag immediately to prevent duplicate calls
+            sessionStorage.removeItem('mallory_auto_initiate_grid');
+            sessionStorage.removeItem('mallory_auto_initiate_email');
+            
+            // Initiate Grid sign-in after a short delay to ensure UI is ready
+            setTimeout(() => {
+              initiateGridSignIn(user.email!, {
+                backgroundColor: '#E67B25',
+                textColor: '#FFFFFF',
+                returnPath: '/(main)/chat'
+              }).catch(error => {
+                console.error('❌ [GridContext] Auto-initiate Grid sign-in failed:', error);
+              });
+            }, 500);
+          }
+        }
+        
+        // NOTE: Grid sign-in is also reactive (triggered by transaction guard)
         // For expired sessions, transaction guard handles re-authentication
       } catch (error) {
         console.error('❌ [GridContext] Error loading Grid account:', error);
