@@ -3,6 +3,7 @@ import { AppState, AppStateStatus } from 'react-native';
 import { walletDataService, WalletData } from '../features/wallet';
 import { gridClientService } from '../features/grid';
 import { useAuth } from './AuthContext';
+import { useGrid } from './GridContext';
 
 interface WalletContextType {
   walletData: WalletData | null;
@@ -18,6 +19,7 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { solanaAddress } = useGrid();
   const [walletData, setWalletData] = useState<WalletData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -36,16 +38,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const gridAccount = await gridClientService.getAccount();
       const gridAddress = gridAccount?.address;
       
-      console.log('💰 [Context] Grid address from secure storage:', gridAddress);
+      // Use Solana address from GridContext or user as fallback if Grid account not set up
+      const fallbackAddress = gridAddress || solanaAddress || user?.solanaAddress;
+      
+      console.log('💰 [Context] Wallet address sources:', {
+        gridAddress,
+        solanaAddress,
+        userSolanaAddress: user?.solanaAddress,
+        fallbackAddress
+      });
       
       const data = forceRefresh 
-        ? await walletDataService.refreshWalletData()
-        : await walletDataService.getWalletData();
+        ? await walletDataService.refreshWalletData(fallbackAddress)
+        : await walletDataService.getWalletData(fallbackAddress);
       
       // Override smartAccountAddress with client-side Grid address (source of truth)
       const walletData = {
         ...data,
-        smartAccountAddress: gridAddress || data.smartAccountAddress
+        smartAccountAddress: gridAddress || solanaAddress || data.smartAccountAddress
       };
       
       console.log('💰 [Context] Wallet data loaded successfully', {
@@ -69,8 +79,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         
         // Try to add Grid address even with cached data
         const gridAccount = await gridClientService.getAccount();
-        if (gridAccount?.address) {
-          cachedData.smartAccountAddress = gridAccount.address;
+        const fallbackForCache = gridAccount?.address || solanaAddress || user?.solanaAddress;
+        if (fallbackForCache) {
+          cachedData.smartAccountAddress = fallbackForCache;
         }
         
         setWalletData(cachedData);

@@ -146,6 +146,53 @@ describe('Wallet Holdings Integration with Grid Client', () => {
       await testStorage.setItem('grid_session_secrets', JSON.stringify(gridSession.sessionSecrets));
     });
 
+    test('should fetch wallet holdings using fallback Solana address when Grid account is not set up', async () => {
+      // This test verifies the critical fix: wallet holdings should be visible
+      // even if Grid account setup is incomplete, using Solana address as fallback
+      
+      const backendUrl = process.env.TEST_BACKEND_URL || 'http://localhost:3001';
+      
+      // Store the Grid address before clearing
+      const gridAccount = await gridClientService.getAccount();
+      const solanaAddress = gridAccount?.address;
+      
+      if (!solanaAddress) {
+        console.log('⚠️ No Grid account available for this test, skipping');
+        return;
+      }
+      
+      // Clear Grid account to simulate incomplete setup
+      await gridClientService.clearAccount();
+      
+      // Verify Grid account is cleared
+      const clearedAccount = await gridClientService.getAccount();
+      expect(clearedAccount).toBeNull();
+      
+      console.log('💰 Testing wallet holdings fetch with fallback address:', solanaAddress);
+      
+      // Use walletDataService with fallback address - should work even without Grid account
+      const walletData = await walletDataService.getWalletData(solanaAddress);
+      
+      // Should successfully fetch holdings using fallback address
+      expect(walletData).toBeDefined();
+      expect(walletData.holdings).toBeDefined();
+      expect(Array.isArray(walletData.holdings)).toBe(true);
+      expect(typeof walletData.totalBalance).toBe('number');
+      
+      console.log('✅ Wallet holdings fetched successfully with fallback address');
+      console.log('   Total Balance: $' + walletData.totalBalance.toFixed(2));
+      console.log('   Holdings Count:', walletData.holdings.length);
+      
+      // Restore Grid account for other tests
+      const gridSession = await loadGridSession();
+      const { testStorage } = await import('../setup/test-storage');
+      await testStorage.setItem('grid_account', JSON.stringify({
+        address: gridSession.address,
+        authentication: gridSession.authentication
+      }));
+      await testStorage.setItem('grid_session_secrets', JSON.stringify(gridSession.sessionSecrets));
+    }, 30000);
+
     test('should provide helpful error when wallet fetch fails', async () => {
       const backendUrl = process.env.TEST_BACKEND_URL || 'http://localhost:3001';
       
