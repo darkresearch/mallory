@@ -77,7 +77,6 @@ export function GridProvider({ children }: { children: ReactNode }) {
           setSolanaAddress(null);
           setGridAccountStatus('not_created');
           setGridAccountId(null);
-          setGridOtpSession(null);
           
           // SECURITY FIX: Clear Grid credentials from secure storage on logout
           // This prevents the next user from accessing the previous user's Grid wallet
