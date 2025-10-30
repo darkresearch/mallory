@@ -5,9 +5,10 @@
  * with Grid client integration, preventing "gridClientService is not defined" errors
  */
 
-import { describe, test, expect, beforeAll } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import '../setup/test-env';
 import { authenticateTestUser, loadGridSession } from '../setup/test-helpers';
+import { supabase } from '../setup/supabase-test-client';
 import { walletDataService } from '../../features/wallet';
 import { gridClientService } from '../../features/grid';
 import * as lib from '../../lib';
@@ -32,6 +33,23 @@ describe('Wallet Holdings Integration with Grid Client', () => {
     console.log('🧪 Test setup complete');
     console.log('   User ID:', userId);
     console.log('   Grid Address:', gridAddress);
+  });
+
+  afterAll(async () => {
+    // Sign out from Supabase to stop auth refresh timers
+    try {
+      await Promise.race([
+        (async () => {
+          await supabase.auth.signOut();
+          console.log('✅ Signed out from Supabase');
+        })(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Cleanup timeout')), 30000)
+        )
+      ]);
+    } catch (error) {
+      console.warn('Error signing out:', error);
+    }
   });
 
   describe('Grid client availability in wallet service', () => {

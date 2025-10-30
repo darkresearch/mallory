@@ -29,8 +29,30 @@ describe('Auth + Grid Integration Tests', () => {
 
   afterAll(async () => {
     console.log('🧹 Cleaning up test data...');
-    await cleanupTestData(testSession.userId);
-    console.log('✅ Cleanup complete');
+    try {
+      // Wrap cleanup in timeout to prevent hanging
+      await Promise.race([
+        (async () => {
+          await cleanupTestData(testSession.userId);
+          console.log('✅ Cleanup complete');
+          
+          // Sign out from Supabase to stop auth refresh timers
+          await supabase.auth.signOut();
+          console.log('✅ Signed out from Supabase');
+        })(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Cleanup timeout')), 30000)
+        )
+      ]);
+    } catch (error) {
+      console.warn('Error during cleanup:', error);
+      // Still try to sign out even if cleanup failed
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        // Ignore sign out errors
+      }
+    }
   });
 
   describe('Session Restoration', () => {

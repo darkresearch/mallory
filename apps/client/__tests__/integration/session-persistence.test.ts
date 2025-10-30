@@ -4,7 +4,7 @@
  * Tests session restoration scenarios with real services
  */
 
-import { describe, test, expect, beforeAll } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import './setup';
 import { setupTestUserSession, supabase, gridTestClient } from './setup';
 
@@ -18,6 +18,23 @@ describe('Session Persistence Integration Tests', () => {
 
   beforeAll(async () => {
     testSession = await setupTestUserSession();
+  });
+
+  afterAll(async () => {
+    // Sign out from Supabase to stop auth refresh timers
+    try {
+      await Promise.race([
+        (async () => {
+          await supabase.auth.signOut();
+          console.log('✅ Signed out from Supabase');
+        })(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Cleanup timeout')), 30000)
+        )
+      ]);
+    } catch (error) {
+      console.warn('Error signing out:', error);
+    }
   });
 
   describe('App Restart Simulation', () => {
