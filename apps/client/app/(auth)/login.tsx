@@ -1,13 +1,14 @@
 import { View, Text, TouchableOpacity, ActivityIndicator, Image, StyleSheet, Platform, useWindowDimensions, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import DevAuthInput from '@/components/auth/DevAuthInput';
 import { useState, useEffect } from 'react';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withTiming, 
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
   withDelay,
-  Easing 
+  Easing
 } from 'react-native-reanimated';
 import { preview } from "radon-ide";
 import { LAYOUT, config } from '@/lib';
@@ -162,6 +163,11 @@ export default function LoginScreen() {
         <Animated.View style={[isMobile && styles.bottomSectionMobile, buttonsAnimatedStyle]}>
           {/* Google Sign In Button */}
           <View style={[styles.authSection, isMobile && styles.authSectionMobile]}>
+            {/* Dev Mode - Email OTP Input */}
+            {config.isDevelopment && (
+              <DevAuthInput isMobile={isMobile} />
+            )}
+
             <TouchableOpacity
               style={[
                 styles.googleButton,
