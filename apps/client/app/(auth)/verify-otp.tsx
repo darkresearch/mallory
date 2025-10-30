@@ -1,4 +1,4 @@
-import { View, Text, TextInput, StyleSheet, Platform, useWindowDimensions, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Platform, useWindowDimensions, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
 import Animated, { 
@@ -368,6 +368,14 @@ export default function VerifyOtpScreen() {
             maxLength={6}
             autoFocus
             editable={!isVerifying}
+            onSubmitEditing={() => {
+              // Submit on Enter key
+              if (otp.trim().length === 6 && !isVerifying && !error) {
+                handleVerify();
+              }
+            }}
+            returnKeyType="done"
+            blurOnSubmit={false}
           />
 
           {/* Instruction Text - grouped with OTP like tagline with lockup */}
@@ -413,6 +421,16 @@ export default function VerifyOtpScreen() {
           </View>
         )}
       </View>
+
+      {/* Full-screen loading overlay when verifying */}
+      {isVerifying && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContent}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.loadingText}>Verifying your code...</Text>
+          </View>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -592,6 +610,25 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     paddingBottom: 32,
     zIndex: 10,
+  },
+  
+  // Loading Overlay
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  loadingContent: {
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Satoshi',
+    fontWeight: '500',
   },
 });
 

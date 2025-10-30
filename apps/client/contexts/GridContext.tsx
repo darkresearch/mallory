@@ -273,12 +273,16 @@ export function GridProvider({ children }: { children: ReactNode }) {
           sessionStorage.removeItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH);
         }
 
-        // Refresh Grid account data from database
+        // Refresh Grid account data from database (non-blocking - background sync)
+        // Don't await this - navigate immediately for better UX
+        // The database will be updated in the background
         if (user?.id) {
-          await refreshGridAccount(user.id);
+          refreshGridAccount(user.id).catch(error => {
+            console.error('❌ [GridContext] Background Grid account refresh failed (non-critical):', error);
+          });
         }
         
-        // Navigate back to original screen
+        // Navigate back to original screen immediately
         console.log('🔐 [GridContext] Navigating to:', finalPath);
         router.replace(finalPath as any);
       } else {
