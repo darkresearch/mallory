@@ -30,7 +30,7 @@ describe('Session Persistence Integration Tests', () => {
       expect(supabaseSession.data.session?.user.id).toBe(testSession.userId);
       expect(gridAccount).not.toBe(null);
       expect(gridAccount?.address).toBe(testSession.gridSession.address);
-    });
+    }, 180000); // 3 min timeout for Grid operations
 
     test('should restore user data from database', async () => {
       const { data: userData } = await supabase
@@ -50,7 +50,7 @@ describe('Session Persistence Integration Tests', () => {
 
       expect(account).not.toBe(null);
       expect(account?.address).toBe(testSession.gridSession.address);
-    });
+    }, 180000); // 3 min timeout for Grid operations
   });
 
   describe('Page Refresh Simulation', () => {
@@ -117,7 +117,7 @@ describe('Session Persistence Integration Tests', () => {
         expect(account).not.toBe(null);
         expect(account?.address).toBe(testSession.gridSession.address);
       });
-    });
+    }, 180000); // 3 min timeout for Grid operations
   });
 
   describe('Long-Running Session', () => {
@@ -165,7 +165,7 @@ describe('Session Persistence Integration Tests', () => {
         expect(check.hasAccount).toBe(true);
         expect(check.address).toBe(testSession.gridSession.address);
       });
-    });
+    }, 180000); // 3 min timeout for Grid operations
   });
 
   describe('Offline/Online Transitions', () => {
@@ -203,7 +203,7 @@ describe('Session Persistence Integration Tests', () => {
       expect(gridAccount?.address).toBe(testSession.gridSession.address);
       expect(userData.data?.id).toBe(testSession.userId);
       // Note: users_grid no longer used - Grid data comes from secure storage
-    });
+    }, 180000); // 3 min timeout for Grid operations
   });
 });
 

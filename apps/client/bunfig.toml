@@ -8,7 +8,8 @@ preload = ["./__tests__/setup/test-env.ts"]
 coverage = false
 
 # Timeout for tests (ms)
-timeout = 30000
+# Increased to 120s for integration tests that involve real Grid/Supabase operations
+timeout = 120000
 
 # Mock mappings for React Native ecosystem
 [[test.mock]]

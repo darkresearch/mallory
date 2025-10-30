@@ -40,14 +40,14 @@ describe('Auth + Grid Integration Tests', () => {
       expect(error).toBe(null);
       expect(data.session).not.toBe(null);
       expect(data.session?.user.id).toBe(testSession.userId);
-    });
+    }, 180000); // 3 min timeout for Grid setup
 
     test('should load Grid account from storage', async () => {
       const account = await gridTestClient.getAccount();
       
       expect(account).not.toBe(null);
       expect(account?.address).toBe(testSession.gridSession.address);
-    });
+    }, 180000); // 3 min timeout for Grid operations
 
     test('should have matching user data in database', async () => {
       const { data: userData, error } = await supabase
@@ -102,7 +102,7 @@ describe('Auth + Grid Integration Tests', () => {
       expect(account).not.toBe(null);
       expect(account?.address).toBe(testSession.gridSession.address);
       console.log('✅ Grid wallet accessible from secure storage (no database needed)');
-    });
+    }, 180000); // 3 min timeout for Grid operations
   });
 
   describe('Error Handling', () => {
@@ -197,7 +197,7 @@ describe('Auth + Grid Integration Tests', () => {
       // Step 4: Grid account should still be available
       const account2 = await gridTestClient.getAccount();
       expect(account2?.address).toBe(account1?.address);
-    });
+    }, 180000); // 3 min timeout for Grid operations
 
     test('should handle rapid session checks during app startup', async () => {
       // Simulate multiple components checking auth state simultaneously
@@ -239,7 +239,7 @@ describe('Auth + Grid Integration Tests', () => {
 
       expect(account).not.toBe(null);
       expect(account?.address).toBe(testSession.gridSession.address);
-    });
+    }, 180000); // 3 min timeout for Grid operations
 
     test('should handle concurrent reads from secure storage', async () => {
       // All client-side Grid operations use secure storage

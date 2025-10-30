@@ -92,7 +92,7 @@ describe('Wallet Holdings Integration with Grid Client', () => {
       
       console.log('✅ Grid account retrieved successfully');
       console.log('   Address:', account.address);
-    });
+    }, 180000); // 3 min timeout for Grid operations
   });
 
   describe('Error handling', () => {
