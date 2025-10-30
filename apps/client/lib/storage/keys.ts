@@ -24,6 +24,9 @@ export const SECURE_STORAGE_KEYS = {
   GRID_ACCOUNT: 'mallory_grid_account',
   GRID_SESSION_SECRETS: 'mallory_grid_session_secrets',
   
+  // Grid Sign-In Flow (Persistent during OTP flow)
+  GRID_USER: 'mallory_grid_user',
+  
   // Conversation state
   CURRENT_CONVERSATION_ID: 'mallory_current_conversation_id',
 } as const;
@@ -37,7 +40,6 @@ export const SESSION_STORAGE_KEYS = {
   OAUTH_IN_PROGRESS: 'mallory_oauth_in_progress',
   
   // Grid Sign-In Flow
-  GRID_USER: 'mallory_grid_user',
   GRID_IS_EXISTING_USER: 'mallory_grid_is_existing_user',
   GRID_AUTO_INITIATE: 'mallory_auto_initiate_grid',
   GRID_AUTO_INITIATE_EMAIL: 'mallory_auto_initiate_email',

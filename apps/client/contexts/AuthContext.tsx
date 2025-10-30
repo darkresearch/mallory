@@ -290,10 +290,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // If no wallet exists, it will auto-initiate Grid sign-in
       if (user.email) {
         console.log('🏦 Setting auto-initiate flag for GridContext');
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          window.sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE, 'true');
-          window.sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL, user.email);
-        }
+        await secureStorage.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE, 'true');
+        await secureStorage.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL, user.email);
       }
       
       // Clear signing-in state - Grid flow is separate
@@ -339,12 +337,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🚪 [LOGOUT] Starting Supabase logout');
       setIsLoading(true);
       
-      // CRITICAL: Set logout flag in sessionStorage BEFORE clearing user
+      // CRITICAL: Set logout flag in secure storage BEFORE clearing user
       // This tells GridContext to clear Grid credentials
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.setItem(SESSION_STORAGE_KEYS.IS_LOGGING_OUT, 'true');
-        console.log('🚪 [LOGOUT] Set logout flag for GridContext');
-      }
+      await secureStorage.setItem(SESSION_STORAGE_KEYS.IS_LOGGING_OUT, 'true');
+      console.log('🚪 [LOGOUT] Set logout flag for GridContext');
       
       // STEP 1: Clear signing-in state immediately
       setIsSigningIn(false);
