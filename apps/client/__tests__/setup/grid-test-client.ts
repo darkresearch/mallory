@@ -248,7 +248,6 @@ class TestGridClientService {
         account.address,
         {
           transaction: serialized,
-          externalSigners: [],
           fee_config: {
             currency: 'sol',
             payer_address: account.address,
@@ -277,10 +276,7 @@ class TestGridClientService {
       console.log('✅ Tokens sent via Grid');
       
       // Extract signature (Grid returns transaction_signature)
-      const signature = result.transaction_signature || 
-                       result.data?.transaction_signature ||
-                       result.data?.signature ||
-                       'success';
+      const signature = result.transaction_signature || 'success';
       
       console.log('   Transaction signature:', signature);
       

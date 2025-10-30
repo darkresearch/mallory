@@ -30,6 +30,9 @@ async function main() {
     console.log('Attempting to create transfer via Grid API...');
     console.log('Payload:', transferData);
 
+    // Note: This script is for testing Grid API structure
+    // In production, all Grid API calls go through backend proxy
+    const apiKey = process.env.GRID_API_KEY || 'not-provided-client-side';
     const response = await fetch(
       `https://grid.squads.xyz/api/grid/v1/accounts/${gridSession.address}/transfers`,
       {

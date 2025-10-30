@@ -6,8 +6,10 @@
  */
 
 import { testStorage } from '../setup/test-storage';
+import { join } from 'path';
 
 const CORRECT_GRID_ADDRESS = '4nnT9EyTm7JSmNM6ciCER3SU5QAmUKsqngtmA1rn4Hga';
+const STORAGE_FILE = join(process.cwd(), '.test-secrets', 'test-storage.json');
 
 async function updateGridAddress() {
   try {
@@ -32,7 +34,7 @@ async function updateGridAddress() {
     await testStorage.setItem('grid_session_cache', JSON.stringify(gridSession));
     
     console.log('✅ Grid address updated successfully');
-    console.log('   Cached at:', testStorage.storagePath);
+    console.log('   Cached at:', STORAGE_FILE);
     
   } catch (error) {
     console.error('❌ Failed to update Grid address:', error);

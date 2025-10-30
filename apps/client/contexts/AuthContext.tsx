@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Platform } from 'react-native';
 import { router, usePathname } from 'expo-router';
-import { supabase, secureStorage, config } from '../lib';
+import { supabase, secureStorage, config, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../lib';
 import { configureGoogleSignIn, signInWithGoogle, signOutFromGoogle } from '../features/auth';
 import { walletDataService } from '../features/wallet';
 
@@ -36,9 +36,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const AUTH_TOKEN_KEY = 'mallory_auth_token';
-const REFRESH_TOKEN_KEY = 'mallory_refresh_token';
-
 // No additional configuration needed - Supabase handles OAuth natively
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -69,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // RESTORE isSigningIn from sessionStorage on app init (after OAuth redirect)
   useEffect(() => {
     if (typeof window !== 'undefined' && window.sessionStorage) {
-      const oauthInProgress = sessionStorage.getItem('mallory_oauth_in_progress') === 'true';
+      const oauthInProgress = sessionStorage.getItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS) === 'true';
       if (oauthInProgress) {
         console.log('🔐 [Init] Restoring isSigningIn=true from sessionStorage');
         setIsSigningIn(true);
@@ -89,14 +86,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // (in dev mode, React mounts components twice, and Supabase consumes the hash on first mount)
     const isOAuthCallback = typeof window !== 'undefined' && (
       window.location.hash.includes('access_token=') ||
-      window.sessionStorage.getItem('mallory_oauth_in_progress') === 'true'
+      window.sessionStorage.getItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS) === 'true'
     );
     
     if (isOAuthCallback) {
       console.log('🔍 [Init] Skipping initial auth check (OAuth callback detected)');
       // Set flag in sessionStorage so it persists across StrictMode double-renders
       if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem('mallory_oauth_in_progress', 'true');
+        window.sessionStorage.setItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS, 'true');
       }
     } else {
       console.log('🔍 [Init] Running initial auth check (not an OAuth callback)');
@@ -118,9 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('🔄 [Token Refresh] Supabase token refreshed');
           
           // Update Supabase tokens
-          await secureStorage.setItem(AUTH_TOKEN_KEY, session.access_token);
+          await secureStorage.setItem(SECURE_STORAGE_KEYS.AUTH_TOKEN, session.access_token);
           if (session.refresh_token) {
-            await secureStorage.setItem(REFRESH_TOKEN_KEY, session.refresh_token);
+            await secureStorage.setItem(SECURE_STORAGE_KEYS.REFRESH_TOKEN, session.refresh_token);
           }
           console.log('✅ [Token Refresh] Tokens updated');
         } else if (event === 'SIGNED_OUT') {
@@ -228,15 +225,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // Clear OAuth-in-progress flag now that we're handling the sign-in
     if (typeof window !== 'undefined') {
-      window.sessionStorage.removeItem('mallory_oauth_in_progress');
+      window.sessionStorage.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
       console.log('🔐 Cleared OAuth-in-progress flag');
     }
     
     try {
       // Store tokens securely
-      await secureStorage.setItem(AUTH_TOKEN_KEY, session.access_token);
+      await secureStorage.setItem(SECURE_STORAGE_KEYS.AUTH_TOKEN, session.access_token);
       if (session.refresh_token) {
-        await secureStorage.setItem(REFRESH_TOKEN_KEY, session.refresh_token);
+        await secureStorage.setItem(SECURE_STORAGE_KEYS.REFRESH_TOKEN, session.refresh_token);
       }
       console.log('✅ Tokens stored securely');
 
@@ -289,8 +286,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!gridData?.solana_wallet_address && user.email) {
         console.log('🏦 No Grid wallet found, setting flag for GridContext to initiate sign-in');
         if (typeof window !== 'undefined' && window.sessionStorage) {
-          window.sessionStorage.setItem('mallory_auto_initiate_grid', 'true');
-          window.sessionStorage.setItem('mallory_auto_initiate_email', user.email);
+          window.sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE, 'true');
+          window.sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL, user.email);
         }
       }
       
@@ -337,11 +334,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🚪 [LOGOUT] Starting Supabase logout');
       setIsLoading(true);
       
+      // CRITICAL: Set logout flag in sessionStorage BEFORE clearing user
+      // This tells GridContext to clear Grid credentials
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.IS_LOGGING_OUT, 'true');
+        console.log('🚪 [LOGOUT] Set logout flag for GridContext');
+      }
+      
       // STEP 1: Clear signing-in state immediately
       setIsSigningIn(false);
       // Clear OAuth-in-progress flag
       if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.removeItem('mallory_oauth_in_progress');
+        sessionStorage.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
       }
       console.log('🚪 [LOGOUT] Signing-in state cleared');
       
@@ -356,8 +360,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       // STEP 3: Clear auth tokens
-      await secureStorage.removeItem(AUTH_TOKEN_KEY);
-      await secureStorage.removeItem(REFRESH_TOKEN_KEY);
+      await secureStorage.removeItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
+      await secureStorage.removeItem(SECURE_STORAGE_KEYS.REFRESH_TOKEN);
       console.log('🚪 [LOGOUT] Auth tokens cleared');
       
       // STEP 4: Clear Supabase persisted session from AsyncStorage
@@ -435,7 +439,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       console.log('🔐 Step 1: Getting auth token...');
-      const token = await secureStorage.getItem(AUTH_TOKEN_KEY);
+      const token = await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
       if (!token) {
         throw new Error('No auth token available');
       }
@@ -552,7 +556,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // IMPORTANT: Persist to sessionStorage for OAuth redirect on web
       // When OAuth redirects back, the app reloads and loses React state
       if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.setItem('mallory_oauth_in_progress', 'true');
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS, 'true');
         console.log('🔐 Set OAuth-in-progress flag in sessionStorage');
       }
       

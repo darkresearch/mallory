@@ -22,9 +22,12 @@ interface ConversationWithPreview {
 
 interface AllMessagesCache {
   [conversationId: string]: {
+    id: string;
+    conversation_id: string;
     content: string;
     role: 'user' | 'assistant';
     created_at: string;
+    metadata?: any;
   }[];
 }
 
@@ -97,7 +100,7 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
       // Second query: Get ALL messages for these conversations (with metadata for search)
       const { data: messagesData, error: messagesError } = await supabase
         .from('messages')
-        .select('conversation_id, content, role, created_at, metadata')
+        .select('id, conversation_id, content, role, created_at, metadata')
         .in('conversation_id', conversationIds)
         .order('created_at', { ascending: false });
       
@@ -358,7 +361,7 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
         return conversationsChannel;
       } catch (error) {
         console.error('🔴 [REALTIME] ❌ Error setting up realtime subscriptions:', error);
-        console.error('🔴 [REALTIME] ❌ Error stack:', error.stack);
+        console.error('🔴 [REALTIME] ❌ Error stack:', error instanceof Error ? error.stack : String(error));
         return null;
       }
     };

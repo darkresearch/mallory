@@ -47,7 +47,7 @@ async function main() {
     const usdcToken = tokens.find((t: any) => 
       t.symbol === 'USDC' || t.symbol?.toUpperCase().includes('USDC')
     );
-    const usdcBalance = usdcToken ? parseFloat(usdcToken.amount_decimal || usdcToken.amount) : 0;
+    const usdcBalance = usdcToken ? parseFloat(String(usdcToken.amount_decimal || usdcToken.amount)) : 0;
 
     console.log('Funding Status:');
     const solOk = solBalance >= 0.01;

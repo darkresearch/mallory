@@ -2,9 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { useConversations } from '@/contexts/ConversationsContext';
 import { getCurrentOrCreateConversation } from '../features/chat';
-import { secureStorage } from '../lib';
-
-const CURRENT_CONVERSATION_KEY = 'current_conversation_id';
+import { secureStorage, SECURE_STORAGE_KEYS } from '../lib';
 
 interface UseConversationLoaderProps {
   userId?: string;
@@ -31,7 +29,7 @@ export function useConversationLoader({ userId }: UseConversationLoaderProps) {
           setCurrentConversationId(conversationIdParam);
           
           // Update the current conversation in storage so future messages go to this conversation
-          await secureStorage.setItem(CURRENT_CONVERSATION_KEY, conversationIdParam);
+          await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationIdParam);
         } else {
           // Normal flow - get existing current conversation or create if none exists
           // Pass existing conversations data to avoid duplicate queries

@@ -23,7 +23,8 @@ async function main() {
         amount: 100000, // 0.1 USDC (6 decimals)
         mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
         period: 'one_time',
-        destinations: ['6e3oXsDzefqyQ87x7mT2WtT6EfTsAEPyCgs9eN5Nt3zB'] // test address
+        destinations: ['6e3oXsDzefqyQ87x7mT2WtT6EfTsAEPyCgs9eN5Nt3zB'], // test address
+        spending_limit_signers: []
       }
     );
 

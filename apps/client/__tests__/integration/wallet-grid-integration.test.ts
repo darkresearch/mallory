@@ -5,9 +5,14 @@
  * with Grid client integration, preventing "gridClientService is not defined" errors
  */
 
-import { describe, test, expect, beforeAll } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import '../setup/test-env';
 import { authenticateTestUser, loadGridSession } from '../setup/test-helpers';
+import { supabase } from '../setup/supabase-test-client';
+import { walletDataService } from '../../features/wallet';
+import { gridClientService } from '../../features/grid';
+import * as lib from '../../lib';
+import { globalCleanup } from './global-cleanup';
 
 describe('Wallet Holdings Integration with Grid Client', () => {
   let userId: string;
@@ -31,10 +36,35 @@ describe('Wallet Holdings Integration with Grid Client', () => {
     console.log('   Grid Address:', gridAddress);
   });
 
+  afterAll(async () => {
+    // Sign out from Supabase to stop auth refresh timers
+    try {
+      await Promise.race([
+        (async () => {
+          // Remove all Supabase Realtime channels
+          try {
+            supabase.removeAllChannels();
+          } catch (e) {
+            // Ignore errors
+          }
+          
+          await supabase.auth.signOut();
+          console.log('✅ Signed out from Supabase');
+        })(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Cleanup timeout')), 10000)
+        )
+      ]);
+    } catch (error) {
+      console.warn('Error signing out:', error);
+    }
+    
+    // Register global cleanup to run after all tests
+    await globalCleanup();
+  });
+
   describe('Grid client availability in wallet service', () => {
     test('should be able to import walletDataService', async () => {
-      const { walletDataService } = await import('../../../features/wallet');
-      
       expect(walletDataService).toBeDefined();
       expect(typeof walletDataService.getWalletData).toBe('function');
       
@@ -42,8 +72,6 @@ describe('Wallet Holdings Integration with Grid Client', () => {
     });
 
     test('should be able to import gridClientService', async () => {
-      const { gridClientService } = await import('../../../features/grid');
-      
       expect(gridClientService).toBeDefined();
       expect(typeof gridClientService.getAccount).toBe('function');
       
@@ -84,8 +112,6 @@ describe('Wallet Holdings Integration with Grid Client', () => {
     }, 30000); // 30 second timeout for API call
 
     test('should be able to get Grid account from gridClientService', async () => {
-      const { gridClientService } = await import('../../../features/grid');
-      
       // This will use the test storage that was set up
       const account = await gridClientService.getAccount();
       
@@ -95,13 +121,11 @@ describe('Wallet Holdings Integration with Grid Client', () => {
       
       console.log('✅ Grid account retrieved successfully');
       console.log('   Address:', account.address);
-    });
+    }, 180000); // 3 min timeout for Grid operations
   });
 
   describe('Error handling', () => {
     test('should handle case when Grid account is not available', async () => {
-      const { gridClientService } = await import('../../../features/grid');
-      
       // Clear the account temporarily
       await gridClientService.clearAccount();
       
@@ -150,16 +174,11 @@ describe('Wallet Holdings Integration with Grid Client', () => {
 
   describe('Module integration', () => {
     test('should have correct import chain: wallet -> grid -> lib', async () => {
-      // Import in the correct dependency order
-      const lib = await import('../../../lib');
-      const grid = await import('../../../features/grid');
-      const wallet = await import('../../../features/wallet');
-      
-      // Verify all modules loaded successfully
+      // Verify all modules loaded successfully (imported at top of file)
       expect(lib.secureStorage).toBeDefined();
       expect(lib.config).toBeDefined();
-      expect(grid.gridClientService).toBeDefined();
-      expect(wallet.walletDataService).toBeDefined();
+      expect(gridClientService).toBeDefined();
+      expect(walletDataService).toBeDefined();
       
       console.log('✅ Module import chain is correct');
     });
