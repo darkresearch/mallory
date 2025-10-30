@@ -41,26 +41,28 @@ export default function DevAuthInput({ isMobile }: DevAuthInputProps) {
       console.log('🔐 [Dev Auth] Starting Supabase authentication for:', email);
 
       // Step 1: Try to sign in with password
-      let result = await supabase.auth.signInWithPassword({
+      const signInResult = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: DEV_PASSWORD,
       });
 
       // If user doesn't exist, create account
-      if (result.error?.message?.includes('Invalid login credentials')) {
+      if (signInResult.error?.message?.includes('Invalid login credentials')) {
         console.log('🔐 [Dev Auth] User not found, creating account...');
 
-        result = await supabase.auth.signUp({
+        const signUpResult = await supabase.auth.signUp({
           email: email.trim(),
           password: DEV_PASSWORD,
           options: {
             emailRedirectTo: undefined, // No email confirmation in dev
           }
         });
-      }
 
-      if (result.error) {
-        throw result.error;
+        if (signUpResult.error) {
+          throw signUpResult.error;
+        }
+      } else if (signInResult.error) {
+        throw signInResult.error;
       }
 
       console.log('✅ [Dev Auth] Supabase session created');
