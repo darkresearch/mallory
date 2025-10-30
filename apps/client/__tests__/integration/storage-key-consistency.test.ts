@@ -147,4 +147,36 @@ describe('Storage Key Consistency', () => {
     
     expect(keysWithoutPrefix).toHaveLength(0);
   });
+  
+  it('should successfully import storage keys from keys.ts', async () => {
+    // This will fail at test runtime if imports are broken
+    const keysModule = await import('../../lib/storage/keys');
+    
+    expect(keysModule.SECURE_STORAGE_KEYS).toBeDefined();
+    expect(keysModule.SESSION_STORAGE_KEYS).toBeDefined();
+    
+    // Verify all keys have string values
+    Object.values(keysModule.SECURE_STORAGE_KEYS).forEach(key => {
+      expect(typeof key).toBe('string');
+      expect(key.length).toBeGreaterThan(0);
+    });
+    
+    Object.values(keysModule.SESSION_STORAGE_KEYS).forEach(key => {
+      expect(typeof key).toBe('string');
+      expect(key.length).toBeGreaterThan(0);
+    });
+  });
+  
+  it('should import storage keys from main lib barrel export', async () => {
+    // This verifies the re-export chain works correctly
+    const libModule = await import('../../lib');
+    
+    expect(libModule.SECURE_STORAGE_KEYS).toBeDefined();
+    expect(libModule.SESSION_STORAGE_KEYS).toBeDefined();
+    
+    // Verify they're the same objects (not copies)
+    const keysModule = await import('../../lib/storage/keys');
+    expect(libModule.SECURE_STORAGE_KEYS).toBe(keysModule.SECURE_STORAGE_KEYS);
+    expect(libModule.SESSION_STORAGE_KEYS).toBe(keysModule.SESSION_STORAGE_KEYS);
+  });
 });

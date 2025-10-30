@@ -41,12 +41,114 @@ jobs:
             echo "✅ Running tests - push to main or manual trigger"
           fi
 
-  # Job 1: Fast unit tests (no secrets, no backend)
-  unit-tests:
-    name: Unit Tests
+  # Job 1: TypeScript type checking (fastest, catches import/type errors)
+  type-check:
+    name: TypeScript Type Check
     runs-on: ubuntu-latest
     needs: check-pr-state
     if: needs.check-pr-state.outputs.should-run == 'true'
+    timeout-minutes: 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+          
+      - name: Install workspace dependencies
+        run: bun install
+        
+      - name: Install client dependencies
+        run: cd apps/client && bun install
+        
+      - name: Type check client
+        run: cd apps/client && bun run type-check
+        
+      - name: Install server dependencies
+        run: cd apps/server && bun install
+        
+      - name: Type check server
+        run: cd apps/server && bun run type-check
+
+  # Job 2: Build verification (ensures code actually compiles)
+  build-check:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    needs: type-check
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+          
+      - name: Install workspace dependencies
+        run: bun install
+        
+      - name: Install client dependencies
+        run: cd apps/client && bun install
+        
+      - name: Build client for web
+        run: cd apps/client && bun run web:export
+        env:
+          # Minimal env vars needed for build
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_BACKEND_API_URL: https://api.example.com
+          EXPO_PUBLIC_GRID_ENV: production
+        
+      - name: Verify client build output
+        run: |
+          if [ ! -d "apps/client/dist" ]; then
+            echo "❌ Client build failed - no dist directory found"
+            echo "📁 Contents of apps/client:"
+            ls -la apps/client/ || true
+            exit 1
+          fi
+          echo "✅ Client build successful"
+          echo "📊 Build size:"
+          du -sh apps/client/dist
+        
+      - name: Install server dependencies
+        run: cd apps/server && bun install
+        
+      - name: Build server
+        run: cd apps/server && bun run build
+        
+      - name: Verify server build output
+        run: |
+          if [ ! -d "apps/server/dist" ]; then
+            echo "❌ Server build failed - no dist directory found"
+            echo "📁 Contents of apps/server:"
+            ls -la apps/server/ || true
+            exit 1
+          fi
+          echo "✅ Server build successful"
+          echo "📊 Build size:"
+          du -sh apps/server/dist
+        
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: build-artifacts
+          path: |
+            apps/client/dist/
+            apps/server/dist/
+          if-no-files-found: ignore
+
+  # Job 3: Fast unit tests (no secrets, no backend)
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: build-check
     timeout-minutes: 5
     
     steps:
@@ -82,7 +184,7 @@ jobs:
           path: apps/client/__tests__/results/
           if-no-files-found: ignore
 
-  # Job 2: Integration tests (Supabase + Grid, requires backend for Grid setup)
+  # Job 4: Integration tests (Supabase + Grid, requires backend for Grid setup)
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
@@ -221,7 +323,7 @@ jobs:
           path: apps/client/__tests__/results/
           if-no-files-found: ignore
 
-  # Job 3: E2E tests with backend server
+  # Job 5: E2E tests with backend server
   e2e-tests:
     name: E2E Tests (with Backend)
     runs-on: ubuntu-latest
@@ -373,7 +475,7 @@ jobs:
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [unit-tests, integration-tests, e2e-tests]
+    needs: [type-check, build-check, unit-tests, integration-tests, e2e-tests]
     if: always()
     
     steps:
@@ -381,16 +483,46 @@ jobs:
         run: |
           echo "Test Results Summary:"
           echo "===================="
+          echo "Type Check: ${{ needs.type-check.result }}"
+          echo "Build Check: ${{ needs.build-check.result }}"
           echo "Unit Tests: ${{ needs.unit-tests.result }}"
           echo "Integration Tests: ${{ needs.integration-tests.result }}"
           echo "E2E Tests: ${{ needs.e2e-tests.result }}"
+          echo ""
           
-          if [ "${{ needs.unit-tests.result }}" != "success" ] || \
-             [ "${{ needs.integration-tests.result }}" != "success" ] || \
-             [ "${{ needs.e2e-tests.result }}" != "success" ]; then
+          # Check if any job failed
+          FAILED=0
+          
+          if [ "${{ needs.type-check.result }}" != "success" ]; then
+            echo "❌ Type check failed"
+            FAILED=1
+          fi
+          
+          if [ "${{ needs.build-check.result }}" != "success" ]; then
+            echo "❌ Build check failed"
+            FAILED=1
+          fi
+          
+          if [ "${{ needs.unit-tests.result }}" != "success" ]; then
+            echo "❌ Unit tests failed"
+            FAILED=1
+          fi
+          
+          if [ "${{ needs.integration-tests.result }}" != "success" ]; then
+            echo "❌ Integration tests failed"
+            FAILED=1
+          fi
+          
+          if [ "${{ needs.e2e-tests.result }}" != "success" ]; then
+            echo "❌ E2E tests failed"
+            FAILED=1
+          fi
+          
+          if [ $FAILED -eq 1 ]; then
+            echo ""
             echo "Some tests failed!"
             exit 1
           fi
           
-          echo "All tests passed! ✅"
+          echo "✅ All tests passed!"
 
