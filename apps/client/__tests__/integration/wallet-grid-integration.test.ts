@@ -8,6 +8,9 @@
 import { describe, test, expect, beforeAll } from 'bun:test';
 import '../setup/test-env';
 import { authenticateTestUser, loadGridSession } from '../setup/test-helpers';
+import { walletDataService } from '../../features/wallet';
+import { gridClientService } from '../../features/grid';
+import * as lib from '../../lib';
 
 describe('Wallet Holdings Integration with Grid Client', () => {
   let userId: string;
