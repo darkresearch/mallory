@@ -237,7 +237,8 @@ export function GridProvider({ children }: { children: ReactNode }) {
             email,
             backgroundColor: options?.backgroundColor || '#E67B25',
             textColor: options?.textColor || '#FFFFFF',
-            returnPath: options?.returnPath || '/(main)/chat'
+            returnPath: options?.returnPath || '/(main)/chat',
+            gridUser: JSON.stringify(gridUser)
           }
         });
       } catch (error: any) {

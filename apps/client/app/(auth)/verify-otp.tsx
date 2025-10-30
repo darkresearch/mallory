@@ -35,6 +35,7 @@ export default function VerifyOtpScreen() {
     backgroundColor?: string;
     textColor?: string;
     returnPath?: string;
+    gridUser?: string;
   }>();
   const { width } = useWindowDimensions();
   const { logout } = useAuth();
@@ -121,17 +122,28 @@ export default function VerifyOtpScreen() {
     };
   }, [bgColor]);
 
-  // Load gridUser from sessionStorage on mount
+  // Load gridUser from sessionStorage on web, route params on mobile
   useEffect(() => {
     const loadGridUser = () => {
       try {
-        const stored = sessionStorage.getItem(SESSION_STORAGE_KEYS.GRID_USER);
+        let stored = null;
+        
+        if (Platform.OS === 'web') {
+          // On web, try sessionStorage first
+          stored = sessionStorage.getItem(SESSION_STORAGE_KEYS.GRID_USER);
+        }
+        
+        // If not found in sessionStorage or on mobile, try route params
+        if (!stored && params.gridUser) {
+          stored = params.gridUser;
+        }
+        
         if (stored) {
           const parsed = JSON.parse(stored);
           setGridUser(parsed);
-          console.log('✅ [OTP Screen] Loaded gridUser from sessionStorage');
+          console.log('✅ [OTP Screen] Loaded gridUser from', Platform.OS === 'web' && sessionStorage.getItem(SESSION_STORAGE_KEYS.GRID_USER) ? 'sessionStorage' : 'route params');
         } else {
-          console.error('❌ [OTP Screen] No gridUser in sessionStorage');
+          console.error('❌ [OTP Screen] No gridUser found');
           setError('Session expired. Please sign in again.');
         }
       } catch (err) {
@@ -140,10 +152,8 @@ export default function VerifyOtpScreen() {
       }
     };
 
-    if (Platform.OS === 'web') {
-      loadGridUser();
-    }
-  }, []);
+    loadGridUser();
+  }, [params.gridUser]);
 
   // Animated styles
   const textAnimatedStyle = useAnimatedStyle(() => ({
