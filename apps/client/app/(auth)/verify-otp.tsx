@@ -24,9 +24,11 @@ import { gridClientService } from '@/features/grid';
  * - Simple, focused, no modals
  * 
  * State Management:
- * - gridOtpSession retrieved from GridContext (persists across refresh)
- * - email passed via route params
- * - All logic self-contained in this screen
+ * - This screen is SELF-CONTAINED - manages its own workflow state
+ * - OTP session loaded from secure storage on mount (set by initiateGridSignIn)
+ * - OTP session updated locally on resend (writes to storage for persistence)
+ * - Does NOT rely on GridContext for OTP session state
+ * - Email passed via route params
  */
 export default function VerifyOtpScreen() {
   const router = useRouter();
@@ -38,7 +40,7 @@ export default function VerifyOtpScreen() {
   }>();
   const { width } = useWindowDimensions();
   const { logout } = useAuth();
-  const { completeGridSignIn, gridOtpSession: contextOtpSession } = useGrid();
+  const { completeGridSignIn } = useGrid();  // Only need the action, not the data
   
   // Mobile detection
   const isMobile = Platform.OS === 'ios' || Platform.OS === 'android' || width < 768;
@@ -53,7 +55,8 @@ export default function VerifyOtpScreen() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState('');
   
-  // Local OTP session state (initialized from context, updateable on resend)
+  // Local OTP session state - this screen owns this data
+  // Loaded from secure storage on mount, updated on resend
   const [otpSession, setOtpSession] = useState<any>(null);
   
   // Guard to prevent double-submission
@@ -123,19 +126,32 @@ export default function VerifyOtpScreen() {
     };
   }, [bgColor]);
 
-  // Initialize OTP session from context on mount
+  // Load OTP session from secure storage on mount
+  // This is workflow state that belongs to this screen - not app state
   useEffect(() => {
-    if (contextOtpSession) {
-      setOtpSession(contextOtpSession);
-      console.log('✅ [OTP Screen] Loaded OTP session from GridContext');
-    } else {
-      // CRITICAL: If no OTP session exists, user shouldn't be on this screen
-      // This indicates a routing error (navigated here without going through sign-in flow)
-      console.error('❌ [OTP Screen] CRITICAL: No OTP session found - invalid navigation');
-      setError('Session error. Please sign in again.');
-      // Could also redirect back to login here
-    }
-  }, [contextOtpSession]);
+    const loadOtpSession = async () => {
+      try {
+        const stored = await secureStorage.getItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
+        
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setOtpSession(parsed);
+          console.log('✅ [OTP Screen] Loaded OTP session from secure storage');
+        } else {
+          // CRITICAL: If no OTP session exists, user shouldn't be on this screen
+          // This indicates a routing error (navigated here without going through sign-in flow)
+          console.error('❌ [OTP Screen] CRITICAL: No OTP session found - invalid navigation');
+          setError('Session error. Please sign in again.');
+          // Could also redirect back to login here
+        }
+      } catch (err) {
+        console.error('❌ [OTP Screen] Failed to load OTP session:', err);
+        setError('Session error. Please sign in again.');
+      }
+    };
+    
+    loadOtpSession();
+  }, []); // Only run on mount
 
   // Animated styles
   const textAnimatedStyle = useAnimatedStyle(() => ({
@@ -216,10 +232,10 @@ export default function VerifyOtpScreen() {
       // Start sign-in again to get new OTP (Grid sends new email)
       const { otpSession: newOtpSession } = await gridClientService.startSignIn(params.email);
       
-      // Update LOCAL state with new OTP session (this is what we'll use for verification)
+      // Update LOCAL state with new OTP session
       setOtpSession(newOtpSession);
       
-      // Also update secure storage so GridContext stays in sync
+      // Also update secure storage for persistence (e.g., if user refreshes page)
       await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION, JSON.stringify(newOtpSession));
       
       console.log('✅ [OTP Screen] New OTP sent successfully');
