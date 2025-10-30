@@ -10,7 +10,6 @@ import { AuthProvider } from '../contexts/AuthContext';
 import { GridProvider } from '../contexts/GridContext';
 import { ConversationsProvider } from '../contexts/ConversationsContext';
 import { WalletProvider } from '../contexts/WalletContext';
-import AuthGate from '../components/auth/AuthGate';
 import { initializeComponentRegistry } from '../components/registry';
 import 'react-native-url-polyfill/auto';
 import { Analytics } from '@vercel/analytics/react';
@@ -62,27 +61,25 @@ export default function RootLayout() {
       <SafeAreaProvider style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
         <AuthProvider>
           <GridProvider>
-            <AuthGate>
-              <ConversationsProvider>
-                <WalletProvider>
-                  <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any }}>
-                    <Stack
-                      screenOptions={{
-                        headerShown: false,
-                        contentStyle: { backgroundColor: '#FFEFE3' },
-                        animation: 'fade',
-                      }}
-                    />
-                    {Platform.OS === 'web' && (
-                      <>
-                        <Analytics />
-                        <SpeedInsights />
-                      </>
-                    )}
-                  </View>
-                </WalletProvider>
-              </ConversationsProvider>
-            </AuthGate>
+            <ConversationsProvider>
+              <WalletProvider>
+                <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any }}>
+                  <Stack
+                    screenOptions={{
+                      headerShown: false,
+                      contentStyle: { backgroundColor: '#FFEFE3' },
+                      animation: 'fade',
+                    }}
+                  />
+                  {Platform.OS === 'web' && (
+                    <>
+                      <Analytics />
+                      <SpeedInsights />
+                    </>
+                  )}
+                </View>
+              </WalletProvider>
+            </ConversationsProvider>
           </GridProvider>
         </AuthProvider>
       </SafeAreaProvider>
