@@ -1,4 +1,14 @@
-/// <reference types="bun-types" />
+declare module "bun" {
+  export const plugin: any;
+}
+
+declare global {
+  const Bun: {
+    jest?: {
+      mock: (module: string, factory: () => any) => void;
+    };
+  };
+}
 
 declare module "bun:test" {
   export function test(name: string, fn: () => void | Promise<void>, timeout?: number): void;

@@ -13,8 +13,12 @@ export const ChainOfThoughtContent: React.FC<ChainOfThoughtContentProps> = ({
 }) => {
   const animatedHeight = useRef(new Animated.Value(isOpen ? 1 : 0)).current;
   const animatedOpacity = useRef(new Animated.Value(isOpen ? 1 : 0)).current;
+  const [isMounted, setIsMounted] = React.useState(isOpen);
 
   useEffect(() => {
+    if (isOpen) {
+      setIsMounted(true);
+    }
     Animated.parallel([
       Animated.timing(animatedHeight, {
         toValue: isOpen ? 1 : 0,
@@ -26,10 +30,14 @@ export const ChainOfThoughtContent: React.FC<ChainOfThoughtContentProps> = ({
         duration: 200,
         useNativeDriver: true,
       }),
-    ]).start();
+    ]).start(() => {
+      if (!isOpen) {
+        setIsMounted(false);
+      }
+    });
   }, [isOpen, animatedHeight, animatedOpacity]);
 
-  if (!isOpen && animatedHeight.value === 0) {
+  if (!isMounted) {
     return null;
   }
 
