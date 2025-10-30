@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { router } from 'expo-router';
-import { supabase, SESSION_STORAGE_KEYS } from '../lib';
+import { supabase, secureStorage, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../lib';
 import { gridClientService } from '../features/grid';
 import { useAuth } from './AuthContext';
 
@@ -17,12 +17,14 @@ interface GridAccount {
 }
 
 interface GridUser {
-  // Grid user object from startSignIn()
+  // Grid OTP session object from Grid API's createAccount/initAuth
+  // This is a temporary challenge identifier that must be paired with OTP
+  // to complete authentication via completeAuth/completeAuthAndCreateAccount
   [key: string]: any;
 }
 
 export interface GridContextType {
-  // Grid wallet state
+  // Grid wallet state (persistent)
   gridAccount: GridAccount | null;
   solanaAddress: string | null;
   gridAccountStatus: 'not_created' | 'pending_verification' | 'active';
@@ -33,7 +35,7 @@ export interface GridContextType {
   
   // Grid actions
   initiateGridSignIn: (email: string, options?: { backgroundColor?: string; textColor?: string; returnPath?: string }) => Promise<void>;
-  completeGridSignIn: (gridUser: GridUser, otp: string) => Promise<void>;
+  completeGridSignIn: (otpSession: GridUser, otp: string) => Promise<void>;
   clearGridAccount: () => Promise<void>;
 }
 
@@ -66,9 +68,7 @@ export function GridProvider({ children }: { children: ReactNode }) {
         // We must NOT clear Grid credentials in this case, or users lose access to their wallet
         
         // Check if this is an explicit logout (user clicked sign out button)
-        const isLoggingOut = typeof window !== 'undefined' && window.sessionStorage 
-          ? sessionStorage.getItem(SESSION_STORAGE_KEYS.IS_LOGGING_OUT) === 'true'
-          : false;
+        const isLoggingOut = await secureStorage.getItem(SESSION_STORAGE_KEYS.IS_LOGGING_OUT) === 'true';
         
         if (isLoggingOut) {
           // Explicit logout - clear everything
@@ -88,10 +88,8 @@ export function GridProvider({ children }: { children: ReactNode }) {
           }
           
           // Clear the logout flag now that we've handled it
-          if (typeof window !== 'undefined' && window.sessionStorage) {
-            sessionStorage.removeItem(SESSION_STORAGE_KEYS.IS_LOGGING_OUT);
-            console.log('🔒 [GridContext] Cleared logout flag');
-          }
+          await secureStorage.removeItem(SESSION_STORAGE_KEYS.IS_LOGGING_OUT);
+          console.log('🔒 [GridContext] Cleared logout flag');
         } else {
           // App refresh or initial load - do NOT clear Grid credentials
           // Just clear React state, keep secure storage intact
@@ -117,10 +115,8 @@ export function GridProvider({ children }: { children: ReactNode }) {
           
           // Clear auto-initiate flag if account exists
           // This prevents auto-initiating when user already has a wallet
-          if (typeof window !== 'undefined' && window.sessionStorage) {
-            sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE);
-            sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL);
-          }
+          await secureStorage.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE);
+          await secureStorage.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL);
         } else {
           // No Grid account in secure storage
           setGridAccount(null);
@@ -131,15 +127,15 @@ export function GridProvider({ children }: { children: ReactNode }) {
         
         // Check for auto-initiate flag from AuthContext (unified authentication flow)
         // Only initiate if no account exists in secure storage
-        if (!account && typeof window !== 'undefined' && window.sessionStorage) {
-          const shouldAutoInitiate = sessionStorage.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE) === 'true';
-          const autoInitiateEmail = sessionStorage.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL);
+        if (!account) {
+          const shouldAutoInitiate = await secureStorage.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE) === 'true';
+          const autoInitiateEmail = await secureStorage.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL);
           
           if (shouldAutoInitiate && autoInitiateEmail && user?.email === autoInitiateEmail) {
             console.log('🏦 [GridContext] Auto-initiating Grid sign-in for unified flow');
             // Clear the flag immediately to prevent duplicate calls
-            sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE);
-            sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL);
+            await secureStorage.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE);
+            await secureStorage.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL);
             
             // Initiate Grid sign-in after a short delay to ensure UI is ready
             setTimeout(() => {
@@ -172,7 +168,7 @@ export function GridProvider({ children }: { children: ReactNode }) {
    * Starts the Grid wallet sign-in flow by:
    * 1. Checking if Grid account already exists
    * 2. Starting sign-in with Grid (sends OTP email)
-   * 3. Storing gridUser in sessionStorage for OTP screen
+   * 3. Storing OTP session in secure storage for OTP screen
    * 4. Navigating to OTP verification screen
    * 
    * Uses singleton pattern to prevent race conditions.
@@ -219,14 +215,17 @@ export function GridProvider({ children }: { children: ReactNode }) {
         console.log('🏦 [GridContext] No Grid account found, starting sign-in...');
 
         // Start Grid sign-in - backend automatically detects auth level and handles migration
-        const { user: gridUser } = await gridClientService.startSignIn(email);
+        const { otpSession, isExistingUser } = await gridClientService.startSignIn(email);
 
-        // Store gridUser and return path in sessionStorage for OTP screen
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_USER, JSON.stringify(gridUser));
-          if (options?.returnPath) {
-            sessionStorage.setItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH, options.returnPath);
-          }
+        // Store OTP session in secure storage (cross-platform) and state
+        // NOTE: OTP session is NOT stored in GridContext state - it's workflow state
+        // that belongs to the OTP screen. We only write to storage here.
+        await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION, JSON.stringify(otpSession));
+        console.log('✅ [GridContext] Stored OTP session in secure storage (OTP screen will load it)');
+        
+        // Store return path in session storage
+        if (options?.returnPath) {
+          await secureStorage.setItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH, options.returnPath);
         }
 
         // Navigate to OTP verification screen with background color, text color, and return path
@@ -268,11 +267,11 @@ export function GridProvider({ children }: { children: ReactNode }) {
    * 
    * Called from OTP verification screen after user enters code.
    */
-  const completeGridSignIn = async (gridUser: GridUser, otp: string) => {
+  const completeGridSignIn = async (otpSession: GridUser, otp: string) => {
     try {
       console.log('🔐 [GridContext] Completing Grid sign-in with OTP');
       
-      const authResult = await gridClientService.completeSignIn(gridUser, otp);
+      const authResult = await gridClientService.completeSignIn(otpSession, otp);
       
       if (authResult.success && authResult.data) {
         console.log('✅ [GridContext] Grid sign-in successful!');
@@ -284,19 +283,18 @@ export function GridProvider({ children }: { children: ReactNode }) {
         setGridAccountStatus('active');
         setIsSigningInToGrid(false);
         
-        // Get return path from sessionStorage or default to chat
-        const returnPath = typeof window !== 'undefined' && window.sessionStorage 
-          ? sessionStorage.getItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH) 
-          : null;
+        // Clear OTP session from storage (no longer needed after successful sign-in)
+        // Note: We don't manage OTP session in state - it's OTP screen's responsibility
+        await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
+        
+        // Get return path from secure storage or default to chat
+        const returnPath = await secureStorage.getItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH);
         const finalPath = returnPath || '/(main)/chat';
         
-        // Clear sessionStorage
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_USER);
-          sessionStorage.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
-          sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
-          sessionStorage.removeItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH);
-        }
+        // Clear session storage
+        await secureStorage.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
+        await secureStorage.removeItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
+        await secureStorage.removeItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH);
         
         // Navigate to destination screen immediately
         // Grid account data is already stored in:
@@ -333,12 +331,10 @@ export function GridProvider({ children }: { children: ReactNode }) {
       setGridAccountId(null);
       setIsSigningInToGrid(false);
       
-      // Clear sessionStorage
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_USER);
-        sessionStorage.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
-        sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
-      }
+      // Clear secure storage (including OTP session if any)
+      await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
+      await secureStorage.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
+      await secureStorage.removeItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
     } catch (error) {
       console.log('🚪 [GridContext] Error clearing Grid data (non-critical):', error);
     }
