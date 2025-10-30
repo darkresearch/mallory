@@ -24,13 +24,16 @@ import { GridClient } from '@sqds/grid';
  * 1. startSignIn(email)
  *    - Initiates sign-in for ANY user (first-time or returning)
  *    - Backend detects user type via Grid API
- *    - Returns { user, isExistingUser } - hint stored for next phase
+ *    - Returns { otpSession, isExistingUser }
+ *      • otpSession = temporary OTP challenge from Grid API
+ *      • isExistingUser = hint for completion flow
  *
- * 2. completeSignIn(user, otpCode)
+ * 2. completeSignIn(otpSession, otpCode)
  *    - Completes sign-in for ANY user
+ *    - otpSession = the challenge object from startSignIn
  *    - Passes isExistingUser hint to backend
  *    - Backend verifies with retry logic + fallback
- *    - Returns authentication data
+ *    - Returns authentication data (GRID_ACCOUNT)
  *
  * 3. getAccount()
  *    - Gets stored Grid account from secure storage
@@ -48,9 +51,9 @@ import { GridClient } from '@sqds/grid';
  * 1. User opens app
  * 2. Check getAccount() - if exists, user is signed in
  * 3. If not signed in:
- *    a. Call startSignIn(email) → OTP sent, hint stored
+ *    a. Call startSignIn(email) → OTP sent, otpSession + hint stored
  *    b. User enters OTP
- *    c. Call completeSignIn(user, otp) → Passes hint → Account ready
+ *    c. Call completeSignIn(otpSession, otp) → Passes hint → Account ready
  * 4. User can now make transactions
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -79,8 +82,10 @@ class GridClientService {
    * 1. Backend tries createAccount() → if success, user is NEW
    * 2. If "already exists" error → Backend tries initAuth() → user is EXISTING
    * 3. Grid sends OTP to user's email
-   * 4. Backend returns { user, isExistingUser }
-   * 5. Client stores isExistingUser hint for completeSignIn()
+   * 4. Backend returns { otpSession, isExistingUser }
+   *    • otpSession = Grid's OTP challenge object (must be paired with OTP code)
+   *    • isExistingUser = optimization hint for completion flow
+   * 5. Client stores both for completeSignIn()
    *
    * FLOW HINT STORAGE:
    * ─────────────────
@@ -88,15 +93,17 @@ class GridClientService {
    * to pass from startSignIn → completeSignIn without server-side state.
    *
    * @param email - User's email address
-   * @returns Promise with { user, isExistingUser } - Grid user object + flow hint
+   * @returns Promise with { otpSession, isExistingUser }
+   *   • otpSession = Temporary OTP session identifier from Grid API
+   *   • isExistingUser = Flow hint for optimal completion routing
    * @throws Error if backend request fails
    *
    * USAGE:
    * ─────
-   * const { user, isExistingUser } = await gridClientService.startSignIn('user@example.com');
-   * // isExistingUser is stored internally for completeSignIn()
+   * const { otpSession, isExistingUser } = await gridClientService.startSignIn('user@example.com');
+   * // otpSession is stored in secure storage for completeSignIn()
    * // User receives OTP via email
-   * // Show OTP input modal
+   * // Show OTP input screen
    */
   async startSignIn(email: string) {
     try {
@@ -134,7 +141,7 @@ class GridClientService {
       console.log(`✅ [Grid Client] Sign-in started, OTP sent to email (${isExistingUser ? 'existing' : 'new'} user)`);
 
       return {
-        user: data.user,
+        otpSession: data.user,  // Grid's OTP challenge object
         isExistingUser
       };
     } catch (error) {
@@ -179,19 +186,19 @@ class GridClientService {
    * 5. Client stores account data + session secrets
    * 6. User is now signed in and can make transactions
    *
-   * @param user - Grid user object from startSignIn()
+   * @param otpSession - Grid OTP session object from startSignIn()
    * @param otpCode - 6-digit OTP code from email
    * @returns Promise with authentication result
    * @throws Error if verification fails
    *
    * USAGE:
    * ─────
-   * const result = await gridClientService.completeSignIn(user, '123456');
+   * const result = await gridClientService.completeSignIn(otpSession, '123456');
    * if (result.success) {
    *   console.log('Signed in! Address:', result.data.address);
    * }
    */
-  async completeSignIn(user: any, otpCode: string) {
+  async completeSignIn(otpSession: any, otpCode: string) {
     try {
       console.log('🔐 [Grid Client] Completing sign-in with OTP');
 
@@ -231,7 +238,7 @@ class GridClientService {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          user,
+          user: otpSession,  // Grid's OTP session object
           otpCode,
           sessionSecrets,
           isExistingUser // Flow hint for backend routing

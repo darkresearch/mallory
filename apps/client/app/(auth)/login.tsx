@@ -1,14 +1,14 @@
 import { View, Text, TouchableOpacity, ActivityIndicator, Image, StyleSheet, Platform, useWindowDimensions, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import AuthCarousel from '@/components/auth/AuthCarousel';
+import DevAuthInput from '@/components/auth/DevAuthInput';
 import { useState, useEffect } from 'react';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withTiming, 
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
   withDelay,
-  Easing 
+  Easing
 } from 'react-native-reanimated';
 import { preview } from "radon-ide";
 import { LAYOUT, config } from '@/lib';
@@ -161,13 +161,35 @@ export default function LoginScreen() {
 
         {/* Bottom section - Button + Footer anchored to bottom on mobile */}
         <Animated.View style={[isMobile && styles.bottomSectionMobile, buttonsAnimatedStyle]}>
-          {/* Auth Carousel - Google */}
+          {/* Google Sign In Button */}
           <View style={[styles.authSection, isMobile && styles.authSectionMobile]}>
-            <AuthCarousel
-              onGoogleLogin={handleLogin}
-              isLoading={isLoading}
-              isMobile={isMobile}
-            />
+            {/* Dev Mode - Email OTP Input */}
+            {config.isDevelopment && (
+              <DevAuthInput isMobile={isMobile} />
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.googleButton,
+                isMobile && styles.googleButtonMobile,
+              ]}
+              onPress={handleLogin}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#666" />
+              ) : (
+                <>
+                  <Image
+                    source={{ uri: 'https://www.google.com/favicon.ico' }}
+                    style={styles.googleIcon}
+                  />
+                  <Text style={styles.googleButtonText}>
+                    Continue with Google
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
 
             {/* Error Message */}
             {error && (
@@ -306,18 +328,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgb(251, 251, 251)',
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 28,
-    width: '23%',
     minWidth: 250,
     maxWidth: 345,
   },
   googleButtonMobile: {
-    borderRadius: 28, // Same pill shape on mobile
+    borderRadius: 28,
     width: '100%',
-    minWidth: 0, // Override minWidth from web
+    minWidth: 0,
     paddingVertical: 16,
   },
   googleIcon: {
