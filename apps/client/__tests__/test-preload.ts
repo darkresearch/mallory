@@ -5,6 +5,8 @@
  * Use with: bun test --preload ./test-preload.ts
  */
 
+/// <reference path="../bun-types.d.ts" />
+
 // Mock React Native core module
 const mockReactNative = {
   Platform: {
@@ -75,9 +77,13 @@ const mockExpoSecureStore = {
 import { plugin } from 'bun';
 
 // Use Bun's test mock system
+// @ts-expect-error Bun is a global provided by Bun runtime
 if (typeof Bun !== 'undefined' && Bun.jest) {
+  // @ts-expect-error Bun is a global provided by Bun runtime
   Bun.jest.mock('react-native', () => mockReactNative);
+  // @ts-expect-error Bun is a global provided by Bun runtime
   Bun.jest.mock('expo-router', () => mockExpoRouter);
+  // @ts-expect-error Bun is a global provided by Bun runtime
   Bun.jest.mock('expo-secure-store', () => mockExpoSecureStore);
 }
 

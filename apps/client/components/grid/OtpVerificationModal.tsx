@@ -17,7 +17,7 @@ interface OtpVerificationModalProps {
   visible: boolean;
   onClose: (success: boolean) => void;
   userEmail: string;
-  gridUser: any; // User object from Grid startSignIn() - REQUIRED
+  gridUser?: any; // User object from Grid startSignIn() - Optional for re-auth scenarios
 }
 
 export default function OtpVerificationModal({
@@ -31,6 +31,7 @@ export default function OtpVerificationModal({
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState('');
   const [verificationSuccess, setVerificationSuccess] = useState(false);
+  const [currentGridUser, setCurrentGridUser] = useState<any>(gridUser);
   
   // Track in-flight request to prevent race conditions
   const verificationInProgress = React.useRef(false);
@@ -43,8 +44,15 @@ export default function OtpVerificationModal({
       setError('');
       setIsVerifying(false);
       verificationInProgress.current = false; // Reset ref
+    } else if (!currentGridUser) {
+      // For re-auth scenarios, get gridUser by calling startSignIn
+      gridClientService.startSignIn(userEmail).then(result => {
+        setCurrentGridUser(result.user);
+      }).catch(err => {
+        console.error('Failed to initialize sign-in:', err);
+      });
     }
-  }, [visible]);
+  }, [visible, userEmail, currentGridUser]);
 
   const handleResendOtp = async () => {
     setIsVerifying(true);
@@ -54,7 +62,8 @@ export default function OtpVerificationModal({
     try {
       // Resend OTP - backend handles whether to use beginner or advanced flow
       console.log('🔄 Resending OTP for:', userEmail);
-      await gridClientService.startSignIn(userEmail);
+      const startResult = await gridClientService.startSignIn(userEmail);
+      setCurrentGridUser(startResult.user);
       console.log('✅ OTP resent successfully');
       setError(''); // Clear any previous errors
     } catch (error) {
@@ -99,17 +108,21 @@ export default function OtpVerificationModal({
     setError('');
 
     try {
-      // Safety check - gridUser should always be provided by upstream code
-      if (!gridUser) {
-        console.error('❌ [OTP Modal] gridUser is missing - this is a bug in calling code');
-        throw new Error('Sign-in session not found. Please close this modal and try again.');
+      // Safety check - use currentGridUser (either from props or initialized)
+      if (!currentGridUser) {
+        console.error('❌ [OTP Modal] gridUser is missing - initializing sign-in');
+        const startResult = await gridClientService.startSignIn(userEmail);
+        setCurrentGridUser(startResult.user);
+        if (!startResult.user) {
+          throw new Error('Sign-in session not found. Please close this modal and try again.');
+        }
       }
 
       console.log('🔐 [OTP] Completing sign-in with OTP - backend determines correct flow');
       console.log('🔐 [OTP] OTP length:', cleanOtp.length, 'First 2 digits:', cleanOtp.substring(0, 2) + '****');
       
       // Backend automatically uses the correct flow (beginner or advanced)
-      const authResult = await gridClientService.completeSignIn(gridUser, cleanOtp);
+      const authResult = await gridClientService.completeSignIn(currentGridUser, cleanOtp);
       
       console.log('🔐 [OTP Verification] Sign-in result:', {
         success: authResult.success,

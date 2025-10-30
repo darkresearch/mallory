@@ -10,6 +10,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import './setup';
 import { setupTestUserSession, cleanupTestData, supabase, gridTestClient } from './setup';
+import { globalCleanup } from './global-cleanup';
 
 describe('Auth + Grid Integration Tests', () => {
   let testSession: {
@@ -29,8 +30,41 @@ describe('Auth + Grid Integration Tests', () => {
 
   afterAll(async () => {
     console.log('🧹 Cleaning up test data...');
-    await cleanupTestData(testSession.userId);
-    console.log('✅ Cleanup complete');
+    try {
+      // Wrap cleanup in timeout to prevent hanging
+      await Promise.race([
+        (async () => {
+          await cleanupTestData(testSession.userId);
+          console.log('✅ Cleanup complete');
+          
+          // Remove all Supabase Realtime channels
+          try {
+            supabase.removeAllChannels();
+          } catch (e) {
+            // Ignore errors
+          }
+          
+          // Sign out from Supabase to stop auth refresh timers
+          await supabase.auth.signOut();
+          console.log('✅ Signed out from Supabase');
+        })(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Cleanup timeout')), 10000)
+        )
+      ]);
+    } catch (error) {
+      console.warn('Error during cleanup:', error);
+      // Still try to sign out even if cleanup failed
+      try {
+        supabase.removeAllChannels();
+        await supabase.auth.signOut();
+      } catch (e) {
+        // Ignore sign out errors
+      }
+    }
+    
+    // Register global cleanup to run after all tests
+    await globalCleanup();
   });
 
   describe('Session Restoration', () => {
@@ -40,14 +74,14 @@ describe('Auth + Grid Integration Tests', () => {
       expect(error).toBe(null);
       expect(data.session).not.toBe(null);
       expect(data.session?.user.id).toBe(testSession.userId);
-    });
+    }, 180000); // 3 min timeout for Grid setup
 
     test('should load Grid account from storage', async () => {
       const account = await gridTestClient.getAccount();
       
       expect(account).not.toBe(null);
       expect(account?.address).toBe(testSession.gridSession.address);
-    });
+    }, 180000); // 3 min timeout for Grid operations
 
     test('should have matching user data in database', async () => {
       const { data: userData, error } = await supabase
@@ -102,7 +136,7 @@ describe('Auth + Grid Integration Tests', () => {
       expect(account).not.toBe(null);
       expect(account?.address).toBe(testSession.gridSession.address);
       console.log('✅ Grid wallet accessible from secure storage (no database needed)');
-    });
+    }, 180000); // 3 min timeout for Grid operations
   });
 
   describe('Error Handling', () => {
@@ -197,7 +231,7 @@ describe('Auth + Grid Integration Tests', () => {
       // Step 4: Grid account should still be available
       const account2 = await gridTestClient.getAccount();
       expect(account2?.address).toBe(account1?.address);
-    });
+    }, 180000); // 3 min timeout for Grid operations
 
     test('should handle rapid session checks during app startup', async () => {
       // Simulate multiple components checking auth state simultaneously
@@ -239,7 +273,7 @@ describe('Auth + Grid Integration Tests', () => {
 
       expect(account).not.toBe(null);
       expect(account?.address).toBe(testSession.gridSession.address);
-    });
+    }, 180000); // 3 min timeout for Grid operations
 
     test('should handle concurrent reads from secure storage', async () => {
       // All client-side Grid operations use secure storage

@@ -209,7 +209,7 @@ class GridClientService {
       console.log('🔐 [Grid Client] Generating session secrets...');
 
       // IMPORTANT: Use same environment as backend (from config)
-      const gridEnv = (config.gridEnv || 'production') as 'sandbox' | 'production';
+      const gridEnv = (process.env.EXPO_PUBLIC_GRID_ENV || 'production') as 'sandbox' | 'production';
       console.log(`🔐 [Grid Client] Using Grid environment: ${gridEnv}`);
 
       const tempClient = new GridClient({

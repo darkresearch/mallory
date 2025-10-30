@@ -13,7 +13,7 @@ import Animated, {
 import { Dimensions } from 'react-native';
 import { useConversations } from '../../contexts/ConversationsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { secureStorage, SESSION_STORAGE_KEYS } from '../../lib';
+import { secureStorage, SESSION_STORAGE_KEYS, SECURE_STORAGE_KEYS } from '../../lib';
 import { PressableButton } from '../../components/ui/PressableButton';
 import { createNewConversation } from '../../features/chat';
 

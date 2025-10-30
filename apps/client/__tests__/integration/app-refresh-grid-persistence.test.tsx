@@ -16,35 +16,42 @@ import { SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../../lib/storage/key
 // Mock dependencies
 jest.mock('../../lib/supabase', () => ({
   supabase: {
-    from: jest.fn(() => ({
-      select: jest.fn(() => ({
-        eq: jest.fn(() => ({
-          abortSignal: jest.fn(() => ({
-            single: jest.fn().mockResolvedValue({ data: null, error: null })
+    from: jest.fn<any>(() => ({
+      select: jest.fn<any>(() => ({
+        eq: jest.fn<any>(() => ({
+          abortSignal: jest.fn<any>(() => ({
+            single: jest.fn<any>().mockResolvedValue({ data: null, error: null })
           }))
         }))
       }))
     })),
     auth: {
-      getSession: jest.fn().mockResolvedValue({ 
+      getSession: jest.fn<any>().mockResolvedValue({ 
         data: { session: null }, 
         error: null 
       }),
-      onAuthStateChange: jest.fn(() => ({
+      onAuthStateChange: jest.fn<any>(() => ({
         data: { subscription: { unsubscribe: jest.fn() } }
       }))
     }
   }
 }));
 
+const mockGetAccount = jest.fn<any>();
+const mockClearAccount = jest.fn<any>();
+
 jest.mock('../../features/grid', () => ({
   gridClientService: {
-    getAccount: jest.fn(),
-    clearAccount: jest.fn()
+    getAccount: mockGetAccount,
+    clearAccount: mockClearAccount
   }
 }));
 
 import { gridClientService } from '../../features/grid';
+
+// Use the mocked functions directly with proper typing
+const getAccountMock = mockGetAccount as jest.Mock<any>;
+const clearAccountMock = mockClearAccount as jest.Mock<any>;
 
 // Test wrapper with both Auth and Grid providers
 function TestWrapper({ children }: { children: React.ReactNode }) {
@@ -61,8 +68,8 @@ describe('App Refresh - Grid Credentials Persistence', () => {
   beforeEach(async () => {
     // Clear all storage before each test
     await testStorage.clear();
-    gridClientService.getAccount.mockClear();
-    gridClientService.clearAccount.mockClear();
+    getAccountMock.mockClear();
+    clearAccountMock.mockClear();
     
     // Clear sessionStorage
     if (typeof globalThis.sessionStorage !== 'undefined') {
@@ -82,7 +89,7 @@ describe('App Refresh - Grid Credentials Persistence', () => {
       JSON.stringify(mockGridAccount)
     );
     
-    gridClientService.getAccount.mockResolvedValue(mockGridAccount);
+    getAccountMock.mockResolvedValue(mockGridAccount);
     
     // Simulate app refresh: user is temporarily null while auth is loading
     const { result, rerender } = renderHook(
@@ -99,7 +106,7 @@ describe('App Refresh - Grid Credentials Persistence', () => {
     // Grid context should detect no user but NOT clear credentials
     // (because there's no logout flag set)
     await waitFor(() => {
-      expect(gridClientService.clearAccount).not.toHaveBeenCalled();
+      expect(clearAccountMock).not.toHaveBeenCalled();
     });
     
     // Grid credentials should still be in storage
@@ -125,8 +132,8 @@ describe('App Refresh - Grid Credentials Persistence', () => {
       JSON.stringify({ sessionId: 'test-session' })
     );
     
-    gridClientService.getAccount.mockResolvedValue(mockGridAccount);
-    gridClientService.clearAccount.mockImplementation(async () => {
+    getAccountMock.mockResolvedValue(mockGridAccount);
+    clearAccountMock.mockImplementation(async () => {
       await testStorage.removeItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
       await testStorage.removeItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
     });
@@ -151,7 +158,7 @@ describe('App Refresh - Grid Credentials Persistence', () => {
     
     // GridContext should detect logout flag and clear credentials
     await waitFor(() => {
-      expect(gridClientService.clearAccount).toHaveBeenCalled();
+      expect(clearAccountMock).toHaveBeenCalled();
     }, { timeout: 3000 });
     
     // Grid credentials should be removed from storage
@@ -174,7 +181,7 @@ describe('App Refresh - Grid Credentials Persistence', () => {
       JSON.stringify(mockGridAccount)
     );
     
-    gridClientService.getAccount.mockResolvedValue(mockGridAccount);
+    getAccountMock.mockResolvedValue(mockGridAccount);
     
     // NO logout flag set
     expect(globalThis.sessionStorage?.getItem(SESSION_STORAGE_KEYS.IS_LOGGING_OUT)).toBeNull();
@@ -186,11 +193,11 @@ describe('App Refresh - Grid Credentials Persistence', () => {
     
     // Wait for Grid context to initialize
     await waitFor(() => {
-      expect(gridClientService.getAccount).toHaveBeenCalled();
+      expect(getAccountMock).toHaveBeenCalled();
     });
     
     // clearAccount should NOT be called
-    expect(gridClientService.clearAccount).not.toHaveBeenCalled();
+    expect(clearAccountMock).not.toHaveBeenCalled();
     
     // Credentials should still be in storage
     const storedAccount = await testStorage.getItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
@@ -209,7 +216,7 @@ describe('App Refresh - Grid Credentials Persistence', () => {
       JSON.stringify(mockGridAccount)
     );
     
-    gridClientService.getAccount.mockResolvedValue(mockGridAccount);
+    getAccountMock.mockResolvedValue(mockGridAccount);
     
     const { result, rerender } = renderHook(
       () => ({
@@ -231,7 +238,7 @@ describe('App Refresh - Grid Credentials Persistence', () => {
     
     // Grid context should reload credentials when user becomes available
     await waitFor(() => {
-      expect(gridClientService.getAccount).toHaveBeenCalled();
+      expect(getAccountMock).toHaveBeenCalled();
     });
   });
   
@@ -247,7 +254,7 @@ describe('App Refresh - Grid Credentials Persistence', () => {
       JSON.stringify(mockGridAccount)
     );
     
-    gridClientService.getAccount.mockResolvedValue(mockGridAccount);
+    getAccountMock.mockResolvedValue(mockGridAccount);
     
     // Simulate multiple refresh cycles
     for (let i = 0; i < 3; i++) {
@@ -257,7 +264,7 @@ describe('App Refresh - Grid Credentials Persistence', () => {
       );
       
       await waitFor(() => {
-        expect(gridClientService.getAccount).toHaveBeenCalled();
+        expect(getAccountMock).toHaveBeenCalled();
       });
       
       // Unmount (simulates app refresh)
@@ -267,7 +274,7 @@ describe('App Refresh - Grid Credentials Persistence', () => {
       const storedAccount = await testStorage.getItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
       expect(storedAccount).not.toBeNull();
       
-      gridClientService.getAccount.mockClear();
+      getAccountMock.mockClear();
     }
     
     // After 3 refresh cycles, credentials should still be intact
@@ -276,6 +283,6 @@ describe('App Refresh - Grid Credentials Persistence', () => {
     expect(JSON.parse(finalAccount!)).toEqual(mockGridAccount);
     
     // clearAccount should never have been called
-    expect(gridClientService.clearAccount).not.toHaveBeenCalled();
+    expect(clearAccountMock).not.toHaveBeenCalled();
   });
 });
