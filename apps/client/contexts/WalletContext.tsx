@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { walletDataService, WalletData } from '../features/wallet';
 import { gridClientService } from '../features/grid';
@@ -26,9 +26,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasTriggeredGridSignIn, setHasTriggeredGridSignIn] = useState(false);
+  
+  // Track the last wallet address we loaded data for to prevent duplicate loads
+  const lastLoadedAddressRef = useRef<string | null>(null);
 
   // Load wallet data
-  const loadWalletData = async (forceRefresh = false) => {
+  const loadWalletData = useCallback(async (forceRefresh = false) => {
     if (!user?.id) return;
     
     try {
@@ -94,6 +97,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setError(null);
       setHasTriggeredGridSignIn(false); // Reset flag on success
       
+      // Track the address we loaded data for
+      lastLoadedAddressRef.current = fallbackAddress;
+      
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load wallet data';
       console.error('💰 [Context] Error loading wallet data:', errorMessage);
@@ -122,7 +128,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setIsRefreshing(false);
       setIsInitialized(true);
     }
-  };
+  }, [user?.id, user?.email, user?.solanaAddress, solanaAddress, hasTriggeredGridSignIn, initiateGridSignIn]);
 
   // Refresh function for manual refresh
   const refreshWalletData = async () => {
@@ -141,7 +147,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.log('💰 [Context] Loading wallet data in background for user:', user.id);
       loadWalletData();
     }
-  }, [user?.id, isInitialized]);
+  }, [user?.id, isInitialized, loadWalletData]);
 
   // When Grid account becomes available (after OTP completion), load wallet data
   useEffect(() => {
@@ -151,16 +157,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const hasWalletAddress = gridAccount?.address || solanaAddress || user?.solanaAddress;
     
     if (hasWalletAddress && gridAccountStatus === 'active') {
-      // Check if we need to load wallet data
-      const needsData = !walletData || walletData.holdings.length === 0;
+      // Check if we've already loaded data for this address to prevent duplicate loads
+      const hasLoadedForThisAddress = lastLoadedAddressRef.current === hasWalletAddress;
       
-      if (needsData) {
+      // Only load if we haven't loaded for this address yet
+      // The ref check prevents infinite loops even if walletData state is stale
+      if (!hasLoadedForThisAddress) {
         console.log('💰 [Context] Grid account now available, loading wallet data');
         setHasTriggeredGridSignIn(false); // Reset flag so we can retry if needed
         loadWalletData(true); // Force refresh to get fresh data
       }
     }
-  }, [gridAccount?.address, solanaAddress, gridAccountStatus, user?.id, user?.solanaAddress, isInitialized, walletData]);
+  }, [gridAccount?.address, solanaAddress, gridAccountStatus, user?.id, user?.solanaAddress, isInitialized, loadWalletData]);
 
   // Auto-refresh on app focus
   useEffect(() => {
@@ -183,7 +191,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription?.remove();
     };
-  }, [user?.id, isInitialized]);
+  }, [user?.id, isInitialized, loadWalletData]);
 
   // Auto-refresh timer (every 60 seconds when app is active)
   useEffect(() => {
@@ -197,7 +205,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }, 60000); // 60 seconds
 
     return () => clearInterval(interval);
-  }, [user?.id, isInitialized]);
+  }, [user?.id, isInitialized, loadWalletData]);
 
   // Clear data when user logs out
   useEffect(() => {
@@ -208,6 +216,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       setIsInitialized(false);
       setHasTriggeredGridSignIn(false);
+      lastLoadedAddressRef.current = null;
       walletDataService.clearCache();
     }
   }, [user?.id]);
