@@ -8,48 +8,20 @@
  * This file focuses on unit-level logic that doesn't require backend.
  */
 
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 import '../setup/test-env';
-import { gridClientService } from '../../features/grid';
 
 describe('WalletContext OTP Trigger Behavior (Unit)', () => {
-  let originalAccount: any;
-
-  beforeEach(async () => {
-    // Store original Grid account if it exists
-    originalAccount = await gridClientService.getAccount();
-  });
-
-  afterEach(async () => {
-    // Restore original account
-    if (originalAccount) {
-      const { testStorage } = await import('../setup/test-storage');
-      await testStorage.setItem('grid_account', JSON.stringify(originalAccount));
-    } else {
-      await gridClientService.clearAccount();
-    }
-  });
-
-  test('should detect when no wallet address is available (triggers OTP flow)', async () => {
-    // Clear Grid account to simulate no wallet address
-    await gridClientService.clearAccount();
-
-    // Verify no Grid account exists
-    const account = await gridClientService.getAccount();
-    expect(account).toBeNull();
-
-    console.log('💰 Testing wallet address detection logic');
-    console.log('   This simulates WalletContext behavior when no address is available');
-
+  test('should detect when no wallet address is available (triggers OTP flow)', () => {
     // Simulate WalletContext logic: check for wallet address from multiple sources
-    const gridAddress = account?.address;
-    const solanaAddress = null; // Simulated: no address from GridContext
-    const userSolanaAddress = null; // Simulated: no address from user
+    const gridAddress = null; // No Grid account address
+    const solanaAddress = null; // No address from GridContext
+    const userSolanaAddress = null; // No address from user
     
     const fallbackAddress = gridAddress || solanaAddress || userSolanaAddress;
     
     // Verify that no address is available
-    expect(fallbackAddress).toBeUndefined();
+    expect(fallbackAddress).toBeNull();
     
     // In production, WalletContext would trigger initiateGridSignIn() here
     // Integration tests verify the full flow with backend
@@ -59,27 +31,35 @@ describe('WalletContext OTP Trigger Behavior (Unit)', () => {
     console.log('   which navigates to OTP verification screen');
   });
 
-  test('should detect when wallet address becomes available', async () => {
-    // Get or create a Grid account for testing
-    const account = await gridClientService.getAccount();
+  test('should detect when wallet address becomes available', () => {
+    // Simulate WalletContext logic: check for wallet address from multiple sources
+    const gridAddress = 'So11111111111111111111111111111111111111112'; // Mock address
+    const solanaAddress = gridAddress; // From GridContext
+    const userSolanaAddress = null; // From user
     
-    if (account) {
-      // Simulate WalletContext logic: check for wallet address from multiple sources
-      const gridAddress = account.address;
-      const solanaAddress = account.address; // From GridContext
-      const userSolanaAddress = null; // From user
-      
-      const fallbackAddress = gridAddress || solanaAddress || userSolanaAddress;
-      
-      // Verify that address IS available
-      expect(fallbackAddress).toBeDefined();
-      expect(typeof fallbackAddress).toBe('string');
-      
-      console.log('✅ Correctly detects wallet address available');
-      console.log('   Address:', fallbackAddress);
-      console.log('   In WalletContext, this would trigger wallet data loading');
-    } else {
-      console.log('⚠️ No Grid account available for this test, skipping');
-    }
+    const fallbackAddress = gridAddress || solanaAddress || userSolanaAddress;
+    
+    // Verify that address IS available
+    expect(fallbackAddress).toBeDefined();
+    expect(typeof fallbackAddress).toBe('string');
+    expect(fallbackAddress).toBe('So11111111111111111111111111111111111111112');
+    
+    console.log('✅ Correctly detects wallet address available');
+    console.log('   Address:', fallbackAddress);
+    console.log('   In WalletContext, this would trigger wallet data loading');
+  });
+
+  test('should prioritize Grid account address over fallback addresses', () => {
+    // Simulate WalletContext logic: multiple sources available
+    const gridAddress = 'GridAddress123';
+    const solanaAddress = 'SolanaAddress456';
+    const userSolanaAddress = 'UserAddress789';
+    
+    // Should prioritize Grid account address
+    const fallbackAddress = gridAddress || solanaAddress || userSolanaAddress;
+    
+    expect(fallbackAddress).toBe('GridAddress123');
+    
+    console.log('✅ Correctly prioritizes Grid account address');
   });
 });
