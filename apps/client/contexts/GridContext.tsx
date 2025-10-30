@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { router } from 'expo-router';
-import { supabase } from '../lib';
+import { supabase, SESSION_STORAGE_KEYS } from '../lib';
 import { gridClientService } from '../features/grid';
 import { useAuth } from './AuthContext';
 
@@ -65,7 +65,7 @@ export function GridProvider({ children }: { children: ReactNode }) {
         
         // Check if this is an explicit logout (user clicked sign out button)
         const isLoggingOut = typeof window !== 'undefined' && window.sessionStorage 
-          ? sessionStorage.getItem('mallory_is_logging_out') === 'true'
+          ? sessionStorage.getItem(SESSION_STORAGE_KEYS.IS_LOGGING_OUT) === 'true'
           : false;
         
         if (isLoggingOut) {
@@ -87,7 +87,7 @@ export function GridProvider({ children }: { children: ReactNode }) {
           
           // Clear the logout flag now that we've handled it
           if (typeof window !== 'undefined' && window.sessionStorage) {
-            sessionStorage.removeItem('mallory_is_logging_out');
+            sessionStorage.removeItem(SESSION_STORAGE_KEYS.IS_LOGGING_OUT);
             console.log('🔒 [GridContext] Cleared logout flag');
           }
         } else {
@@ -122,14 +122,14 @@ export function GridProvider({ children }: { children: ReactNode }) {
         
         // Check for auto-initiate flag from AuthContext (unified authentication flow)
         if (typeof window !== 'undefined' && window.sessionStorage) {
-          const shouldAutoInitiate = sessionStorage.getItem('mallory_auto_initiate_grid') === 'true';
-          const autoInitiateEmail = sessionStorage.getItem('mallory_auto_initiate_email');
+          const shouldAutoInitiate = sessionStorage.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE) === 'true';
+          const autoInitiateEmail = sessionStorage.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL);
           
           if (shouldAutoInitiate && autoInitiateEmail && user?.email === autoInitiateEmail) {
             console.log('🏦 [GridContext] Auto-initiating Grid sign-in for unified flow');
             // Clear the flag immediately to prevent duplicate calls
-            sessionStorage.removeItem('mallory_auto_initiate_grid');
-            sessionStorage.removeItem('mallory_auto_initiate_email');
+            sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE);
+            sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL);
             
             // Initiate Grid sign-in after a short delay to ensure UI is ready
             setTimeout(() => {
@@ -205,9 +205,9 @@ export function GridProvider({ children }: { children: ReactNode }) {
       
       // Store gridUser and return path in sessionStorage for OTP screen
       if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.setItem('mallory_grid_user', JSON.stringify(gridUser));
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_USER, JSON.stringify(gridUser));
         if (options?.returnPath) {
-          sessionStorage.setItem('otp_return_path', options.returnPath);
+          sessionStorage.setItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH, options.returnPath);
         }
       }
       
@@ -261,16 +261,16 @@ export function GridProvider({ children }: { children: ReactNode }) {
         
         // Get return path from sessionStorage or default to chat
         const returnPath = typeof window !== 'undefined' && window.sessionStorage 
-          ? sessionStorage.getItem('otp_return_path') 
+          ? sessionStorage.getItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH) 
           : null;
         const finalPath = returnPath || '/(main)/chat';
         
         // Clear sessionStorage
         if (typeof window !== 'undefined' && window.sessionStorage) {
-          sessionStorage.removeItem('mallory_grid_user');
-          sessionStorage.removeItem('mallory_oauth_in_progress');
-          sessionStorage.removeItem('mallory_grid_is_existing_user');
-          sessionStorage.removeItem('otp_return_path');
+          sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_USER);
+          sessionStorage.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
+          sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
+          sessionStorage.removeItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH);
         }
 
         // Refresh Grid account data from database
@@ -374,9 +374,9 @@ export function GridProvider({ children }: { children: ReactNode }) {
       
       // Clear sessionStorage
       if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.removeItem('mallory_grid_user');
-        sessionStorage.removeItem('mallory_oauth_in_progress');
-        sessionStorage.removeItem('mallory_grid_is_existing_user');
+        sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_USER);
+        sessionStorage.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
+        sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
       }
     } catch (error) {
       console.log('🚪 [GridContext] Error clearing Grid data (non-critical):', error);

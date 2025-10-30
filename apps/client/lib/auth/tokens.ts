@@ -1,6 +1,4 @@
-import { secureStorage } from '../storage';
-
-const AUTH_TOKEN_KEY = 'mallory_auth_token';
+import { secureStorage, SECURE_STORAGE_KEYS } from '../storage';
 
 /**
  * Auth token management utilities
@@ -11,7 +9,7 @@ export const authTokens = {
    */
   async getToken(): Promise<string | null> {
     try {
-      return await secureStorage.getItem(AUTH_TOKEN_KEY);
+      return await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
     } catch (error) {
       console.error('Error getting auth token:', error);
       return null;
@@ -23,7 +21,7 @@ export const authTokens = {
    */
   async setToken(token: string): Promise<void> {
     try {
-      await secureStorage.setItem(AUTH_TOKEN_KEY, token);
+      await secureStorage.setItem(SECURE_STORAGE_KEYS.AUTH_TOKEN, token);
     } catch (error) {
       console.error('Error setting auth token:', error);
     }
@@ -34,7 +32,7 @@ export const authTokens = {
    */
   async removeToken(): Promise<void> {
     try {
-      await secureStorage.removeItem(AUTH_TOKEN_KEY);
+      await secureStorage.removeItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
     } catch (error) {
       console.error('Error removing auth token:', error);
     }

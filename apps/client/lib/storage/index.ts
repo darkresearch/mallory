@@ -2,6 +2,10 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
+// Export storage keys for consistent usage across the app
+export { SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from './keys';
+export type { SecureStorageKey, SessionStorageKey } from './keys';
+
 // Cross-platform secure storage that works on web and mobile
 export const secureStorage = {
   async getItem(key: string): Promise<string | null> {

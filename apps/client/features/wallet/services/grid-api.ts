@@ -59,7 +59,9 @@ class WalletService {
 
   private async getAuthToken(): Promise<string | null> {
     try {
-      const token = await secureStorage.getItem('mallory_auth_token');
+      // Use centralized storage key constant
+      const { SECURE_STORAGE_KEYS } = await import('@/lib/storage/keys');
+      const token = await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
       return token;
     } catch (error) {
       console.error('Error getting auth token:', error);

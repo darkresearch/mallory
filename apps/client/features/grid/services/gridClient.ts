@@ -1,4 +1,4 @@
-import { secureStorage, config } from '@/lib';
+import { secureStorage, config, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '@/lib';
 import { GridClient } from '@sqds/grid';
 
 /**
@@ -104,7 +104,7 @@ class GridClientService {
 
       // Call backend proxy (backend uses stateless detection)
       const backendUrl = config.backendApiUrl || 'http://localhost:3001';
-      const token = await secureStorage.getItem('mallory_auth_token');
+      const token = await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
 
       const response = await fetch(`${backendUrl}/api/grid/start-sign-in`, {
         method: 'POST',
@@ -125,8 +125,11 @@ class GridClientService {
 
       // Store flow hint for completeSignIn()
       // This is the KEY to the stateless pattern - passing hint between phases
+      // CRITICAL: Use sessionStorage (temporary) not secureStorage (persistent)
       const isExistingUser = data.isExistingUser ?? false;
-      await secureStorage.setItem('mallory_grid_is_existing_user', String(isExistingUser));
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER, String(isExistingUser));
+      }
 
       console.log(`✅ [Grid Client] Sign-in started, OTP sent to email (${isExistingUser ? 'existing' : 'new'} user)`);
 
@@ -193,7 +196,10 @@ class GridClientService {
       console.log('🔐 [Grid Client] Completing sign-in with OTP');
 
       // Retrieve flow hint from storage (set in startSignIn)
-      const isExistingUserStr = await secureStorage.getItem('mallory_grid_is_existing_user');
+      // CRITICAL: Read from sessionStorage where we stored it
+      const isExistingUserStr = typeof window !== 'undefined' && window.sessionStorage
+        ? sessionStorage.getItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER)
+        : null;
       const isExistingUser = isExistingUserStr === 'true';
 
       console.log(`🔐 [Grid Client] Flow hint: ${isExistingUser ? 'existing' : 'new'} user`);
@@ -216,7 +222,7 @@ class GridClientService {
 
       // Call backend proxy to complete auth (passes flow hint for optimal routing)
       const backendUrl = config.backendApiUrl || 'http://localhost:3001';
-      const token = await secureStorage.getItem('mallory_auth_token');
+      const token = await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
 
       const response = await fetch(`${backendUrl}/api/grid/complete-sign-in`, {
         method: 'POST',
@@ -241,14 +247,17 @@ class GridClientService {
       }
 
       // Store account data (includes authentication tokens)
-      await secureStorage.setItem('grid_account', JSON.stringify(authResult.data));
+      await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT, JSON.stringify(authResult.data));
 
       // Store session secrets for future transactions
       // These never expire - they're permanent "device credentials"
-      await secureStorage.setItem('grid_session_secrets', JSON.stringify(sessionSecrets));
+      await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS, JSON.stringify(sessionSecrets));
 
       // Clean up flow hint (no longer needed)
-      await secureStorage.removeItem('mallory_grid_is_existing_user');
+      // CRITICAL: Remove from sessionStorage where we stored it
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
+      }
 
       console.log('✅ [Grid Client] Sign-in complete:', authResult.data.address);
 
@@ -263,7 +272,7 @@ class GridClientService {
    * Get stored Grid account
    */
   async getAccount() {
-    const accountJson = await secureStorage.getItem('grid_account');
+    const accountJson = await secureStorage.getItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
     return accountJson ? JSON.parse(accountJson) : null;
   }
 
@@ -293,14 +302,14 @@ class GridClientService {
       const { recipient, amount, tokenMint } = params;
       
       // Retrieve session secrets and account
-      const sessionSecretsJson = await secureStorage.getItem('grid_session_secrets');
+      const sessionSecretsJson = await secureStorage.getItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
       if (!sessionSecretsJson) {
         throw new Error('Session secrets not found');
       }
       
       const sessionSecrets = JSON.parse(sessionSecretsJson);
       
-      const accountJson = await secureStorage.getItem('grid_account');
+      const accountJson = await secureStorage.getItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
       if (!accountJson) {
         throw new Error('Grid account not found');
       }
@@ -309,7 +318,7 @@ class GridClientService {
 
       // Call backend proxy
       const backendUrl = config.backendApiUrl || 'http://localhost:3001';
-      const token = await secureStorage.getItem('mallory_auth_token');
+      const token = await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
       
       const response = await fetch(`${backendUrl}/api/grid/send-tokens`, {
         method: 'POST',
@@ -346,8 +355,8 @@ class GridClientService {
    * Clear stored Grid data (logout)
    */
   async clearAccount() {
-    await secureStorage.removeItem('grid_session_secrets');
-    await secureStorage.removeItem('grid_account');
+    await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
+    await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
     console.log('🔐 Grid account data cleared');
   }
 }

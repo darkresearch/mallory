@@ -22,6 +22,7 @@ import DepositModal from '../../components/wallet/DepositModal';
 import SendModal from '../../components/wallet/SendModal';
 import { sendToken } from '../../features/wallet';
 import { walletService } from '../../features/wallet';
+import { SESSION_STORAGE_KEYS } from '../../lib';
 
 
 export default function WalletScreen() {
@@ -38,7 +39,7 @@ export default function WalletScreen() {
   // Load pending send from sessionStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined' && window.sessionStorage) {
-      const stored = sessionStorage.getItem('mallory_pending_send');
+      const stored = sessionStorage.getItem(SESSION_STORAGE_KEYS.PENDING_SEND);
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
@@ -46,7 +47,7 @@ export default function WalletScreen() {
           setPendingSend(parsed);
         } catch (error) {
           console.error('❌ [WalletScreen] Failed to parse stored pending send:', error);
-          sessionStorage.removeItem('mallory_pending_send');
+          sessionStorage.removeItem(SESSION_STORAGE_KEYS.PENDING_SEND);
         }
       }
     }
@@ -110,7 +111,7 @@ export default function WalletScreen() {
       
       // Persist to sessionStorage to survive navigation
       if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.setItem('mallory_pending_send', JSON.stringify(pendingSendData));
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.PENDING_SEND, JSON.stringify(pendingSendData));
         console.log('💾 [WalletScreen] Saved pending send to sessionStorage');
       }
       
@@ -159,7 +160,7 @@ export default function WalletScreen() {
           setPendingSend(null);
           // Clear from sessionStorage after completion
           if (typeof window !== 'undefined' && window.sessionStorage) {
-            sessionStorage.removeItem('mallory_pending_send');
+            sessionStorage.removeItem(SESSION_STORAGE_KEYS.PENDING_SEND);
             console.log('🧹 [WalletScreen] Cleared pending send from sessionStorage');
           }
         });
