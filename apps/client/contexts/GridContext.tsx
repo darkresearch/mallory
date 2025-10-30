@@ -50,9 +50,12 @@ export function GridProvider({ children }: { children: ReactNode }) {
   
   // OTP flow state
   const [isSigningInToGrid, setIsSigningInToGrid] = useState(false);
-  
+
   // Guard to prevent concurrent Grid sign-in attempts
   const isInitiatingGridSignIn = useRef(false);
+
+  // Promise-based lock to handle race conditions
+  const gridSignInPromise = useRef<Promise<void> | null>(null);
 
   // Load Grid account on mount and when user changes
   useEffect(() => {
@@ -181,9 +184,15 @@ export function GridProvider({ children }: { children: ReactNode }) {
     email: string,
     options?: { backgroundColor?: string; textColor?: string; returnPath?: string }
   ) => {
-    // GUARD: Atomic check-and-set to prevent race conditions
+    // GUARD: If a sign-in is already in progress, wait for it instead of starting a new one
+    if (gridSignInPromise.current) {
+      console.log('🏦 [GridContext] Sign-in already in progress, waiting for existing promise');
+      return gridSignInPromise.current;
+    }
+
+    // GUARD: Double-check with boolean flag
     if (isInitiatingGridSignIn.current) {
-      console.log('🏦 [GridContext] Sign-in already in progress, skipping duplicate call');
+      console.log('🏦 [GridContext] Sign-in already in progress (flag check), skipping duplicate call');
       return;
     }
 
@@ -191,52 +200,61 @@ export function GridProvider({ children }: { children: ReactNode }) {
     isInitiatingGridSignIn.current = true;
     setIsSigningInToGrid(true);
 
-    try {
-      console.log('🏦 [GridContext] Checking Grid account status for:', email);
-      
-      // Check if Grid account exists in client-side secure storage
-      const existingAccount = await gridClientService.getAccount();
-      
-      if (existingAccount) {
-        console.log('✅ [GridContext] Grid account already exists in secure storage');
-        setGridAccount(existingAccount);
-        setSolanaAddress(existingAccount.address);
+    // Create and store the promise
+    const promise = (async () => {
+      try {
+        console.log('🏦 [GridContext] Checking Grid account status for:', email);
+
+        // Check if Grid account exists in client-side secure storage
+        const existingAccount = await gridClientService.getAccount();
+
+        if (existingAccount) {
+          console.log('✅ [GridContext] Grid account already exists in secure storage');
+          setGridAccount(existingAccount);
+          setSolanaAddress(existingAccount.address);
+          setIsSigningInToGrid(false);
+          return; // Already signed in to Grid
+        }
+
+        console.log('🏦 [GridContext] No Grid account found, starting sign-in...');
+
+        // Start Grid sign-in - backend automatically detects auth level and handles migration
+        const { user: gridUser } = await gridClientService.startSignIn(email);
+
+        // Store gridUser and return path in sessionStorage for OTP screen
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_USER, JSON.stringify(gridUser));
+          if (options?.returnPath) {
+            sessionStorage.setItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH, options.returnPath);
+          }
+        }
+
+        // Navigate to OTP verification screen with background color, text color, and return path
+        console.log('🏦 [GridContext] Navigating to OTP verification screen');
+        router.push({
+          pathname: '/(auth)/verify-otp',
+          params: {
+            email,
+            backgroundColor: options?.backgroundColor || '#E67B25',
+            textColor: options?.textColor || '#FFFFFF',
+            returnPath: options?.returnPath || '/(main)/chat'
+          }
+        });
+      } catch (error: any) {
+        console.error('❌ [GridContext] Failed to start Grid sign-in:', error);
         setIsSigningInToGrid(false);
-        return; // Already signed in to Grid
+        throw error;
+      } finally {
+        // ALWAYS clear guards when done (success or error)
+        isInitiatingGridSignIn.current = false;
+        gridSignInPromise.current = null;
       }
-      
-      console.log('🏦 [GridContext] No Grid account found, starting sign-in...');
-      
-      // Start Grid sign-in - backend automatically detects auth level and handles migration
-      const { user: gridUser } = await gridClientService.startSignIn(email);
-      
-      // Store gridUser and return path in sessionStorage for OTP screen
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_USER, JSON.stringify(gridUser));
-        if (options?.returnPath) {
-          sessionStorage.setItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH, options.returnPath);
-        }
-      }
-      
-      // Navigate to OTP verification screen with background color, text color, and return path
-      console.log('🏦 [GridContext] Navigating to OTP verification screen');
-      router.push({
-        pathname: '/(auth)/verify-otp',
-        params: { 
-          email,
-          backgroundColor: options?.backgroundColor || '#E67B25',
-          textColor: options?.textColor || '#FFFFFF',
-          returnPath: options?.returnPath || '/(main)/chat'
-        }
-      });
-    } catch (error: any) {
-      console.error('❌ [GridContext] Failed to start Grid sign-in:', error);
-      setIsSigningInToGrid(false);
-      throw error;
-    } finally {
-      // ALWAYS clear guard flag when done (success or error)
-      isInitiatingGridSignIn.current = false;
-    }
+    })();
+
+    // Store the promise so concurrent calls can wait for it
+    gridSignInPromise.current = promise;
+
+    return promise;
   };
 
   /**
