@@ -38,7 +38,7 @@ export default function VerifyOtpScreen() {
   }>();
   const { width } = useWindowDimensions();
   const { logout } = useAuth();
-  const { completeGridSignIn, gridOtpSession } = useGrid();
+  const { completeGridSignIn, gridOtpSession: contextOtpSession } = useGrid();
   
   // Mobile detection
   const isMobile = Platform.OS === 'ios' || Platform.OS === 'android' || width < 768;
@@ -52,6 +52,9 @@ export default function VerifyOtpScreen() {
   const [otp, setOtp] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState('');
+  
+  // Local OTP session state (initialized from context, updateable on resend)
+  const [otpSession, setOtpSession] = useState<any>(null);
   
   // Guard to prevent double-submission
   const verificationInProgress = useRef(false);
@@ -120,15 +123,19 @@ export default function VerifyOtpScreen() {
     };
   }, [bgColor]);
 
-  // Load OTP session from context on mount
+  // Initialize OTP session from context on mount
   useEffect(() => {
-    if (!gridOtpSession) {
-      console.error('❌ [OTP Screen] No OTP session found in context');
-      setError('Session expired. Please sign in again.');
-    } else {
+    if (contextOtpSession) {
+      setOtpSession(contextOtpSession);
       console.log('✅ [OTP Screen] Loaded OTP session from GridContext');
+    } else {
+      // CRITICAL: If no OTP session exists, user shouldn't be on this screen
+      // This indicates a routing error (navigated here without going through sign-in flow)
+      console.error('❌ [OTP Screen] CRITICAL: No OTP session found - invalid navigation');
+      setError('Session error. Please sign in again.');
+      // Could also redirect back to login here
     }
-  }, [gridOtpSession]);
+  }, [contextOtpSession]);
 
   // Animated styles
   const textAnimatedStyle = useAnimatedStyle(() => ({
@@ -161,8 +168,8 @@ export default function VerifyOtpScreen() {
     }
 
     // Check OTP session
-    if (!gridOtpSession) {
-      setError('Session expired. Please sign in again.');
+    if (!otpSession) {
+      setError('Session error. Please try signing in again.');
       return;
     }
 
@@ -175,7 +182,7 @@ export default function VerifyOtpScreen() {
       console.log('🔐 [OTP Screen] Verifying OTP via GridContext...');
       
       // Use GridContext to complete sign-in (it handles navigation)
-      await completeGridSignIn(gridOtpSession, cleanOtp);
+      await completeGridSignIn(otpSession, cleanOtp);
       
       console.log('✅ [OTP Screen] Verification successful!');
     } catch (err: any) {
