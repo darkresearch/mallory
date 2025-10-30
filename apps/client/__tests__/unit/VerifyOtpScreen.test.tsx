@@ -9,7 +9,7 @@
  * - Integration with GridContext actions
  */
 
-import { describe, test, expect, beforeEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
 import '../setup/test-env';
 
 // Mock secure storage
@@ -25,31 +25,40 @@ const mockSecureStorageAPI = {
   },
 };
 
-// Mock Grid client service
+// Mock Grid client service with call tracking
+let mockStartSignInCalls: Array<{ email: string }> = [];
+let mockCompleteSignInCalls: Array<{ otpSession: any; otpCode: string }> = [];
+
 const mockGridClientService = {
-  startSignIn: mock(async (email: string) => ({
-    otpSession: {
-      id: 'session-' + Date.now(),
-      email,
-      challenge: 'mock-challenge',
-    },
-    isExistingUser: false,
-  })),
-  completeSignIn: mock(async (otpSession: any, otpCode: string) => ({
-    success: true,
-    data: {
-      address: 'mock-address-123',
-      authentication: { token: 'mock-token' },
-    },
-  })),
+  startSignIn: async (email: string) => {
+    mockStartSignInCalls.push({ email });
+    return {
+      otpSession: {
+        id: 'session-' + Date.now(),
+        email,
+        challenge: 'mock-challenge',
+      },
+      isExistingUser: false,
+    };
+  },
+  completeSignIn: async (otpSession: any, otpCode: string) => {
+    mockCompleteSignInCalls.push({ otpSession, otpCode });
+    return {
+      success: true,
+      data: {
+        address: 'mock-address-123',
+        authentication: { token: 'mock-token' },
+      },
+    };
+  },
 };
 
 describe('VerifyOtpScreen - Self-Contained Architecture', () => {
   beforeEach(() => {
     // Reset mocks
     mockSecureStorage = {};
-    mockGridClientService.startSignIn.mockClear();
-    mockGridClientService.completeSignIn.mockClear();
+    mockStartSignInCalls = [];
+    mockCompleteSignInCalls = [];
   });
 
   describe('Loading OTP Session on Mount', () => {
@@ -178,8 +187,8 @@ describe('VerifyOtpScreen - Self-Contained Architecture', () => {
         gridAccountStatus: 'not_created',
         isSigningInToGrid: false,
         // ❌ NOT: gridOtpSession (removed in new architecture)
-        initiateGridSignIn: mock(async () => {}),
-        completeGridSignIn: mock(async () => {}),
+        initiateGridSignIn: async () => {},
+        completeGridSignIn: async () => {},
       };
       
       // Assert: gridOtpSession not in context
@@ -270,10 +279,11 @@ describe('VerifyOtpScreen - Self-Contained Architecture', () => {
     });
 
     test('should handle resend errors gracefully', async () => {
-      // Setup: Mock failure
-      mockGridClientService.startSignIn.mockImplementationOnce(async () => {
+      // Setup: Mock failure by replacing function temporarily
+      const originalStartSignIn = mockGridClientService.startSignIn;
+      mockGridClientService.startSignIn = async () => {
         throw new Error('Network error');
-      });
+      };
       
       // Act: Try to resend
       let errorMessage = '';
@@ -285,6 +295,9 @@ describe('VerifyOtpScreen - Self-Contained Architecture', () => {
       
       // Assert: Error caught and displayed
       expect(errorMessage).toBe('Network error');
+      
+      // Restore original function
+      mockGridClientService.startSignIn = originalStartSignIn;
       
       // Local state should remain unchanged
       console.log('✅ Resend errors handled gracefully');
@@ -310,10 +323,9 @@ describe('VerifyOtpScreen - Self-Contained Architecture', () => {
       expect(result.data.address).toBe('mock-address-123');
       
       // Assert: completeSignIn called with local session
-      expect(mockGridClientService.completeSignIn).toHaveBeenCalledWith(
-        localOtpSession,
-        otpCode
-      );
+      expect(mockCompleteSignInCalls.length).toBe(1);
+      expect(mockCompleteSignInCalls[0].otpSession.id).toBe(localOtpSession.id);
+      expect(mockCompleteSignInCalls[0].otpCode).toBe(otpCode);
       
       console.log('✅ OTP verified using local session state');
     });
@@ -337,12 +349,8 @@ describe('VerifyOtpScreen - Self-Contained Architecture', () => {
       await mockGridClientService.completeSignIn(localOtpSession, otpCode);
       
       // Assert: Used new session, not old one
-      expect(mockGridClientService.completeSignIn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: expect.not.stringContaining('session-old'),
-        }),
-        otpCode
-      );
+      expect(mockCompleteSignInCalls.length).toBe(1);
+      expect(mockCompleteSignInCalls[0].otpSession.id).not.toBe('session-old');
       
       console.log('✅ Uses fresh session after resend, not stale one');
     });
@@ -350,10 +358,11 @@ describe('VerifyOtpScreen - Self-Contained Architecture', () => {
 
   describe('Error Handling', () => {
     test('should show correct error for expired OTP code', async () => {
-      // Setup: Mock expired code error
-      mockGridClientService.completeSignIn.mockImplementationOnce(async () => {
+      // Setup: Mock expired code error by replacing function temporarily
+      const originalCompleteSignIn = mockGridClientService.completeSignIn;
+      mockGridClientService.completeSignIn = async () => {
         throw new Error('Invalid code or expired');
-      });
+      };
       
       // Act: Try to verify
       let errorMessage = '';
@@ -366,15 +375,19 @@ describe('VerifyOtpScreen - Self-Contained Architecture', () => {
       // Assert: Error message guides user to resend
       expect(errorMessage.toLowerCase()).toContain('expired');
       
+      // Restore original function
+      mockGridClientService.completeSignIn = originalCompleteSignIn;
+      
       // UI should show: "This code is invalid or has expired. Please resend code."
       console.log('✅ Expired code error handled with correct message');
     });
 
     test('should show correct error for invalid OTP code', async () => {
       // Setup: Mock invalid code error
-      mockGridClientService.completeSignIn.mockImplementationOnce(async () => {
+      const originalCompleteSignIn = mockGridClientService.completeSignIn;
+      mockGridClientService.completeSignIn = async () => {
         throw new Error('Invalid code');
-      });
+      };
       
       // Act: Try to verify
       let errorMessage = '';
@@ -387,14 +400,18 @@ describe('VerifyOtpScreen - Self-Contained Architecture', () => {
       // Assert: Error message guides user
       expect(errorMessage.toLowerCase()).toContain('invalid');
       
+      // Restore original function
+      mockGridClientService.completeSignIn = originalCompleteSignIn;
+      
       console.log('✅ Invalid code error handled with correct message');
     });
 
     test('should handle network errors during verification', async () => {
       // Setup: Mock network error
-      mockGridClientService.completeSignIn.mockImplementationOnce(async () => {
+      const originalCompleteSignIn = mockGridClientService.completeSignIn;
+      mockGridClientService.completeSignIn = async () => {
         throw new Error('Network request failed');
-      });
+      };
       
       // Act: Try to verify
       let errorMessage = '';
@@ -406,6 +423,9 @@ describe('VerifyOtpScreen - Self-Contained Architecture', () => {
       
       // Assert: Error caught
       expect(errorMessage).toContain('Network');
+      
+      // Restore original function
+      mockGridClientService.completeSignIn = originalCompleteSignIn;
       
       console.log('✅ Network errors handled gracefully');
     });
@@ -434,10 +454,9 @@ describe('VerifyOtpScreen - Self-Contained Architecture', () => {
       await mockGridClientService.completeSignIn(localOtpSession, otpCode);
       
       // Assert: Session passed as parameter, not read from context
-      expect(mockGridClientService.completeSignIn).toHaveBeenCalledWith(
-        localOtpSession, // Passed as param
-        otpCode
-      );
+      expect(mockCompleteSignInCalls.length).toBe(1);
+      expect(mockCompleteSignInCalls[0].otpSession.id).toBe(localOtpSession.id);
+      expect(mockCompleteSignInCalls[0].otpCode).toBe(otpCode);
       
       console.log('✅ OTP session passed as parameter to GridContext action');
     });
