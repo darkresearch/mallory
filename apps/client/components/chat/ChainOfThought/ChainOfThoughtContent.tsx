@@ -29,7 +29,7 @@ export const ChainOfThoughtContent: React.FC<ChainOfThoughtContentProps> = ({
     ]).start();
   }, [isOpen, animatedHeight, animatedOpacity]);
 
-  if (!isOpen && animatedHeight._value === 0) {
+  if (!isOpen && animatedHeight.value === 0) {
     return null;
   }
 

@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 10,
     paddingBottom: 40, // Space for sign out button and fade
-    transform: [{ translateY: "-15px" }],
+    transform: [{ translateY: -15 }],
     // border: '1px solid red',
   },
   

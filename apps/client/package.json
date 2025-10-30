@@ -136,6 +136,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^24.9.2",
     "@types/react": "~19.1.0",
+    "@types/three": "^0.180.0",
     "babel-plugin-module-resolver": "^5.0.2",
     "buffer": "^6.0.3",
     "dotenv": "^16.4.7",

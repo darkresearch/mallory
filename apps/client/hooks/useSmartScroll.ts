@@ -97,7 +97,7 @@ export const useSmartScroll = (): UseSmartScrollReturn => {
   }, [isAtBottom, scrollToBottom]);
 
   return {
-    scrollViewRef,
+    scrollViewRef: scrollViewRef as React.RefObject<ScrollView>,
     isAtBottom,
     showScrollButton,
     scrollToBottom,
