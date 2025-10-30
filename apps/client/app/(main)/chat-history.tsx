@@ -13,7 +13,7 @@ import Animated, {
 import { Dimensions } from 'react-native';
 import { useConversations } from '../../contexts/ConversationsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { secureStorage } from '../../lib';
+import { secureStorage, SESSION_STORAGE_KEYS } from '../../lib';
 import { PressableButton } from '../../components/ui/PressableButton';
 import { createNewConversation } from '../../features/chat';
 
@@ -84,7 +84,7 @@ export default function ChatHistoryScreen() {
   useEffect(() => {
     const loadCurrentConversationId = async () => {
       try {
-        const currentId = await secureStorage.getItem('current_conversation_id');
+        const currentId = await secureStorage.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
         setCurrentConversationId(currentId);
       } catch (error) {
         console.error('Error loading current conversation ID:', error);

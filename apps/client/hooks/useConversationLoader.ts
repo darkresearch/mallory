@@ -2,9 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { useConversations } from '@/contexts/ConversationsContext';
 import { getCurrentOrCreateConversation } from '../features/chat';
-import { secureStorage } from '../lib';
-
-const CURRENT_CONVERSATION_KEY = 'current_conversation_id';
+import { secureStorage, SECURE_STORAGE_KEYS } from '../lib';
 
 interface UseConversationLoaderProps {
   userId?: string;

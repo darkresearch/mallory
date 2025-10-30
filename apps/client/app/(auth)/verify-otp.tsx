@@ -8,7 +8,7 @@ import Animated, {
   withDelay,
   Easing 
 } from 'react-native-reanimated';
-import { LAYOUT } from '@/lib';
+import { LAYOUT, SESSION_STORAGE_KEYS } from '@/lib';
 import { PressableButton } from '@/components/ui/PressableButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGrid } from '@/contexts/GridContext';
@@ -125,7 +125,7 @@ export default function VerifyOtpScreen() {
   useEffect(() => {
     const loadGridUser = () => {
       try {
-        const stored = sessionStorage.getItem('mallory_grid_user');
+        const stored = sessionStorage.getItem(SESSION_STORAGE_KEYS.GRID_USER);
         if (stored) {
           const parsed = JSON.parse(stored);
           setGridUser(parsed);
@@ -224,7 +224,7 @@ export default function VerifyOtpScreen() {
       // Update both state AND sessionStorage
       setGridUser(newGridUser);
       if (Platform.OS === 'web') {
-        sessionStorage.setItem('mallory_grid_user', JSON.stringify(newGridUser));
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_USER, JSON.stringify(newGridUser));
       }
       
       console.log('✅ [OTP Screen] New OTP sent');
@@ -285,7 +285,7 @@ export default function VerifyOtpScreen() {
     try {
       // Clear sessionStorage
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        sessionStorage.removeItem('mallory_grid_user');
+        sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_USER);
       }
       await logout();
     } catch (err) {

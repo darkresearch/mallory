@@ -23,6 +23,9 @@ export const SECURE_STORAGE_KEYS = {
   // Grid Wallet (Persistent credentials)
   GRID_ACCOUNT: 'mallory_grid_account',
   GRID_SESSION_SECRETS: 'mallory_grid_session_secrets',
+  
+  // Conversation state
+  CURRENT_CONVERSATION_ID: 'mallory_current_conversation_id',
 } as const;
 
 // ═══════════════════════════════════════════════════════════════

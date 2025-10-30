@@ -1,5 +1,6 @@
 import { useAuth } from '../contexts/AuthContext';
 import { useGrid } from '../contexts/GridContext';
+import { SESSION_STORAGE_KEYS } from '../lib';
 
 /**
  * Transaction Guard Hook
@@ -53,7 +54,7 @@ export function useTransactionGuard() {
       
       // Store current location for return navigation
       if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.setItem('otp_return_path', currentScreen);
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH, currentScreen);
       }
       
       // Trigger Grid sign-in with proper context
