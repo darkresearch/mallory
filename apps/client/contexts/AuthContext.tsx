@@ -337,6 +337,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('🚪 [LOGOUT] Starting Supabase logout');
       setIsLoading(true);
       
+      // CRITICAL: Set logout flag in sessionStorage BEFORE clearing user
+      // This tells GridContext to clear Grid credentials
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.setItem('mallory_is_logging_out', 'true');
+        console.log('🚪 [LOGOUT] Set logout flag for GridContext');
+      }
+      
       // STEP 1: Clear signing-in state immediately
       setIsSigningIn(false);
       // Clear OAuth-in-progress flag

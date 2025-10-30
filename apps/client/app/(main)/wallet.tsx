@@ -27,7 +27,7 @@ import { walletService } from '../../features/wallet';
 export default function WalletScreen() {
   const router = useRouter();
   const { user, logout, triggerReauth } = useAuth();
-  const { gridAccount } = useGrid();
+  const { gridAccount, solanaAddress } = useGrid();
   const { ensureGridSession } = useTransactionGuard();
   const translateX = useSharedValue(Dimensions.get('window').width);
   const [addressCopied, setAddressCopied] = useState(false);
@@ -174,9 +174,10 @@ export default function WalletScreen() {
   };
 
   const handleCopyAddress = async () => {
-    if (user?.solanaAddress) {
+    const address = gridAccount?.address || solanaAddress || user?.solanaAddress;
+    if (address) {
       try {
-        Clipboard.setString(user.solanaAddress);
+        Clipboard.setString(address);
         setAddressCopied(true);
         setTimeout(() => setAddressCopied(false), 2000);
       } catch (error) {
@@ -268,7 +269,7 @@ export default function WalletScreen() {
               activeOpacity={0.7}
             >
               <Text style={styles.walletAddress}>
-                {formatWalletAddress(user?.solanaAddress)}
+                {formatWalletAddress(gridAccount?.address || solanaAddress || user?.solanaAddress)}
               </Text>
               <Ionicons 
                 name={addressCopied ? "checkmark" : "copy-outline"} 
@@ -403,7 +404,7 @@ export default function WalletScreen() {
         <DepositModal
           visible={showDepositModal}
           onClose={() => setShowDepositModal(false)}
-          solanaAddress={user?.solanaAddress}
+          solanaAddress={gridAccount?.address || solanaAddress || user?.solanaAddress}
         />
         
         <SendModal 

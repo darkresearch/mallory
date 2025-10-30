@@ -59,19 +59,45 @@ export function GridProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const loadGridAccount = async () => {
       if (!user?.id) {
-        // Clear Grid state when no user
-        setGridAccount(null);
-        setSolanaAddress(null);
-        setGridAccountStatus('not_created');
-        setGridAccountId(null);
+        // CRITICAL FIX: Only clear Grid state on EXPLICIT logout, not on app refresh
+        // During app initialization, user?.id is temporarily null while auth session is being restored
+        // We must NOT clear Grid credentials in this case, or users lose access to their wallet
         
-        // SECURITY FIX: Clear Grid credentials from secure storage on logout
-        // This prevents the next user from accessing the previous user's Grid wallet
-        try {
-          await clearGridAccount();
-          console.log('🔒 [GridContext] Grid credentials cleared from secure storage on logout');
-        } catch (error) {
-          console.log('🔒 [GridContext] Error clearing Grid credentials (non-critical):', error);
+        // Check if this is an explicit logout (user clicked sign out button)
+        const isLoggingOut = typeof window !== 'undefined' && window.sessionStorage 
+          ? sessionStorage.getItem('mallory_is_logging_out') === 'true'
+          : false;
+        
+        if (isLoggingOut) {
+          // Explicit logout - clear everything
+          console.log('🔒 [GridContext] Explicit logout detected, clearing Grid state');
+          setGridAccount(null);
+          setSolanaAddress(null);
+          setGridAccountStatus('not_created');
+          setGridAccountId(null);
+          
+          // SECURITY FIX: Clear Grid credentials from secure storage on logout
+          // This prevents the next user from accessing the previous user's Grid wallet
+          try {
+            await clearGridAccount();
+            console.log('🔒 [GridContext] Grid credentials cleared from secure storage on logout');
+          } catch (error) {
+            console.log('🔒 [GridContext] Error clearing Grid credentials (non-critical):', error);
+          }
+          
+          // Clear the logout flag now that we've handled it
+          if (typeof window !== 'undefined' && window.sessionStorage) {
+            sessionStorage.removeItem('mallory_is_logging_out');
+            console.log('🔒 [GridContext] Cleared logout flag');
+          }
+        } else {
+          // App refresh or initial load - do NOT clear Grid credentials
+          // Just clear React state, keep secure storage intact
+          console.log('🔄 [GridContext] App refresh/init detected, clearing React state only (preserving Grid credentials)');
+          setGridAccount(null);
+          setSolanaAddress(null);
+          setGridAccountStatus('not_created');
+          setGridAccountId(null);
         }
         
         return;
