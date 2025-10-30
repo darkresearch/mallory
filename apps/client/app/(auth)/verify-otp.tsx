@@ -189,10 +189,13 @@ export default function VerifyOtpScreen() {
       console.error('❌ [OTP Screen] Verification error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Verification failed';
       
+      // Parse error messages and guide user to resend if needed
       if (errorMessage.toLowerCase().includes('invalid email and code combination')) {
-        setError('Invalid code. Please check and try again, or request a new code.');
-      } else if (errorMessage.toLowerCase().includes('invalid code')) {
-        setError('Invalid code. This code may have been used already. Please request a new code.');
+        setError('Invalid code. The code may have expired. Please resend code.');
+      } else if (errorMessage.toLowerCase().includes('invalid code') || 
+                 errorMessage.toLowerCase().includes('expired') ||
+                 errorMessage.toLowerCase().includes('used')) {
+        setError('This code is invalid or has expired. Please resend code.');
       } else {
         setError(errorMessage);
       }
@@ -208,15 +211,18 @@ export default function VerifyOtpScreen() {
     setOtp('');
 
     try {
-      console.log('🔄 [OTP Screen] Resending OTP...');
+      console.log('🔄 [OTP Screen] Resending OTP - starting new sign-in flow...');
       
-      // Start sign-in again to get new OTP
-      const { otpSession } = await gridClientService.startSignIn(params.email);
+      // Start sign-in again to get new OTP (Grid sends new email)
+      const { otpSession: newOtpSession } = await gridClientService.startSignIn(params.email);
       
-      // Store the new OTP session in secure storage (GridContext will reload it)
-      await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION, JSON.stringify(otpSession));
+      // Update LOCAL state with new OTP session (this is what we'll use for verification)
+      setOtpSession(newOtpSession);
       
-      console.log('✅ [OTP Screen] New OTP sent');
+      // Also update secure storage so GridContext stays in sync
+      await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION, JSON.stringify(newOtpSession));
+      
+      console.log('✅ [OTP Screen] New OTP sent successfully');
     } catch (err) {
       console.error('❌ [OTP Screen] Failed to resend:', err);
       setError(err instanceof Error ? err.message : 'Failed to resend code');
