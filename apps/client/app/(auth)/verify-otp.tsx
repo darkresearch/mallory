@@ -350,8 +350,7 @@ export default function VerifyOtpScreen() {
                     )}
                     <View style={[
                       styles.digitUnderline,
-                      { backgroundColor: textColor, opacity: 0.3 },
-                      isActive && styles.digitUnderlineActive
+                      { backgroundColor: textColor, opacity: 0.3 }
                     ]} />
                   </View>
                 );
@@ -494,11 +493,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8CEAC',
     borderRadius: 1,
     opacity: 0.5,
-  },
-  
-  digitUnderlineActive: {
-    backgroundColor: '#FFEFE3',
-    opacity: 1,
   },
   
   // Hidden input (captures keyboard input)
