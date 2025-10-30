@@ -16,29 +16,29 @@ import { SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../../lib/storage/key
 // Mock dependencies
 jest.mock('../../lib/supabase', () => ({
   supabase: {
-    from: jest.fn(() => ({
-      select: jest.fn(() => ({
-        eq: jest.fn(() => ({
-          abortSignal: jest.fn(() => ({
-            single: jest.fn().mockResolvedValue({ data: null, error: null })
+    from: jest.fn<any>(() => ({
+      select: jest.fn<any>(() => ({
+        eq: jest.fn<any>(() => ({
+          abortSignal: jest.fn<any>(() => ({
+            single: jest.fn<any>().mockResolvedValue({ data: null, error: null })
           }))
         }))
       }))
     })),
     auth: {
-      getSession: jest.fn().mockResolvedValue({ 
+      getSession: jest.fn<any>().mockResolvedValue({ 
         data: { session: null }, 
         error: null 
       }),
-      onAuthStateChange: jest.fn(() => ({
+      onAuthStateChange: jest.fn<any>(() => ({
         data: { subscription: { unsubscribe: jest.fn() } }
       }))
     }
   }
 }));
 
-const mockGetAccount = jest.fn();
-const mockClearAccount = jest.fn();
+const mockGetAccount = jest.fn<any>();
+const mockClearAccount = jest.fn<any>();
 
 jest.mock('../../features/grid', () => ({
   gridClientService: {
