@@ -33,8 +33,6 @@ describe('Wallet Holdings Integration with Grid Client', () => {
 
   describe('Grid client availability in wallet service', () => {
     test('should be able to import walletDataService', async () => {
-      const { walletDataService } = await import('../../features/wallet/index.js');
-      
       expect(walletDataService).toBeDefined();
       expect(typeof walletDataService.getWalletData).toBe('function');
       
@@ -42,8 +40,6 @@ describe('Wallet Holdings Integration with Grid Client', () => {
     });
 
     test('should be able to import gridClientService', async () => {
-      const { gridClientService } = await import('../../features/grid/index.js');
-      
       expect(gridClientService).toBeDefined();
       expect(typeof gridClientService.getAccount).toBe('function');
       
@@ -84,8 +80,6 @@ describe('Wallet Holdings Integration with Grid Client', () => {
     }, 30000); // 30 second timeout for API call
 
     test('should be able to get Grid account from gridClientService', async () => {
-      const { gridClientService } = await import('../../features/grid/index.js');
-      
       // This will use the test storage that was set up
       const account = await gridClientService.getAccount();
       
@@ -100,8 +94,6 @@ describe('Wallet Holdings Integration with Grid Client', () => {
 
   describe('Error handling', () => {
     test('should handle case when Grid account is not available', async () => {
-      const { gridClientService } = await import('../../features/grid/index.js');
-      
       // Clear the account temporarily
       await gridClientService.clearAccount();
       
@@ -150,16 +142,11 @@ describe('Wallet Holdings Integration with Grid Client', () => {
 
   describe('Module integration', () => {
     test('should have correct import chain: wallet -> grid -> lib', async () => {
-      // Import in the correct dependency order
-      const lib = await import('../../lib/index.js');
-      const grid = await import('../../features/grid/index.js');
-      const wallet = await import('../../features/wallet/index.js');
-      
-      // Verify all modules loaded successfully
+      // Verify all modules loaded successfully (imported at top of file)
       expect(lib.secureStorage).toBeDefined();
       expect(lib.config).toBeDefined();
-      expect(grid.gridClientService).toBeDefined();
-      expect(wallet.walletDataService).toBeDefined();
+      expect(gridClientService).toBeDefined();
+      expect(walletDataService).toBeDefined();
       
       console.log('✅ Module import chain is correct');
     });
