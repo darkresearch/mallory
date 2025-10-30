@@ -1,5 +1,11 @@
 # State Management Review
 
+> **⚠️ NOTE:** This document is outdated as of 2025-10-30. Major cleanup has been completed:
+> - `OtpVerificationModal.tsx` has been deleted (duplicate of verify-otp screen)
+> - `AuthGate.tsx` has been deleted (logic moved to AuthContext)
+> - `AuthCarousel.tsx` has been deleted (replaced with simple button)
+> - See [CLEANUP_SUMMARY.md](/CLEANUP_SUMMARY.md) for details
+
 **Date:** October 29, 2025  
 **Status:** 🔴 Action Required
 

@@ -158,8 +158,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('🔀 [AuthContext] Not authenticated, redirecting to login from:', currentPath);
         router.replace('/(auth)/login');
       }
+    } else if (needsReauth) {
+      // User needs re-authentication - redirect to OTP screen
+      // Skip if already on verify-otp screen to prevent redirect loop
+      if (!currentPath.includes('/verify-otp')) {
+        console.log('🔀 [AuthContext] User needs re-auth, redirecting to OTP screen from:', currentPath);
+        router.push({
+          pathname: '/(auth)/verify-otp',
+          params: { 
+            email: user.email || '',
+            returnPath: currentPath
+          }
+        });
+      }
     } else {
-      // Authenticated - only redirect from root or auth screens
+      // Authenticated and verified - only redirect from root or auth screens
       // Do NOT redirect if user is on wallet, chat-history, or any other main screen
       const isOnAuthScreen = currentPath.includes('/auth/');
       const isOnRootOnly = currentPath === '/' || currentPath === '/index';
@@ -172,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       // If user is on /(main)/wallet, /(main)/chat-history, etc - stay there
     }
-  }, [user, isLoading, pathname]);
+  }, [user, isLoading, needsReauth, pathname]);
 
   // Grid sign-in logic moved to GridContext
   // AuthContext now only handles Supabase authentication
