@@ -193,6 +193,7 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
     }
   }, [aiMessages, aiStatus, liveReasoningText]);
 
+  // DISABLED: Proactive message feature is disabled
   // Trigger proactive message for empty onboarding conversations
   // SAFEGUARDS AGAINST INFINITE LOOPS:
   // 1. Check userHasCompletedOnboarding flag (persistent across sessions)
@@ -202,14 +203,9 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
   // 
   // NOTE: Onboarding conversation creation is now handled by OnboardingConversationHandler component
   // This effect only triggers the greeting message for existing onboarding conversations
-  // 
-  // DISABLED: Proactive message is currently disabled
+  /*
   useEffect(() => {
     const triggerProactiveMessage = async () => {
-      // DISABLED: Proactive message from Mallory is disabled
-      console.log('🤖 [Proactive] Proactive message is disabled');
-      return;
-      
       // SAFEGUARD #1: User has already received intro message - NEVER send again
       if (userHasCompletedOnboarding) {
         console.log('🤖 [Proactive] User has already completed onboarding - skipping intro message');
@@ -279,6 +275,7 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
 
     triggerProactiveMessage();
   }, [isLoadingHistory, rawMessages.length, currentConversationId, sendAIMessage, aiStatus, userHasCompletedOnboarding, userId]);
+  */
 
   const handleSendMessage = async (message: string) => {
     if (!sendAIMessage) return;
