@@ -50,8 +50,8 @@ jest.mock('../../features/grid', () => ({
 import { gridClientService } from '../../features/grid';
 
 // Use the mocked functions directly with proper typing
-const getAccountMock = mockGetAccount as jest.Mock;
-const clearAccountMock = mockClearAccount as jest.Mock;
+const getAccountMock = mockGetAccount as jest.Mock<any>;
+const clearAccountMock = mockClearAccount as jest.Mock<any>;
 
 // Test wrapper with both Auth and Grid providers
 function TestWrapper({ children }: { children: React.ReactNode }) {
