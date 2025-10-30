@@ -29,7 +29,7 @@ export function useConversationLoader({ userId }: UseConversationLoaderProps) {
           setCurrentConversationId(conversationIdParam);
           
           // Update the current conversation in storage so future messages go to this conversation
-          await secureStorage.setItem(CURRENT_CONVERSATION_KEY, conversationIdParam);
+          await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationIdParam);
         } else {
           // Normal flow - get existing current conversation or create if none exists
           // Pass existing conversations data to avoid duplicate queries
