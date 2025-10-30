@@ -260,19 +260,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('Database query result:', { userData, dbError });
 
-      // Get Grid account data (kept for backward compatibility in user object)
-      // Actual Grid state management is handled by GridContext
-      console.log('🏦 Fetching Grid account data');
-      const { data: gridData, error: gridError } = await supabase
-        .from('users_grid')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-      
-      // It's OK if no Grid data exists yet - it will be created by GridContext
-      if (gridError && gridError.code !== 'PGRST116') {
-        console.log('Grid data fetch error:', gridError);
-      }
+      // Grid wallet info will be managed by GridContext
+      // It loads from secure storage, not database
+      // We no longer store Grid data in the user object
 
       const user: User = {
         id: session.user.id,
@@ -284,10 +274,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         instantBuyAmount: userData?.instant_buy_amount,
         instayieldEnabled: userData?.instayield_enabled,
         hasCompletedOnboarding: userData?.has_completed_onboarding || false,
-        // Grid wallet info (kept for backward compatibility, but managed by GridContext)
-        solanaAddress: gridData?.solana_wallet_address,
-        gridAccountStatus: gridData?.grid_account_status || 'not_created',
-        gridAccountId: gridData?.grid_account_id,
+        // Grid wallet info removed - now managed by GridContext
+        // These fields kept for backward compatibility but will be undefined
+        solanaAddress: undefined,
+        gridAccountStatus: 'not_created',
+        gridAccountId: undefined,
       };
 
       console.log('👤 Setting user:', user);
@@ -295,9 +286,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('✅ User set successfully');
       
       // Set flag for GridContext to auto-initiate sign-in for unified authentication flow
-      // This avoids circular dependency while enabling automatic Grid sign-in for new users
-      if (!gridData?.solana_wallet_address && user.email) {
-        console.log('🏦 No Grid wallet found, setting flag for GridContext to initiate sign-in');
+      // GridContext will check secure storage to see if wallet already exists
+      // If no wallet exists, it will auto-initiate Grid sign-in
+      if (user.email) {
+        console.log('🏦 Setting auto-initiate flag for GridContext');
         if (typeof window !== 'undefined' && window.sessionStorage) {
           window.sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE, 'true');
           window.sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL, user.email);
@@ -616,10 +608,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /**
    * Refresh User Data
    * 
-   * Refetches user data (including Grid info for backward compatibility) from the database.
+   * Refetches user data from the database (Supabase user metadata only).
    * 
-   * Note: Grid account data comes from Grid API and secure storage, not database.
-   * This function only refreshes Supabase user metadata.
+   * Note: Grid account data comes from Grid API and secure storage via GridContext.
+   * This function does NOT refresh Grid data.
    * 
    * @param userId - Optional user ID to use (defaults to current user)
    */
@@ -634,21 +626,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     
     try {
-      // Fetch user data
+      // Fetch user data (NOT Grid data - that's in GridContext)
       const { data: userData } = await supabase
         .from('users')
         .select('*')
         .eq('id', targetUserId)
         .single();
-      
-      // Fetch Grid data (for backward compatibility in user object)
-      const { data: gridData } = await supabase
-        .from('users_grid')
-        .select('*')
-        .eq('id', targetUserId)
-        .single();
 
-      // Update user state
+      // Update user state (Grid fields remain unchanged - managed by GridContext)
       if (user) {
         setUser(prev => {
           if (!prev) return null;
@@ -659,10 +644,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               instayieldEnabled: userData.instayield_enabled,
               hasCompletedOnboarding: userData.has_completed_onboarding,
             }),
-            // Grid data for backward compatibility
-            solanaAddress: gridData?.solana_wallet_address || prev.solanaAddress,
-            gridAccountStatus: gridData?.grid_account_status || prev.gridAccountStatus,
-            gridAccountId: gridData?.grid_account_id || prev.gridAccountId,
+            // Grid data NOT updated here - GridContext manages it
           };
         });
         console.log('🔄 [AuthContext] User data refreshed');

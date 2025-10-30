@@ -111,6 +111,13 @@ export function GridProvider({ children }: { children: ReactNode }) {
           setSolanaAddress(account.address);  // Wallet address from Grid SDK
           setGridAccountStatus('active');  // If account exists, it's active
           setGridAccountId(account.address);  // Use address as ID
+          
+          // Clear auto-initiate flag if account exists
+          // This prevents auto-initiating when user already has a wallet
+          if (typeof window !== 'undefined' && window.sessionStorage) {
+            sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE);
+            sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL);
+          }
         } else {
           // No Grid account in secure storage
           setGridAccount(null);
@@ -120,7 +127,8 @@ export function GridProvider({ children }: { children: ReactNode }) {
         }
         
         // Check for auto-initiate flag from AuthContext (unified authentication flow)
-        if (typeof window !== 'undefined' && window.sessionStorage) {
+        // Only initiate if no account exists in secure storage
+        if (!account && typeof window !== 'undefined' && window.sessionStorage) {
           const shouldAutoInitiate = sessionStorage.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE) === 'true';
           const autoInitiateEmail = sessionStorage.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL);
           
