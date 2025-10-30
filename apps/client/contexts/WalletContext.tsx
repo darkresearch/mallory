@@ -19,12 +19,13 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { solanaAddress } = useGrid();
+  const { solanaAddress, gridAccount, initiateGridSignIn, gridAccountStatus } = useGrid();
   const [walletData, setWalletData] = useState<WalletData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasTriggeredGridSignIn, setHasTriggeredGridSignIn] = useState(false);
 
   // Load wallet data
   const loadWalletData = async (forceRefresh = false) => {
@@ -48,6 +49,31 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         fallbackAddress
       });
       
+      // If no wallet address is available, trigger Grid sign-in
+      if (!fallbackAddress && user?.email && !hasTriggeredGridSignIn) {
+        console.log('💰 [Context] No wallet address available, triggering Grid OTP sign-in');
+        setHasTriggeredGridSignIn(true);
+        try {
+          await initiateGridSignIn(user.email, {
+            backgroundColor: '#FFEFE3',
+            textColor: '#000000',
+            returnPath: '/(main)/wallet'
+          });
+          // Don't set error here - Grid sign-in will navigate to OTP screen
+          // Wallet data will load after OTP completion via the useEffect below
+          return;
+        } catch (signInError) {
+          console.error('💰 [Context] Failed to initiate Grid sign-in:', signInError);
+          setHasTriggeredGridSignIn(false); // Reset to allow retry
+          throw new Error('No wallet address available. Please complete Grid wallet setup.');
+        }
+      }
+      
+      // If we still don't have an address after attempting sign-in, throw error
+      if (!fallbackAddress) {
+        throw new Error('No wallet found. Please complete Grid wallet setup.');
+      }
+      
       const data = forceRefresh 
         ? await walletDataService.refreshWalletData(fallbackAddress)
         : await walletDataService.getWalletData(fallbackAddress);
@@ -66,11 +92,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       setWalletData(walletData);
       setError(null);
+      setHasTriggeredGridSignIn(false); // Reset flag on success
       
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load wallet data';
       console.error('💰 [Context] Error loading wallet data:', errorMessage);
-      setError(errorMessage);
+      
+      // Don't set error if we're triggering Grid sign-in (will navigate to OTP)
+      if (!errorMessage.includes('No wallet address available')) {
+        setError(errorMessage);
+      }
       
       // Try to use cached data on error
       const cachedData = walletDataService.getCachedData();
@@ -111,6 +142,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       loadWalletData();
     }
   }, [user?.id, isInitialized]);
+
+  // When Grid account becomes available (after OTP completion), load wallet data
+  useEffect(() => {
+    if (!user?.id || !isInitialized) return;
+    
+    // If Grid account just became available and we don't have wallet data, load it
+    const hasWalletAddress = gridAccount?.address || solanaAddress || user?.solanaAddress;
+    
+    if (hasWalletAddress && gridAccountStatus === 'active') {
+      // Check if we need to load wallet data
+      const needsData = !walletData || walletData.holdings.length === 0;
+      
+      if (needsData) {
+        console.log('💰 [Context] Grid account now available, loading wallet data');
+        setHasTriggeredGridSignIn(false); // Reset flag so we can retry if needed
+        loadWalletData(true); // Force refresh to get fresh data
+      }
+    }
+  }, [gridAccount?.address, solanaAddress, gridAccountStatus, user?.id, user?.solanaAddress, isInitialized, walletData]);
 
   // Auto-refresh on app focus
   useEffect(() => {
@@ -157,6 +207,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setError(null);
       setIsLoading(false);
       setIsInitialized(false);
+      setHasTriggeredGridSignIn(false);
       walletDataService.clearCache();
     }
   }, [user?.id]);

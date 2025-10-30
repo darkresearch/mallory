@@ -193,6 +193,44 @@ describe('Wallet Holdings Integration with Grid Client', () => {
       await testStorage.setItem('grid_session_secrets', JSON.stringify(gridSession.sessionSecrets));
     }, 30000);
 
+    test('should throw error when no wallet address is available (triggers OTP flow)', async () => {
+      // This test verifies that when NO wallet address is available (no Grid account,
+      // no fallback Solana address), the system should trigger Grid OTP sign-in
+      
+      // Clear Grid account
+      await gridClientService.clearAccount();
+      
+      // Verify Grid account is cleared
+      const clearedAccount = await gridClientService.getAccount();
+      expect(clearedAccount).toBeNull();
+      
+      console.log('💰 Testing wallet data fetch with NO address available');
+      
+      // Try to fetch wallet data without any address - should throw error
+      // In production, WalletContext would catch this and trigger Grid OTP sign-in
+      try {
+        await walletDataService.getWalletData(); // No fallback address provided
+        // Should not reach here - should throw error
+        throw new Error('Expected error when no wallet address is available');
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        expect(errorMessage).toContain('No wallet found');
+        
+        console.log('✅ Correctly throws error when no wallet address available');
+        console.log('   Error:', errorMessage);
+        console.log('   This error triggers Grid OTP sign-in in WalletContext');
+      }
+      
+      // Restore Grid account for other tests
+      const gridSession = await loadGridSession();
+      const { testStorage } = await import('../setup/test-storage');
+      await testStorage.setItem('grid_account', JSON.stringify({
+        address: gridSession.address,
+        authentication: gridSession.authentication
+      }));
+      await testStorage.setItem('grid_session_secrets', JSON.stringify(gridSession.sessionSecrets));
+    });
+
     test('should provide helpful error when wallet fetch fails', async () => {
       const backendUrl = process.env.TEST_BACKEND_URL || 'http://localhost:3001';
       
