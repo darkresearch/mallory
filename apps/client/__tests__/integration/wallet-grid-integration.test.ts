@@ -12,6 +12,7 @@ import { supabase } from '../setup/supabase-test-client';
 import { walletDataService } from '../../features/wallet';
 import { gridClientService } from '../../features/grid';
 import * as lib from '../../lib';
+import { globalCleanup } from './global-cleanup';
 
 describe('Wallet Holdings Integration with Grid Client', () => {
   let userId: string;
@@ -40,16 +41,26 @@ describe('Wallet Holdings Integration with Grid Client', () => {
     try {
       await Promise.race([
         (async () => {
+          // Remove all Supabase Realtime channels
+          try {
+            supabase.removeAllChannels();
+          } catch (e) {
+            // Ignore errors
+          }
+          
           await supabase.auth.signOut();
           console.log('✅ Signed out from Supabase');
         })(),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Cleanup timeout')), 30000)
+          setTimeout(() => reject(new Error('Cleanup timeout')), 10000)
         )
       ]);
     } catch (error) {
       console.warn('Error signing out:', error);
     }
+    
+    // Register global cleanup to run after all tests
+    await globalCleanup();
   });
 
   describe('Grid client availability in wallet service', () => {

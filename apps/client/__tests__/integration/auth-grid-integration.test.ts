@@ -10,6 +10,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import './setup';
 import { setupTestUserSession, cleanupTestData, supabase, gridTestClient } from './setup';
+import { globalCleanup } from './global-cleanup';
 
 describe('Auth + Grid Integration Tests', () => {
   let testSession: {
@@ -36,23 +37,34 @@ describe('Auth + Grid Integration Tests', () => {
           await cleanupTestData(testSession.userId);
           console.log('✅ Cleanup complete');
           
+          // Remove all Supabase Realtime channels
+          try {
+            supabase.removeAllChannels();
+          } catch (e) {
+            // Ignore errors
+          }
+          
           // Sign out from Supabase to stop auth refresh timers
           await supabase.auth.signOut();
           console.log('✅ Signed out from Supabase');
         })(),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Cleanup timeout')), 30000)
+          setTimeout(() => reject(new Error('Cleanup timeout')), 10000)
         )
       ]);
     } catch (error) {
       console.warn('Error during cleanup:', error);
       // Still try to sign out even if cleanup failed
       try {
+        supabase.removeAllChannels();
         await supabase.auth.signOut();
       } catch (e) {
         // Ignore sign out errors
       }
     }
+    
+    // Register global cleanup to run after all tests
+    await globalCleanup();
   });
 
   describe('Session Restoration', () => {
