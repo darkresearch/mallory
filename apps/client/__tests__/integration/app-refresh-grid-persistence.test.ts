@@ -44,7 +44,7 @@ jest.mock('../../features/grid', () => ({
   }
 }));
 
-const { gridClientService } = require('../../features/grid');
+import { gridClientService } from '../../features/grid';
 
 // Test wrapper with both Auth and Grid providers
 function TestWrapper({ children }: { children: React.ReactNode }) {
