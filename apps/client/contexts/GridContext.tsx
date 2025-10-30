@@ -17,7 +17,9 @@ interface GridAccount {
 }
 
 interface GridUser {
-  // Grid user object from startSignIn()
+  // Grid OTP session object from Grid API's createAccount/initAuth
+  // This is a temporary challenge identifier that must be paired with OTP
+  // to complete authentication via completeAuth/completeAuthAndCreateAccount
   [key: string]: any;
 }
 
@@ -30,11 +32,11 @@ export interface GridContextType {
   
   // OTP flow state
   isSigningInToGrid: boolean;
-  gridUser: GridUser | null; // Add gridUser to context
+  gridOtpSession: GridUser | null; // Temporary OTP session from Grid API
   
   // Grid actions
   initiateGridSignIn: (email: string, options?: { backgroundColor?: string; textColor?: string; returnPath?: string }) => Promise<void>;
-  completeGridSignIn: (gridUser: GridUser, otp: string) => Promise<void>;
+  completeGridSignIn: (otpSession: GridUser, otp: string) => Promise<void>;
   clearGridAccount: () => Promise<void>;
 }
 
@@ -51,7 +53,7 @@ export function GridProvider({ children }: { children: ReactNode }) {
   
   // OTP flow state
   const [isSigningInToGrid, setIsSigningInToGrid] = useState(false);
-  const [gridUser, setGridUser] = useState<GridUser | null>(null);
+  const [gridOtpSession, setGridOtpSession] = useState<GridUser | null>(null);
 
   // Guard to prevent concurrent Grid sign-in attempts
   const isInitiatingGridSignIn = useRef(false);
@@ -77,7 +79,7 @@ export function GridProvider({ children }: { children: ReactNode }) {
           setSolanaAddress(null);
           setGridAccountStatus('not_created');
           setGridAccountId(null);
-          setGridUser(null);
+          setGridOtpSession(null);
           
           // SECURITY FIX: Clear Grid credentials from secure storage on logout
           // This prevents the next user from accessing the previous user's Grid wallet
@@ -99,7 +101,7 @@ export function GridProvider({ children }: { children: ReactNode }) {
           setSolanaAddress(null);
           setGridAccountStatus('not_created');
           setGridAccountId(null);
-          setGridUser(null);
+          setGridOtpSession(null);
         }
         
         return;
@@ -127,14 +129,14 @@ export function GridProvider({ children }: { children: ReactNode }) {
           setGridAccountId(null);
         }
         
-        // Load pending gridUser from secure storage (OTP flow)
-        const storedGridUser = await secureStorage.getItem(SECURE_STORAGE_KEYS.GRID_USER);
-        if (storedGridUser) {
+        // Load pending OTP session from secure storage (OTP flow)
+        const storedOtpSession = await secureStorage.getItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
+        if (storedOtpSession) {
           try {
-            setGridUser(JSON.parse(storedGridUser));
-            console.log('✅ [GridContext] Loaded gridUser from secure storage');
+            setGridOtpSession(JSON.parse(storedOtpSession));
+            console.log('✅ [GridContext] Loaded OTP session from secure storage');
           } catch (err) {
-            console.error('❌ [GridContext] Failed to parse gridUser:', err);
+            console.error('❌ [GridContext] Failed to parse OTP session:', err);
           }
         }
         
@@ -169,7 +171,7 @@ export function GridProvider({ children }: { children: ReactNode }) {
         setSolanaAddress(null);
         setGridAccountStatus('not_created');
         setGridAccountId(null);
-        setGridUser(null);
+        setGridOtpSession(null);
       }
     };
 
@@ -182,7 +184,7 @@ export function GridProvider({ children }: { children: ReactNode }) {
    * Starts the Grid wallet sign-in flow by:
    * 1. Checking if Grid account already exists
    * 2. Starting sign-in with Grid (sends OTP email)
-   * 3. Storing gridUser in sessionStorage for OTP screen
+   * 3. Storing OTP session in secure storage for OTP screen
    * 4. Navigating to OTP verification screen
    * 
    * Uses singleton pattern to prevent race conditions.
@@ -229,12 +231,12 @@ export function GridProvider({ children }: { children: ReactNode }) {
         console.log('🏦 [GridContext] No Grid account found, starting sign-in...');
 
         // Start Grid sign-in - backend automatically detects auth level and handles migration
-        const { user: newGridUser } = await gridClientService.startSignIn(email);
+        const { otpSession, isExistingUser } = await gridClientService.startSignIn(email);
 
-        // Store gridUser in secure storage (cross-platform) and state
-        await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_USER, JSON.stringify(newGridUser));
-        setGridUser(newGridUser);
-        console.log('✅ [GridContext] Stored gridUser in secure storage and state');
+        // Store OTP session in secure storage (cross-platform) and state
+        await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION, JSON.stringify(otpSession));
+        setGridOtpSession(otpSession);
+        console.log('✅ [GridContext] Stored OTP session in secure storage and state');
         
         // Store return path in session storage
         if (options?.returnPath) {
@@ -280,11 +282,11 @@ export function GridProvider({ children }: { children: ReactNode }) {
    * 
    * Called from OTP verification screen after user enters code.
    */
-  const completeGridSignIn = async (gridUser: GridUser, otp: string) => {
+  const completeGridSignIn = async (otpSession: GridUser, otp: string) => {
     try {
       console.log('🔐 [GridContext] Completing Grid sign-in with OTP');
       
-      const authResult = await gridClientService.completeSignIn(gridUser, otp);
+      const authResult = await gridClientService.completeSignIn(otpSession, otp);
       
       if (authResult.success && authResult.data) {
         console.log('✅ [GridContext] Grid sign-in successful!');
@@ -296,9 +298,9 @@ export function GridProvider({ children }: { children: ReactNode }) {
         setGridAccountStatus('active');
         setIsSigningInToGrid(false);
         
-        // Clear gridUser from state and storage (no longer needed after successful sign-in)
-        setGridUser(null);
-        await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_USER);
+        // Clear OTP session from state and storage (no longer needed after successful sign-in)
+        setGridOtpSession(null);
+        await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
         
         // Get return path from secure storage or default to chat
         const returnPath = await secureStorage.getItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH);
@@ -343,10 +345,10 @@ export function GridProvider({ children }: { children: ReactNode }) {
       setGridAccountStatus('not_created');
       setGridAccountId(null);
       setIsSigningInToGrid(false);
-      setGridUser(null);
+      setGridOtpSession(null);
       
       // Clear secure storage
-      await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_USER);
+      await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
       await secureStorage.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
       await secureStorage.removeItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
     } catch (error) {
@@ -362,7 +364,7 @@ export function GridProvider({ children }: { children: ReactNode }) {
         gridAccountStatus,
         gridAccountId,
         isSigningInToGrid,
-        gridUser,
+        gridOtpSession,
         initiateGridSignIn,
         completeGridSignIn,
         clearGridAccount,

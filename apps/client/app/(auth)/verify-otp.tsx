@@ -24,7 +24,7 @@ import { gridClientService } from '@/features/grid';
  * - Simple, focused, no modals
  * 
  * State Management:
- * - gridUser stored in sessionStorage (survives refresh)
+ * - gridOtpSession retrieved from GridContext (persists across refresh)
  * - email passed via route params
  * - All logic self-contained in this screen
  */
@@ -38,7 +38,7 @@ export default function VerifyOtpScreen() {
   }>();
   const { width } = useWindowDimensions();
   const { logout } = useAuth();
-  const { completeGridSignIn, gridUser: contextGridUser } = useGrid();
+  const { completeGridSignIn, gridOtpSession } = useGrid();
   
   // Mobile detection
   const isMobile = Platform.OS === 'ios' || Platform.OS === 'android' || width < 768;
@@ -120,15 +120,15 @@ export default function VerifyOtpScreen() {
     };
   }, [bgColor]);
 
-  // Load gridUser from context on mount
+  // Load OTP session from context on mount
   useEffect(() => {
-    if (!contextGridUser) {
-      console.error('❌ [OTP Screen] No gridUser found in context');
+    if (!gridOtpSession) {
+      console.error('❌ [OTP Screen] No OTP session found in context');
       setError('Session expired. Please sign in again.');
     } else {
-      console.log('✅ [OTP Screen] Loaded gridUser from GridContext');
+      console.log('✅ [OTP Screen] Loaded OTP session from GridContext');
     }
-  }, [contextGridUser]);
+  }, [gridOtpSession]);
 
   // Animated styles
   const textAnimatedStyle = useAnimatedStyle(() => ({
@@ -160,8 +160,8 @@ export default function VerifyOtpScreen() {
       return;
     }
 
-    // Check gridUser
-    if (!contextGridUser) {
+    // Check OTP session
+    if (!gridOtpSession) {
       setError('Session expired. Please sign in again.');
       return;
     }
@@ -175,7 +175,7 @@ export default function VerifyOtpScreen() {
       console.log('🔐 [OTP Screen] Verifying OTP via GridContext...');
       
       // Use GridContext to complete sign-in (it handles navigation)
-      await completeGridSignIn(contextGridUser, cleanOtp);
+      await completeGridSignIn(gridOtpSession, cleanOtp);
       
       console.log('✅ [OTP Screen] Verification successful!');
     } catch (err: any) {
@@ -204,10 +204,10 @@ export default function VerifyOtpScreen() {
       console.log('🔄 [OTP Screen] Resending OTP...');
       
       // Start sign-in again to get new OTP
-      const { user: newGridUser } = await gridClientService.startSignIn(params.email);
+      const { otpSession } = await gridClientService.startSignIn(params.email);
       
-      // Store the new gridUser in secure storage (GridContext will reload it)
-      await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_USER, JSON.stringify(newGridUser));
+      // Store the new OTP session in secure storage (GridContext will reload it)
+      await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION, JSON.stringify(otpSession));
       
       console.log('✅ [OTP Screen] New OTP sent');
     } catch (err) {
@@ -265,8 +265,8 @@ export default function VerifyOtpScreen() {
 
   const handleSignOut = async () => {
     try {
-      // Clear gridUser from secure storage
-      await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_USER);
+      // Clear OTP session from secure storage
+      await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
       await logout();
     } catch (err) {
       console.error('Sign out error:', err);

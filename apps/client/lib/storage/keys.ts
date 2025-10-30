@@ -24,8 +24,11 @@ export const SECURE_STORAGE_KEYS = {
   GRID_ACCOUNT: 'mallory_grid_account',
   GRID_SESSION_SECRETS: 'mallory_grid_session_secrets',
   
-  // Grid Sign-In Flow (Persistent during OTP flow)
-  GRID_USER: 'mallory_grid_user',
+  // Grid OTP Flow (Temporary session identifier for OTP verification)
+  // This is the "challenge" object from Grid API's createAccount/initAuth
+  // Must be paired with OTP code to complete authentication
+  // Cleared after successful OTP verification
+  GRID_OTP_SESSION: 'mallory_grid_otp_session',
   
   // Conversation state
   CURRENT_CONVERSATION_ID: 'mallory_current_conversation_id',
