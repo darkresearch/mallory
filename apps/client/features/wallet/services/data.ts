@@ -53,8 +53,9 @@ class WalletDataService {
 
   /**
    * Fetch enriched holdings from new holdings endpoint
+   * @param fallbackWalletAddress - Optional Solana address to use if Grid account is not available
    */
-  private async fetchEnrichedHoldings(): Promise<WalletData> {
+  private async fetchEnrichedHoldings(fallbackWalletAddress?: string): Promise<WalletData> {
     const requestId = Math.random().toString(36).substring(2, 8);
     const startTime = Date.now();
 
@@ -62,7 +63,8 @@ class WalletDataService {
       console.log('💰 [Mobile] fetchEnrichedHoldings() START', {
         requestId,
         baseUrl: this.baseUrl,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        hasFallbackAddress: !!fallbackWalletAddress
       });
 
       // Test server connection first
@@ -70,16 +72,21 @@ class WalletDataService {
 
       // Get Grid wallet address from secure storage
       const gridAccount = await gridClientService.getAccount();
-      const walletAddress = gridAccount?.address;
+      const walletAddress = gridAccount?.address || fallbackWalletAddress;
 
       if (!walletAddress) {
-        console.error('💰 [Mobile] No Grid wallet address available', { requestId });
+        console.error('💰 [Mobile] No Grid wallet address available', { 
+          requestId,
+          hasGridAccount: !!gridAccount,
+          hasFallbackAddress: !!fallbackWalletAddress
+        });
         throw new Error('No wallet found. Please complete Grid wallet setup.');
       }
 
-      console.log('💰 [Mobile] Grid wallet address retrieved', {
+      console.log('💰 [Mobile] Using wallet address', {
         requestId,
-        address: walletAddress
+        address: walletAddress,
+        source: gridAccount?.address ? 'gridAccount' : 'fallback'
       });
 
       // Get auth token
@@ -193,12 +200,14 @@ class WalletDataService {
 
   /**
    * Get complete wallet data with intelligent caching
+   * @param fallbackWalletAddress - Optional Solana address to use if Grid account is not available
    */
-  async getWalletData(): Promise<WalletData> {
+  async getWalletData(fallbackWalletAddress?: string): Promise<WalletData> {
     console.log('💰 [Mobile] WalletDataService.getWalletData() called', {
       baseUrl: this.baseUrl,
       hasFreshCache: this.hasFreshCache(),
-      cacheExpiry: this.cacheExpiry ? new Date(this.cacheExpiry).toISOString() : 'none'
+      cacheExpiry: this.cacheExpiry ? new Date(this.cacheExpiry).toISOString() : 'none',
+      hasFallbackAddress: !!fallbackWalletAddress
     });
 
     // Return cached data if still fresh
@@ -215,7 +224,7 @@ class WalletDataService {
       // Test server connectivity first
       await this.testServerConnection();
       
-      const walletData = await this.fetchEnrichedHoldings();
+      const walletData = await this.fetchEnrichedHoldings(fallbackWalletAddress);
       this.updateCache(walletData);
       
       console.log('💰 [Mobile] Wallet data updated successfully', {
@@ -317,11 +326,14 @@ class WalletDataService {
 
   /**
    * Refresh wallet data (bypass cache)
+   * @param fallbackWalletAddress - Optional Solana address to use if Grid account is not available
    */
-  async refreshWalletData(): Promise<WalletData> {
-    console.log('💰 Refreshing wallet data (bypassing cache)');
+  async refreshWalletData(fallbackWalletAddress?: string): Promise<WalletData> {
+    console.log('💰 Refreshing wallet data (bypassing cache)', {
+      hasFallbackAddress: !!fallbackWalletAddress
+    });
     this.clearCache();
-    return this.getWalletData();
+    return this.getWalletData(fallbackWalletAddress);
   }
 
   /**
