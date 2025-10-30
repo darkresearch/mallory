@@ -403,7 +403,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('🚪 [LOGOUT] Supabase sign-out error (non-critical):', error);
       }
       
-      // STEP 8: Clear navigation stack and redirect to login
+      // STEP 8: Clear React state and set loading to false BEFORE redirect
+      // This ensures the auto-redirect effect can see the state change
+      setIsLoading(false);
+      
+      // STEP 9: Clear navigation stack and redirect to login
       try {
         if (router.canDismiss()) {
           router.dismissAll();
@@ -415,14 +419,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Final redirect to login
       router.replace('/(auth)/login');
-      console.log('🚪 [LOGOUT] Logout completed successfully');
+      console.log('🚪 [LOGOUT] Logout completed successfully, redirected to login');
       
     } catch (error) {
       console.error('🚪 [LOGOUT] Unexpected error during logout:', error);
+      setIsLoading(false);
       // Force redirect to login even on error
       router.replace('/(auth)/login');
     } finally {
-      setIsLoading(false);
       isLoggingOut.current = false;
     }
   };
