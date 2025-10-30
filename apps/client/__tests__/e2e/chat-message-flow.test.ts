@@ -649,12 +649,12 @@ describe('Chat Message Flow (E2E)', () => {
       console.warn('   Falling back to basic heuristics...');
       
       // Fallback: Basic punctuation check (less reliable)
-      const lastChar = assistantMessage.content.trim().slice(-1);
+      const lastChar = extractedText.trim().slice(-1);
       const endsWithPunctuation = ['.', '!', '?', '"', "'", ')'].includes(lastChar);
       
       if (!endsWithPunctuation) {
         console.warn('   ⚠️  WARNING: Response does not end with punctuation');
-        console.warn('   Last 200 chars:', assistantMessage.content.slice(-200));
+        console.warn('   Last 200 chars:', extractedText.slice(-200));
       }
     }
 

@@ -13,7 +13,7 @@ interface Icon3DProps {
 
 function Model({ uri, rotationSpeed = 1 }: { uri: string; rotationSpeed?: number }) {
   const { scene } = useGLTF(uri);
-  const meshRef = useRef<THREE.Group>();
+  const meshRef = useRef<THREE.Group>(null);
   
   // Clone the scene to avoid sharing materials between instances
   const clonedScene = React.useMemo(() => scene.clone(), [scene]);

@@ -4,9 +4,10 @@
  * Tests session restoration scenarios with real services
  */
 
-import { describe, test, expect, beforeAll } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import './setup';
 import { setupTestUserSession, supabase, gridTestClient } from './setup';
+import { globalCleanup } from './global-cleanup';
 
 describe('Session Persistence Integration Tests', () => {
   let testSession: {
@@ -20,6 +21,33 @@ describe('Session Persistence Integration Tests', () => {
     testSession = await setupTestUserSession();
   });
 
+  afterAll(async () => {
+    // Sign out from Supabase to stop auth refresh timers
+    try {
+      await Promise.race([
+        (async () => {
+          // Remove all Supabase Realtime channels
+          try {
+            supabase.removeAllChannels();
+          } catch (e) {
+            // Ignore errors
+          }
+          
+          await supabase.auth.signOut();
+          console.log('✅ Signed out from Supabase');
+        })(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Cleanup timeout')), 10000)
+        )
+      ]);
+    } catch (error) {
+      console.warn('Error signing out:', error);
+    }
+    
+    // Register global cleanup to run after all tests
+    await globalCleanup();
+  });
+
   describe('App Restart Simulation', () => {
     test('should restore both Supabase and Grid sessions after restart', async () => {
       // Simulate app restart by re-fetching everything
@@ -30,7 +58,7 @@ describe('Session Persistence Integration Tests', () => {
       expect(supabaseSession.data.session?.user.id).toBe(testSession.userId);
       expect(gridAccount).not.toBe(null);
       expect(gridAccount?.address).toBe(testSession.gridSession.address);
-    });
+    }, 180000); // 3 min timeout for Grid operations
 
     test('should restore user data from database', async () => {
       const { data: userData } = await supabase
@@ -50,7 +78,7 @@ describe('Session Persistence Integration Tests', () => {
 
       expect(account).not.toBe(null);
       expect(account?.address).toBe(testSession.gridSession.address);
-    });
+    }, 180000); // 3 min timeout for Grid operations
   });
 
   describe('Page Refresh Simulation', () => {
@@ -117,7 +145,7 @@ describe('Session Persistence Integration Tests', () => {
         expect(account).not.toBe(null);
         expect(account?.address).toBe(testSession.gridSession.address);
       });
-    });
+    }, 180000); // 3 min timeout for Grid operations
   });
 
   describe('Long-Running Session', () => {
@@ -165,7 +193,7 @@ describe('Session Persistence Integration Tests', () => {
         expect(check.hasAccount).toBe(true);
         expect(check.address).toBe(testSession.gridSession.address);
       });
-    });
+    }, 180000); // 3 min timeout for Grid operations
   });
 
   describe('Offline/Online Transitions', () => {
@@ -203,7 +231,7 @@ describe('Session Persistence Integration Tests', () => {
       expect(gridAccount?.address).toBe(testSession.gridSession.address);
       expect(userData.data?.id).toBe(testSession.userId);
       // Note: users_grid no longer used - Grid data comes from secure storage
-    });
+    }, 180000); // 3 min timeout for Grid operations
   });
 });
 

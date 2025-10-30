@@ -1,9 +1,8 @@
-import { secureStorage } from '../../../lib/storage';
+import { secureStorage, SECURE_STORAGE_KEYS } from '../../../lib/storage';
 import { supabase } from '../../../lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
-const LAST_CONVERSATION_KEY = 'last_conversation_timestamp';
-const CURRENT_CONVERSATION_KEY = 'current_conversation_id';
+const LAST_CONVERSATION_KEY = 'mallory_last_conversation_timestamp';
 const GLOBAL_TOKEN_ID = '00000000-0000-0000-0000-000000000000'; // All zeros UUID for global conversations
 
 export interface ConversationData {
@@ -183,7 +182,7 @@ export async function createNewConversation(userId?: string, metadata?: Record<s
     const now = Date.now();
     
     // Store in local storage as the current conversation
-    await secureStorage.setItem(CURRENT_CONVERSATION_KEY, newConversationId);
+    await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, newConversationId);
     await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
     
     // Get userId if not provided
@@ -244,7 +243,7 @@ export async function getCurrentOrCreateConversation(
   existingConversations?: Array<{ id: string; updated_at: string }>
 ): Promise<ConversationData> {
   try {
-    const currentConversationId = await secureStorage.getItem(CURRENT_CONVERSATION_KEY);
+    const currentConversationId = await secureStorage.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
     const now = Date.now();
     
     if (currentConversationId) {
@@ -265,7 +264,7 @@ export async function getCurrentOrCreateConversation(
         console.log('📱 Found existing conversations (from context), loading most recent:', mostRecentConversation.id);
         
         // Set as current conversation
-        await secureStorage.setItem(CURRENT_CONVERSATION_KEY, mostRecentConversation.id);
+        await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
         await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
         
         return {
@@ -313,7 +312,7 @@ export async function getCurrentOrCreateConversation(
           console.log('📱 Found existing conversations (from DB), loading most recent:', mostRecentConversation.id);
           
           // Set as current conversation
-          await secureStorage.setItem(CURRENT_CONVERSATION_KEY, mostRecentConversation.id);
+          await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
           await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
           
           return {

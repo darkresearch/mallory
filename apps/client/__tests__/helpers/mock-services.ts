@@ -5,7 +5,7 @@
  * for isolated unit testing
  */
 
-import { mock } from 'bun:test';
+import { jest } from '@jest/globals';
 
 /**
  * Mock Supabase client for unit tests
@@ -13,24 +13,24 @@ import { mock } from 'bun:test';
 export function createMockSupabase() {
   return {
     auth: {
-      getSession: mock(() => Promise.resolve({ data: { session: null }, error: null })),
-      signInWithPassword: mock(() => Promise.resolve({ data: { user: null, session: null }, error: null })),
-      signInWithOAuth: mock(() => Promise.resolve({ data: {}, error: null })),
-      signInWithIdToken: mock(() => Promise.resolve({ data: { user: null, session: null }, error: null })),
-      signOut: mock(() => Promise.resolve({ error: null })),
-      onAuthStateChange: mock((callback: any) => ({
-        data: { subscription: { unsubscribe: mock(() => {}) } }
+      getSession: jest.fn(() => Promise.resolve({ data: { session: null }, error: null })),
+      signInWithPassword: jest.fn(() => Promise.resolve({ data: { user: null, session: null }, error: null })),
+      signInWithOAuth: jest.fn(() => Promise.resolve({ data: {}, error: null })),
+      signInWithIdToken: jest.fn(() => Promise.resolve({ data: { user: null, session: null }, error: null })),
+      signOut: jest.fn(() => Promise.resolve({ error: null })),
+      onAuthStateChange: jest.fn((callback: any) => ({
+        data: { subscription: { unsubscribe: jest.fn(() => {}) } }
       })),
     },
-    from: mock((table: string) => ({
-      select: mock(() => ({
-        eq: mock(() => ({
-          single: mock(() => Promise.resolve({ data: null, error: null })),
+    from: jest.fn((table: string) => ({
+      select: jest.fn(() => ({
+        eq: jest.fn(() => ({
+          single: jest.fn(() => Promise.resolve({ data: null, error: null })),
         })),
       })),
-      delete: mock(() => ({
-        eq: mock(() => ({
-          like: mock(() => Promise.resolve({ data: null, error: null })),
+      delete: jest.fn(() => ({
+        eq: jest.fn(() => ({
+          like: jest.fn(() => Promise.resolve({ data: null, error: null })),
         })),
       })),
     })),
@@ -42,19 +42,19 @@ export function createMockSupabase() {
  */
 export function createMockGridClient() {
   return {
-    getAccount: mock(() => Promise.resolve(null)),
-    startSignIn: mock(() => Promise.resolve({ 
+    getAccount: jest.fn(() => Promise.resolve(null)),
+    startSignIn: jest.fn(() => Promise.resolve({ 
       user: { id: 'mock-grid-user-id' },
       sessionSecrets: { key: 'mock-secret' }
     })),
-    completeSignIn: mock(() => Promise.resolve({
+    completeSignIn: jest.fn(() => Promise.resolve({
       success: true,
       data: {
         address: 'mock-solana-address',
         authentication: { token: 'mock-token' }
       }
     })),
-    clearAccount: mock(() => Promise.resolve()),
+    clearAccount: jest.fn(() => Promise.resolve()),
   };
 }
 
@@ -63,12 +63,12 @@ export function createMockGridClient() {
  */
 export function createMockRouter() {
   return {
-    push: mock(() => {}),
-    replace: mock(() => {}),
-    back: mock(() => {}),
-    canDismiss: mock(() => false),
-    dismissAll: mock(() => {}),
-    setParams: mock(() => {}),
+    push: jest.fn(() => {}),
+    replace: jest.fn(() => {}),
+    back: jest.fn(() => {}),
+    canDismiss: jest.fn(() => false),
+    dismissAll: jest.fn(() => {}),
+    setParams: jest.fn(() => {}),
   };
 }
 
@@ -79,16 +79,16 @@ export function createMockSecureStorage() {
   const storage = new Map<string, string>();
   
   return {
-    setItem: mock(async (key: string, value: string) => {
+    setItem: jest.fn(async (key: string, value: string) => {
       storage.set(key, value);
     }),
-    getItem: mock(async (key: string) => {
+    getItem: jest.fn(async (key: string) => {
       return storage.get(key) || null;
     }),
-    removeItem: mock(async (key: string) => {
+    removeItem: jest.fn(async (key: string) => {
       storage.delete(key);
     }),
-    clear: mock(async () => {
+    clear: jest.fn(async () => {
       storage.clear();
     }),
     // Access to internal storage for test assertions
@@ -101,8 +101,8 @@ export function createMockSecureStorage() {
  */
 export function createMockWalletDataService() {
   return {
-    clearCache: mock(() => {}),
-    getWalletData: mock(() => Promise.resolve(null)),
+    clearCache: jest.fn(() => {}),
+    getWalletData: jest.fn(() => Promise.resolve(null)),
   };
 }
 

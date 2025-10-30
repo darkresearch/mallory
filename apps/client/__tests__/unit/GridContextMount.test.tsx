@@ -5,7 +5,7 @@
  * when a user is signed in, preventing reactive errors later
  */
 
-import { describe, test, expect, mock, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
 import '../setup/test-env';
 
 describe('GridContext - Proactive Initialization on Mount', () => {

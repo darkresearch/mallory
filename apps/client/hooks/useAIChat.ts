@@ -61,7 +61,8 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
     transport: new DefaultChatTransport({
       fetch: async (url, options) => {
         // Get auth token and Grid session secrets
-        const token = await secureStorage.getItem('mallory_auth_token');
+        const { SECURE_STORAGE_KEYS } = await import('@/lib/storage/keys');
+        const token = await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
         
         // Get Grid context for x402 payments (shared utility)
         const { gridSessionSecrets, gridSession } = await loadGridContextForX402({
@@ -82,7 +83,7 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
             } : null;
           },
           getSessionSecrets: async () => {
-            return await secureStorage.getItem('grid_session_secrets');
+            return await secureStorage.getItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
           }
         });
         
