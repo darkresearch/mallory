@@ -34,7 +34,6 @@ export interface GridContextType {
   // Grid actions
   initiateGridSignIn: (email: string, options?: { backgroundColor?: string; textColor?: string; returnPath?: string }) => Promise<void>;
   completeGridSignIn: (gridUser: GridUser, otp: string) => Promise<void>;
-  refreshGridAccount: (userId?: string) => Promise<void>;
   clearGridAccount: () => Promise<void>;
 }
 
@@ -272,17 +271,12 @@ export function GridProvider({ children }: { children: ReactNode }) {
           sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
           sessionStorage.removeItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH);
         }
-
-        // Refresh Grid account data from database (non-blocking - background sync)
-        // Don't await this - navigate immediately for better UX
-        // The database will be updated in the background
-        if (user?.id) {
-          refreshGridAccount(user.id).catch(error => {
-            console.error('❌ [GridContext] Background Grid account refresh failed (non-critical):', error);
-          });
-        }
         
-        // Navigate back to original screen immediately
+        // Navigate to destination screen immediately
+        // Grid account data is already stored in:
+        // 1. React state (set above)
+        // 2. Secure storage (set by gridClientService.completeSignIn)
+        // No need to query database - Grid API is the source of truth
         console.log('🔐 [GridContext] Navigating to:', finalPath);
         router.replace(finalPath as any);
       } else {
@@ -293,69 +287,6 @@ export function GridProvider({ children }: { children: ReactNode }) {
       setIsSigningInToGrid(false);
       throw error;
     }
-  };
-
-  /**
-   * Refresh Grid Account
-   * 
-   * Refetches Grid wallet info (address, status) from the database
-   * and updates the local state. Called after Grid sign-in completes
-   * to sync the newly created wallet address into the UI.
-   * 
-   * @param userId - Optional user ID to use (defaults to current user)
-   */
-  const refreshGridAccount = async (userId?: string) => {
-    console.log('🔄 [GridContext] Refreshing Grid account...');
-    
-    // Use provided userId or fall back to current user
-    const targetUserId = userId || user?.id;
-    
-    if (!targetUserId) {
-      console.log('🔄 [GridContext] No user ID provided or available, skipping');
-      return;
-    }
-    
-    try {
-      console.log('🔄 [GridContext] Querying database for user:', targetUserId);
-      
-      // Add timeout to prevent hanging (5 second max)
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const { data: gridData, error: queryError } = await supabase
-        .from('users_grid')
-        .select('*')
-        .eq('id', targetUserId)
-        .abortSignal(controller.signal)
-        .single();
-      
-      clearTimeout(timeoutId);
-
-      console.log('🔄 [GridContext] Query result:', {
-        hasData: !!gridData,
-        address: gridData?.solana_wallet_address,
-        status: gridData?.grid_account_status,
-        error: queryError?.message,
-      });
-
-      // Update state with fresh data from database
-      if (gridData) {
-        setSolanaAddress(gridData.solana_wallet_address);
-        setGridAccountStatus(gridData.grid_account_status || 'not_created');
-        setGridAccountId(gridData.grid_account_id);
-        console.log('🔄 [GridContext] Grid account state updated');
-      }
-    } catch (error: any) {
-      // Check if this is an abort error (timeout)
-      if (error.name === 'AbortError') {
-        console.error('❌ [GridContext] Query timed out after 5 seconds');
-      } else {
-        console.error('❌ [GridContext] Error:', error);
-      }
-      // Don't throw - this is a non-critical operation
-    }
-    
-    console.log('🔄 [GridContext] COMPLETED');
   };
 
   /**
@@ -397,7 +328,6 @@ export function GridProvider({ children }: { children: ReactNode }) {
         isSigningInToGrid,
         initiateGridSignIn,
         completeGridSignIn,
-        refreshGridAccount,
         clearGridAccount,
       }}
     >

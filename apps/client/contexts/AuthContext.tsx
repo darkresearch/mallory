@@ -617,7 +617,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * Refresh User Data
    * 
    * Refetches user data (including Grid info for backward compatibility) from the database.
-   * Grid-specific refresh logic is now in GridContext.refreshGridAccount()
+   * 
+   * Note: Grid account data comes from Grid API and secure storage, not database.
+   * This function only refreshes Supabase user metadata.
    * 
    * @param userId - Optional user ID to use (defaults to current user)
    */
