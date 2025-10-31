@@ -26,7 +26,6 @@ interface UseAIChatProps {
  */
 export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatProps) {
   const previousStatusRef = useRef<string>('ready');
-  const lastVerifiedMessageCountRef = useRef(0);
   const [initialMessages, setInitialMessages] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const { width: viewportWidth } = useWindowDimensions();
@@ -35,7 +34,6 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
   useEffect(() => {
     // Reset state when conversation ID changes
     setInitialMessages([]);
-    lastVerifiedMessageCountRef.current = 0; // Reset verification count
     
     // Don't load if conversationId is invalid
     if (!conversationId || conversationId === 'temp-loading') {
@@ -167,78 +165,8 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
         currentCount: messages.length
       });
       setMessages(initialMessages);
-      lastVerifiedMessageCountRef.current = initialMessages.length;
     }
-  }, [isLoadingHistory, initialMessages.length, setMessages, messages.length]);
-
-  // Verify sync with server after AI completes responding
-  // This helps catch any desync issues without disrupting UX
-  useEffect(() => {
-    // Only verify when:
-    // 1. AI just finished responding (status changed from 'awaiting_message' to 'ready')
-    // 2. We have messages to verify
-    // 3. Message count has changed since last verification
-    const justFinished = previousStatusRef.current === 'awaiting_message' && status === 'ready';
-    const shouldVerify = 
-      justFinished && 
-      messages.length > 0 && 
-      messages.length !== lastVerifiedMessageCountRef.current &&
-      conversationId &&
-      conversationId !== 'temp-loading';
-
-    if (shouldVerify) {
-      console.log('🔍 Verifying message sync with server after AI response:', {
-        localCount: messages.length,
-        lastVerified: lastVerifiedMessageCountRef.current
-      });
-
-      // Verify in background without blocking UI
-      const verifySync = async () => {
-        try {
-          const serverMessages = await loadMessagesFromSupabase(conversationId);
-          
-          // Check if server has significantly different message count
-          const diff = Math.abs(serverMessages.length - messages.length);
-          
-          if (diff > 0) {
-            console.warn('⚠️ Client/Server message count mismatch:', {
-              client: messages.length,
-              server: serverMessages.length,
-              difference: diff,
-              conversationId
-            });
-            
-            // Log message IDs for debugging
-            const clientIds = messages.map(m => m.id).sort();
-            const serverIds = serverMessages.map(m => m.id).sort();
-            const missingOnServer = clientIds.filter(id => !serverIds.includes(id));
-            const missingOnClient = serverIds.filter(id => !clientIds.includes(id));
-            
-            if (missingOnServer.length > 0) {
-              console.warn('⚠️ Messages on client but not server:', missingOnServer);
-            }
-            if (missingOnClient.length > 0) {
-              console.warn('⚠️ Messages on server but not client:', missingOnClient);
-            }
-            
-            // Note: We log but don't auto-fix to avoid disrupting user experience
-            // The next conversation load or refresh will sync correctly
-          } else {
-            console.log('✅ Message sync verified - client and server match:', messages.length);
-          }
-          
-          lastVerifiedMessageCountRef.current = messages.length;
-        } catch (error) {
-          console.error('🔍 Error verifying message sync:', error);
-        }
-      };
-
-      verifySync();
-    }
-
-    // Track status for next comparison
-    previousStatusRef.current = status;
-  }, [status, messages.length, conversationId]);
+  }, [isLoadingHistory, initialMessages.length, messages.length, setMessages]);
 
   // Message persistence is now handled server-side
   // Complete messages are saved after streaming completes, ensuring reliability without incremental overhead
