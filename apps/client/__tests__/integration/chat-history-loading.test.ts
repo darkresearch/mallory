@@ -147,7 +147,7 @@ describe('Chat History Integration Tests', () => {
 
       await supabase.from('messages').insert(messages);
 
-      const loadedMessages = await loadMessagesFromSupabase(conversation!.id);
+      const loadedMessages = await loadMessagesFromSupabaseTest(conversation!.id);
 
       expect(loadedMessages.length).toBe(3);
       expect(loadedMessages[0].role).toBe('user');
@@ -196,7 +196,7 @@ describe('Chat History Integration Tests', () => {
 
       await supabase.from('messages').insert(messages);
 
-      const loadedMessages = await loadMessagesFromSupabase(conversation!.id);
+      const loadedMessages = await loadMessagesFromSupabaseTest(conversation!.id);
 
       expect(loadedMessages.length).toBe(3);
       expect((loadedMessages[0] as any).content).toBe('Message 1');
@@ -232,7 +232,7 @@ describe('Chat History Integration Tests', () => {
 
       await supabase.from('messages').insert(message);
 
-      const loadedMessages = await loadMessagesFromSupabase(conversation!.id);
+      const loadedMessages = await loadMessagesFromSupabaseTest(conversation!.id);
 
       expect(loadedMessages.length).toBe(1);
       expect(loadedMessages[0].parts.length).toBe(2);
@@ -269,7 +269,7 @@ describe('Chat History Integration Tests', () => {
 
       await supabase.from('messages').insert(message);
 
-      const loadedMessages = await loadMessagesFromSupabase(conversation!.id);
+      const loadedMessages = await loadMessagesFromSupabaseTest(conversation!.id);
 
       expect(loadedMessages.length).toBe(1);
       expect(loadedMessages[0].parts.length).toBe(3);
@@ -366,7 +366,7 @@ describe('Chat History Integration Tests', () => {
   describe('Edge Cases', () => {
     test('should handle loading history for non-existent conversation', async () => {
       const nonExistentId = '00000000-0000-0000-0000-000000000000';
-      const messages = await loadMessagesFromSupabase(nonExistentId);
+      const messages = await loadMessagesFromSupabaseTest(nonExistentId);
 
       expect(messages).toEqual([]);
     });
@@ -393,7 +393,7 @@ describe('Chat History Integration Tests', () => {
         created_at: new Date().toISOString(),
       });
 
-      const loadedMessages = await loadMessagesFromSupabase(conversation!.id);
+      const loadedMessages = await loadMessagesFromSupabaseTest(conversation!.id);
 
       expect(loadedMessages.length).toBe(1);
       expect((loadedMessages[0] as any).content).toBe('Message without metadata');
@@ -425,7 +425,7 @@ describe('Chat History Integration Tests', () => {
 
       await supabase.from('messages').insert(messages);
 
-      const loadedMessages = await loadMessagesFromSupabase(conversation!.id);
+      const loadedMessages = await loadMessagesFromSupabaseTest(conversation!.id);
 
       expect(loadedMessages.length).toBe(100);
       expect((loadedMessages[0] as any).content).toBe('Message 0');
@@ -456,9 +456,9 @@ describe('Chat History Integration Tests', () => {
 
       // Load concurrently
       const [messages1, messages2, messages3] = await Promise.all([
-        loadMessagesFromSupabase(conversation!.id),
-        loadMessagesFromSupabase(conversation!.id),
-        loadMessagesFromSupabase(conversation!.id),
+        loadMessagesFromSupabaseTest(conversation!.id),
+        loadMessagesFromSupabaseTest(conversation!.id),
+        loadMessagesFromSupabaseTest(conversation!.id),
       ]);
 
       expect(messages1.length).toBe(1);
@@ -491,7 +491,7 @@ describe('Chat History Integration Tests', () => {
         created_at: new Date().toISOString(),
       });
 
-      const loadedMessages = await loadMessagesFromSupabase(conversation!.id);
+      const loadedMessages = await loadMessagesFromSupabaseTest(conversation!.id);
 
       expect(loadedMessages.length).toBe(1);
       expect((loadedMessages[0] as any).content).toBe(specialContent);
@@ -513,7 +513,7 @@ describe('Chat History Integration Tests', () => {
       testConversationIds.push(conversation!.id);
 
       // Initial load
-      const initialMessages = await loadMessagesFromSupabase(conversation!.id);
+      const initialMessages = await loadMessagesFromSupabaseTest(conversation!.id);
       expect(initialMessages.length).toBe(0);
 
       // Add a message
@@ -526,7 +526,7 @@ describe('Chat History Integration Tests', () => {
       });
 
       // Reload
-      const updatedMessages = await loadMessagesFromSupabase(conversation!.id);
+      const updatedMessages = await loadMessagesFromSupabaseTest(conversation!.id);
       expect(updatedMessages.length).toBe(1);
       expect((updatedMessages[0] as any).content).toBe('New message');
     });
