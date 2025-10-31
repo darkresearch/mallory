@@ -18,7 +18,11 @@ export function useConversationLoader({ userId }: UseConversationLoaderProps) {
   // Handle conversation loading
   useEffect(() => {
     const loadConversation = async () => {
-      if (!userId) return;
+      if (!userId) {
+        // Reset if no user
+        setCurrentConversationId(null);
+        return;
+      }
       
       try {
         const conversationIdParam = params.conversationId as string;
@@ -28,35 +32,38 @@ export function useConversationLoader({ userId }: UseConversationLoaderProps) {
           console.log('📱 Opening specific conversation:', conversationIdParam);
           setCurrentConversationId(conversationIdParam);
           
-          // Update the current conversation in storage so future messages go to this conversation
+          // Update the active conversation in storage (persists across sessions)
           await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationIdParam);
         } else {
-          // FIRST: Try to load active conversation from secure storage immediately (don't wait for ConversationsContext)
+          // FIRST: Try to load active conversation from secure storage immediately
+          // This allows instant loading without waiting for ConversationsContext
           const activeConversationId = await secureStorage.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
           
           if (activeConversationId) {
             console.log('📱 Found active conversation in storage:', activeConversationId);
             setCurrentConversationId(activeConversationId);
-            return; // Use the stored active conversation immediately
+            return; // Use stored active conversation immediately
           }
           
           // No active conversation in storage - get/create one
           // Pass existing conversations data if available to avoid duplicate queries
-          const existingConversations = isInitialized ? conversations.map(c => ({ id: c.id, updated_at: c.updated_at })) : undefined;
+          const existingConversations = isInitialized && conversations.length > 0 
+            ? conversations.map(c => ({ id: c.id, updated_at: c.updated_at })) 
+            : undefined;
+          
           const conversationData = await getCurrentOrCreateConversation(userId, existingConversations);
           console.log('📱 Using conversation:', conversationData.conversationId);
           setCurrentConversationId(conversationData.conversationId);
         }
       } catch (error) {
         console.error('Error loading conversation:', error);
-        // Fallback to a new conversation
-        const fallbackId = 'fallback-' + Date.now();
-        setCurrentConversationId(fallbackId);
+        // On error, reset to null so user can retry or create new conversation
+        setCurrentConversationId(null);
       }
     };
 
     loadConversation();
-  }, [params.conversationId, isInitialized, conversations, userId]);
+  }, [params.conversationId, userId, isInitialized, conversations]);
 
   return {
     currentConversationId,

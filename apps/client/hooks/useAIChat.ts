@@ -32,41 +32,48 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
   
   // Load historical messages when conversation ID changes
   useEffect(() => {
+    // Reset state when conversation ID changes
+    setInitialMessages([]);
+    
+    // Don't load if conversationId is invalid
+    if (!conversationId || conversationId === 'temp-loading') {
+      setIsLoadingHistory(false);
+      return;
+    }
+    
+    let isCancelled = false;
+    
     const loadHistory = async () => {
-      if (!conversationId || conversationId === 'temp-loading') {
-        setIsLoadingHistory(false);
-        return;
-      }
-      
       setIsLoadingHistory(true);
       console.log('📖 Loading historical messages for conversation:', conversationId);
       
-      // Add timeout to prevent perpetual loading
-      const timeoutId = setTimeout(() => {
-        console.warn('📖 Loading messages timeout after 10 seconds, setting to empty');
-        setIsLoadingHistory(false);
-        setInitialMessages([]);
-      }, 10000); // 10 second timeout
-      
       try {
         const historicalMessages = await loadMessagesFromSupabase(conversationId);
-        clearTimeout(timeoutId);
         
-        console.log('📖 Loaded historical messages:', {
-          count: historicalMessages.length,
-          messageIds: historicalMessages.map(m => m.id)
-        });
-        setInitialMessages(historicalMessages);
+        // Only update if this effect hasn't been cancelled (conversationId changed)
+        if (!isCancelled) {
+          console.log('📖 Loaded historical messages:', {
+            count: historicalMessages.length,
+            messageIds: historicalMessages.map(m => m.id)
+          });
+          setInitialMessages(historicalMessages);
+          setIsLoadingHistory(false);
+        }
       } catch (error) {
-        clearTimeout(timeoutId);
         console.error('📖 Error loading historical messages:', error);
-        setInitialMessages([]);
-      } finally {
-        setIsLoadingHistory(false);
+        if (!isCancelled) {
+          setInitialMessages([]);
+          setIsLoadingHistory(false);
+        }
       }
     };
 
     loadHistory();
+    
+    // Cleanup: mark as cancelled if conversationId changes before loading completes
+    return () => {
+      isCancelled = true;
+    };
   }, [conversationId]);
   
   const { messages, error, sendMessage, regenerate, status, setMessages, stop } = useChat({
