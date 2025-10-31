@@ -166,7 +166,7 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
       });
       setMessages(initialMessages);
     }
-  }, [isLoadingHistory, initialMessages, messages.length, setMessages]);
+  }, [isLoadingHistory, initialMessages.length, messages.length, setMessages]);
 
   // Message persistence is now handled server-side
   // Complete messages are saved after streaming completes, ensuring reliability without incremental overhead
