@@ -24,38 +24,20 @@ export function buildStreamResponse(
   onboardingContext?: {
     userId: string;
     isOnboarding: boolean;
-  }
+  },
+  assistantMessageId?: string // Optional: pre-generated message ID for consistency
 ) {
   // Track stream progress
   let partCount = 0;
   let textParts = 0;
   let lastTextDelta = '';
-  let assistantMessageId: string | null = null;
-  let lastSavedContent = '';
-  let saveThrottleTimeout: NodeJS.Timeout | null = null;
-  
-  // Throttled save function - saves every 500ms during streaming
-  const throttledSave = async (message: UIMessage) => {
-    if (saveThrottleTimeout) {
-      clearTimeout(saveThrottleTimeout);
-    }
-    
-    saveThrottleTimeout = setTimeout(async () => {
-      if (message && message.role === 'assistant') {
-        const currentContent = message.parts?.map((p: any) => p.text || '').join('') || '';
-        // Only save if content has changed significantly (avoid saving empty/unchanged messages)
-        if (currentContent !== lastSavedContent && currentContent.length > 0) {
-          await saveAssistantMessage(conversationId, message, false);
-          lastSavedContent = currentContent;
-        }
-      }
-    }, 500); // Save every 500ms
-  };
   
   const streamResponse = result.toUIMessageStreamResponse({
     sendReasoning: true, // Enable reasoning content in stream
     generateMessageId: () => {
-      const id = uuidv4();
+      // Use pre-generated ID if provided (for consistency with incremental saves)
+      // Otherwise generate a new one
+      const id = assistantMessageId || uuidv4();
       console.log('🆔 Generated message ID:', id);
       return id;
     },
@@ -130,6 +112,8 @@ export function buildStreamResponse(
     },
 
     // Final save when stream completes
+    // Note: Incremental saving during streaming is handled via onStepFinish callback in streamConfig
+    // This callback saves the final complete message state
     onFinish: async ({ messages: allMessages, isAborted }: any) => {
       console.log('🏁 onFinish callback triggered:', { 
         messageCount: allMessages.length, 
@@ -141,13 +125,8 @@ export function buildStreamResponse(
         isOnboarding: onboardingContext?.isOnboarding
       });
       
-      // Clear throttle timeout
-      if (saveThrottleTimeout) {
-        clearTimeout(saveThrottleTimeout);
-        saveThrottleTimeout = null;
-      }
-      
       // Save final assistant message state (complete)
+      // This ensures the message is marked as complete even if incremental saves failed
       if (!isAborted && allMessages.length > 0) {
         const assistantMessage = allMessages.find((msg: UIMessage) => msg.role === 'assistant');
         if (assistantMessage) {

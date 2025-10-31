@@ -173,13 +173,88 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     // Build system prompt
     const systemPrompt = buildSystemPrompt(clientContext, onboardingContext);
 
-    // Build stream configuration
+    // Create incremental save callback for server-side persistence
+    // This saves AI messages every 500ms during streaming
+    // We generate the message ID upfront so it's consistent across incremental and final saves
+    const { v4: uuidv4 } = await import('uuid');
+    const assistantMessageId = uuidv4(); // Generate once, use consistently
+    let currentAssistantMessage: any = null;
+    let lastSavedContent = '';
+    let saveThrottleTimeout: NodeJS.Timeout | null = null;
+    
+    console.log('💾 Generated assistant message ID for incremental saving:', assistantMessageId);
+    
+    const triggerIncrementalSave = () => {
+      if (saveThrottleTimeout) {
+        clearTimeout(saveThrottleTimeout);
+      }
+      
+      saveThrottleTimeout = setTimeout(async () => {
+        if (currentAssistantMessage && currentAssistantMessage.role === 'assistant') {
+          const currentContent = currentAssistantMessage.parts?.map((p: any) => p.text || '').join('') || '';
+          if (currentContent !== lastSavedContent && currentContent.length > 0) {
+            console.log('💾 Incremental save (every 500ms):', {
+              messageId: currentAssistantMessage.id,
+              contentLength: currentContent.length,
+              isComplete: false
+            });
+            const { saveAssistantMessage } = await import('./persistence.js');
+            saveAssistantMessage(conversationId, currentAssistantMessage, false).catch(err => {
+              console.error('💾 Error in incremental save:', err);
+            });
+            lastSavedContent = currentContent;
+          }
+        }
+      }, 500);
+    };
+    
+    const incrementalSaveCallback = async (stepData: any) => {
+      const currentText = stepData.text || '';
+      const stepNumber = stepData.stepNumber || 0;
+      
+      if (currentText) {
+        // Build current message snapshot with consistent ID
+        // Include reasoning parts if available (from extended thinking)
+        const parts: any[] = [];
+        
+        // Add reasoning parts if available in stepData
+        if (stepData.reasoning) {
+          parts.push({
+            type: 'reasoning',
+            text: stepData.reasoning
+          });
+        }
+        
+        // Add text content
+        parts.push({
+          type: 'text',
+          text: currentText
+        });
+        
+        currentAssistantMessage = {
+          id: assistantMessageId,
+          role: 'assistant',
+          parts,
+          content: currentText,
+          createdAt: new Date(),
+          metadata: { 
+            stepNumber, 
+            isIncremental: true,
+            savedAt: new Date().toISOString()
+          }
+        };
+        triggerIncrementalSave();
+      }
+    };
+
+    // Build stream configuration with incremental save callback
     const streamConfig = buildStreamConfig({
       model,
       processedMessages,
       systemPrompt,
       tools,
-      strategy
+      strategy,
+      incrementalSaveCallback
     });
 
     // Start AI streaming
@@ -188,18 +263,25 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     console.log('✅ streamText call completed');
 
     // Build UI message stream response
+    // Pass the assistant message ID so incremental and final saves use the same ID
     console.log('🌊 Creating UI message stream response');
     const { streamResponse } = buildStreamResponse(
       result, 
       originalMessages,  // Use original messages (without synthetic message)
       conversationId, 
-      isOnboardingConversation ? { userId, isOnboarding: true } : undefined
+      isOnboardingConversation ? { userId, isOnboarding: true } : undefined,
+      assistantMessageId // Pass the pre-generated ID for consistency
     );
     console.log('🚀 Stream response created');
 
     // Monitor client connection
     req.on('close', () => {
       console.log('🔌 Client disconnected during stream');
+      // Clear throttle timeout if client disconnects
+      if (saveThrottleTimeout) {
+        clearTimeout(saveThrottleTimeout);
+        saveThrottleTimeout = null;
+      }
     });
     
     req.on('error', (error) => {
