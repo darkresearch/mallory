@@ -8,7 +8,6 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider } from '../contexts/AuthContext';
 import { GridProvider } from '../contexts/GridContext';
-import { ConversationsProvider } from '../contexts/ConversationsContext';
 import { WalletProvider } from '../contexts/WalletContext';
 import { initializeComponentRegistry } from '../components/registry';
 import 'react-native-url-polyfill/auto';
@@ -61,25 +60,23 @@ export default function RootLayout() {
       <SafeAreaProvider style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
         <AuthProvider>
           <GridProvider>
-            <ConversationsProvider>
-              <WalletProvider>
-                <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any }}>
-                  <Stack
-                    screenOptions={{
-                      headerShown: false,
-                      contentStyle: { backgroundColor: '#FFEFE3' },
-                      animation: 'fade',
-                    }}
-                  />
-                  {Platform.OS === 'web' && (
-                    <>
-                      <Analytics />
-                      <SpeedInsights />
-                    </>
-                  )}
-                </View>
-              </WalletProvider>
-            </ConversationsProvider>
+            <WalletProvider>
+              <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any }}>
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: '#FFEFE3' },
+                    animation: 'fade',
+                  }}
+                />
+                {Platform.OS === 'web' && (
+                  <>
+                    <Analytics />
+                    <SpeedInsights />
+                  </>
+                )}
+              </View>
+            </WalletProvider>
           </GridProvider>
         </AuthProvider>
       </SafeAreaProvider>

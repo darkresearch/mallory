@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,11 +11,12 @@ import Animated, {
   Easing
 } from 'react-native-reanimated';
 import { Dimensions } from 'react-native';
-import { useConversations } from '../../contexts/ConversationsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { secureStorage, SESSION_STORAGE_KEYS, SECURE_STORAGE_KEYS } from '../../lib';
+import { secureStorage, SESSION_STORAGE_KEYS, SECURE_STORAGE_KEYS, supabase } from '../../lib';
 import { PressableButton } from '../../components/ui/PressableButton';
 import { createNewConversation } from '../../features/chat';
+
+const GLOBAL_TOKEN_ID = '00000000-0000-0000-0000-000000000000';
 
 interface ConversationWithPreview {
   id: string;
@@ -35,23 +36,34 @@ interface ConversationWithPreview {
   };
 }
 
+interface MessageCache {
+  id: string;
+  conversation_id: string;
+  content: string;
+  role: 'user' | 'assistant';
+  created_at: string;
+  metadata?: any;
+}
+
+interface AllMessagesCache {
+  [conversationId: string]: MessageCache[];
+}
+
 export default function ChatHistoryScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { 
-    conversations, 
-    isLoading, 
-    isInitialized, 
-    refreshConversations, 
-    searchConversations 
-  } = useConversations();
   
-  const translateX = useSharedValue(-Dimensions.get('window').width);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filteredConversations, setFilteredConversations] = useState<ConversationWithPreview[]>([]);
+  // State management
+  const [conversations, setConversations] = useState<ConversationWithPreview[]>([]);
+  const [allMessages, setAllMessages] = useState<AllMessagesCache>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
+  
+  const translateX = useSharedValue(-Dimensions.get('window').width);
   
   // Determine if we're on mobile (small screen) or desktop/tablet
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
@@ -64,21 +76,344 @@ export default function ChatHistoryScreen() {
     
     return () => subscription?.remove();
   }, []);
-  
-  console.log('📜 ChatHistoryScreen rendered, initialized:', isInitialized, 'conversations:', conversations.length);
-  console.log('📜 ChatHistoryScreen conversations metadata:', conversations.map(c => ({ 
-    id: c.id.substring(0, 8), 
-    title: c.metadata?.summary_title || 'no title',
-    updated_at: c.updated_at 
-  })));
 
-  // Helper function to get display title for a conversation
-  const getConversationDisplayTitle = (
-    metadata?: { summary_title?: string },
-    fallback: string = 'New conversation'
-  ): string => {
-    return metadata?.summary_title || fallback;
-  };
+  // Load all conversations and messages for search
+  const loadConversationsAndMessages = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      setIsLoading(true);
+      console.log('📱 [ChatHistory] Loading conversations and messages for user:', user.id);
+      
+      // Query 1: Get all general conversations for the user (including metadata)
+      const { data: conversationsData, error: conversationsError } = await supabase
+        .from('conversations')
+        .select('id, title, token_ca, created_at, updated_at, metadata')
+        .eq('user_id', user.id)
+        .eq('token_ca', GLOBAL_TOKEN_ID)
+        .order('updated_at', { ascending: false });
+      
+      if (conversationsError) {
+        console.error('📱 [ChatHistory] Error fetching conversations:', conversationsError);
+        setConversations([]);
+        setAllMessages({});
+        return;
+      }
+      
+      if (!conversationsData || conversationsData.length === 0) {
+        console.log('📱 [ChatHistory] No conversations found');
+        setConversations([]);
+        setAllMessages({});
+        return;
+      }
+      
+      const conversationIds = conversationsData.map(conv => conv.id);
+      
+      // Query 2: Get ALL messages for these conversations
+      const { data: messagesData, error: messagesError } = await supabase
+        .from('messages')
+        .select('id, conversation_id, content, role, created_at, metadata')
+        .in('conversation_id', conversationIds)
+        .order('created_at', { ascending: false });
+      
+      if (messagesError) {
+        console.error('📱 [ChatHistory] Error fetching messages:', messagesError);
+        // Still show conversations even if messages fail to load
+        const conversationsOnly = conversationsData.map(conv => ({
+          id: conv.id,
+          title: conv.title,
+          token_ca: conv.token_ca,
+          created_at: conv.created_at,
+          updated_at: conv.updated_at,
+          metadata: conv.metadata,
+          lastMessage: undefined
+        }));
+        setConversations(conversationsOnly);
+        setAllMessages({});
+        return;
+      }
+      
+      // Process the data
+      const processedConversations: ConversationWithPreview[] = [];
+      const messagesCache: AllMessagesCache = {};
+      
+      // Group messages by conversation
+      conversationsData.forEach((conv: any) => {
+        const conversationMessages = messagesData?.filter(msg => msg.conversation_id === conv.id) || [];
+        
+        // Store all messages for this conversation for search
+        messagesCache[conv.id] = conversationMessages;
+        
+        // Add conversation with last message preview
+        processedConversations.push({
+          id: conv.id,
+          title: conv.title,
+          token_ca: conv.token_ca,
+          created_at: conv.created_at,
+          updated_at: conv.updated_at,
+          metadata: conv.metadata,
+          lastMessage: conversationMessages[0] || undefined // Already sorted by created_at DESC
+        });
+      });
+      
+      setConversations(processedConversations);
+      setAllMessages(messagesCache);
+      
+      const totalMessages = Object.values(messagesCache).reduce((sum, msgs) => sum + msgs.length, 0);
+      console.log(`📱 [ChatHistory] Loaded ${processedConversations.length} conversations with ${totalMessages} total messages`);
+      
+    } catch (error) {
+      console.error('📱 [ChatHistory] Error in loadConversationsAndMessages:', error);
+    } finally {
+      setIsLoading(false);
+      setIsInitialized(true);
+    }
+  }, [user?.id]);
+
+  // Load data on mount
+  useEffect(() => {
+    if (user?.id && !isInitialized) {
+      console.log('📱 [ChatHistory] Initial load for user:', user.id);
+      loadConversationsAndMessages();
+    }
+  }, [user?.id, isInitialized, loadConversationsAndMessages]);
+
+  // Set up real-time subscriptions for conversations and messages
+  useEffect(() => {
+    if (!user?.id || !isInitialized) return;
+
+    console.log('🔴 [ChatHistory] Setting up real-time subscriptions');
+
+    let conversationsChannel: any = null;
+
+    const setupSubscriptions = async () => {
+      try {
+        // Set up authentication for realtime
+        const { data: session, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError || !session?.session?.access_token) {
+          console.error('🔴 [ChatHistory] Session error or no access token');
+          return null;
+        }
+
+        await supabase.realtime.setAuth(session.session.access_token);
+        console.log('🔴 [ChatHistory] Realtime auth set successfully');
+
+        const channelName = `chat-history:user:${user.id}`;
+        
+        // Subscribe to conversation and message changes
+        conversationsChannel = supabase
+          .channel(channelName, {
+            config: { private: true }
+          })
+          // Conversation INSERT
+          .on('broadcast', { event: 'conversation:INSERT' }, (payload) => {
+            console.log('🔴 [ChatHistory] Conversation INSERT:', payload);
+            const newData = payload.payload?.record || payload.record || payload.new || payload;
+            if (newData && newData.token_ca === GLOBAL_TOKEN_ID) {
+              handleConversationInsert(newData);
+            }
+          })
+          // Conversation UPDATE (for title updates)
+          .on('broadcast', { event: 'conversation:UPDATE' }, (payload) => {
+            console.log('🔴 [ChatHistory] Conversation UPDATE:', payload);
+            const newData = payload.payload?.record || payload.record || payload.new || payload;
+            if (newData) {
+              handleConversationUpdate(newData);
+            }
+          })
+          // Conversation DELETE
+          .on('broadcast', { event: 'conversation:DELETE' }, (payload) => {
+            console.log('🔴 [ChatHistory] Conversation DELETE:', payload);
+            const oldData = payload.payload?.record || payload.record || payload.old || payload;
+            if (oldData) {
+              handleConversationDelete(oldData);
+            }
+          })
+          // Message INSERT (for last message preview and search)
+          .on('broadcast', { event: 'message:INSERT' }, (payload) => {
+            console.log('🔴 [ChatHistory] Message INSERT:', payload);
+            const newData = payload.payload?.record || payload.record || payload.new || payload;
+            if (newData) {
+              handleMessageInsert(newData);
+            }
+          })
+          // Message UPDATE
+          .on('broadcast', { event: 'message:UPDATE' }, (payload) => {
+            console.log('🔴 [ChatHistory] Message UPDATE:', payload);
+            const newData = payload.payload?.record || payload.record || payload.new || payload;
+            if (newData) {
+              handleMessageUpdate(newData);
+            }
+          })
+          // Message DELETE
+          .on('broadcast', { event: 'message:DELETE' }, (payload) => {
+            console.log('🔴 [ChatHistory] Message DELETE:', payload);
+            const oldData = payload.payload?.record || payload.record || payload.old || payload;
+            if (oldData) {
+              handleMessageDelete(oldData);
+            }
+          })
+          .subscribe((status, error) => {
+            console.log('🔴 [ChatHistory] Subscription status:', status, error);
+            if (status === 'SUBSCRIBED') {
+              console.log('🔴 [ChatHistory] ✅ Successfully subscribed!');
+            }
+          });
+        
+        return conversationsChannel;
+      } catch (error) {
+        console.error('🔴 [ChatHistory] Error setting up subscriptions:', error);
+        return null;
+      }
+    };
+
+    setupSubscriptions().then(channel => {
+      conversationsChannel = channel;
+    });
+
+    // Cleanup subscriptions
+    return () => {
+      console.log('🔴 [ChatHistory] Cleaning up subscriptions');
+      if (conversationsChannel) {
+        supabase.removeChannel(conversationsChannel);
+      }
+    };
+  }, [user?.id, isInitialized]);
+
+  // Real-time event handlers
+  const handleConversationInsert = useCallback((newRecord: any) => {
+    const newConversation: ConversationWithPreview = {
+      id: newRecord.id,
+      title: newRecord.title,
+      token_ca: newRecord.token_ca,
+      created_at: newRecord.created_at,
+      updated_at: newRecord.updated_at,
+      metadata: newRecord.metadata,
+      lastMessage: undefined
+    };
+    
+    setConversations(prev => [newConversation, ...prev]);
+    console.log('✅ [ChatHistory] Added new conversation:', newRecord.id);
+  }, []);
+
+  const handleConversationUpdate = useCallback((newRecord: any) => {
+    setConversations(prev => {
+      const updated = prev.map(conv => 
+        conv.id === newRecord.id 
+          ? { ...conv, updated_at: newRecord.updated_at, metadata: newRecord.metadata }
+          : conv
+      ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+      
+      return updated;
+    });
+    console.log('✅ [ChatHistory] Updated conversation:', newRecord.id);
+  }, []);
+
+  const handleConversationDelete = useCallback((oldRecord: any) => {
+    setConversations(prev => prev.filter(conv => conv.id !== oldRecord.id));
+    setAllMessages(prev => {
+      const updated = { ...prev };
+      delete updated[oldRecord.id];
+      return updated;
+    });
+    console.log('✅ [ChatHistory] Removed conversation:', oldRecord.id);
+  }, []);
+
+  const handleMessageInsert = useCallback((newRecord: MessageCache) => {
+    const conversationId = newRecord.conversation_id;
+    
+    // Add to messages cache
+    setAllMessages(prev => ({
+      ...prev,
+      [conversationId]: [newRecord, ...(prev[conversationId] || [])]
+    }));
+    
+    // Update conversation's last message and updated_at
+    setConversations(prev => 
+      prev.map(conv => 
+        conv.id === conversationId
+          ? { 
+              ...conv,
+              updated_at: newRecord.created_at, // Use message time as conversation update time
+              lastMessage: {
+                content: newRecord.content,
+                role: newRecord.role,
+                created_at: newRecord.created_at
+              }
+            }
+          : conv
+      ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    );
+    
+    console.log('✅ [ChatHistory] Added new message to conversation:', conversationId);
+  }, []);
+
+  const handleMessageUpdate = useCallback((newRecord: MessageCache) => {
+    const conversationId = newRecord.conversation_id;
+    
+    setAllMessages(prev => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).map(msg =>
+        msg.id === newRecord.id ? newRecord : msg
+      )
+    }));
+    
+    console.log('✅ [ChatHistory] Updated message:', newRecord.id);
+  }, []);
+
+  const handleMessageDelete = useCallback((oldRecord: MessageCache) => {
+    const conversationId = oldRecord.conversation_id;
+    
+    setAllMessages(prev => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).filter(msg => msg.id !== oldRecord.id)
+    }));
+    
+    console.log('✅ [ChatHistory] Removed message:', oldRecord.id);
+  }, []);
+
+  // In-memory search through cached messages
+  const searchConversations = useCallback((query: string): ConversationWithPreview[] => {
+    if (!query.trim()) {
+      return conversations;
+    }
+    
+    const lowerQuery = query.toLowerCase();
+    const matchingConversations: ConversationWithPreview[] = [];
+    
+    // Search through all cached messages
+    Object.entries(allMessages).forEach(([conversationId, messages]) => {
+      const hasMatch = messages.some(message => 
+        message.content.toLowerCase().includes(lowerQuery)
+      );
+      
+      if (hasMatch) {
+        const conversation = conversations.find(conv => conv.id === conversationId);
+        if (conversation) {
+          // Find the most recent matching message for preview
+          const matchingMessage = messages.find(message =>
+            message.content.toLowerCase().includes(lowerQuery)
+          );
+          
+          matchingConversations.push({
+            ...conversation,
+            lastMessage: matchingMessage || conversation.lastMessage
+          });
+        }
+      }
+    });
+    
+    // Sort by conversation updated_at (most recent first)
+    return matchingConversations.sort((a, b) => 
+      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
+  }, [conversations, allMessages]);
+
+  // Filtered conversations based on search
+  const filteredConversations = useMemo(() => {
+    return searchConversations(searchQuery);
+  }, [searchQuery, searchConversations]);
 
   // Load current conversation ID for active indicator
   useEffect(() => {
@@ -93,27 +428,10 @@ export default function ChatHistoryScreen() {
     loadCurrentConversationId();
   }, []);
 
-  // Handle search with instant response (no network calls!)
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const results = searchConversations(searchQuery);
-      setFilteredConversations(results);
-    } else {
-      setFilteredConversations(conversations);
-    }
-  }, [searchQuery, conversations, searchConversations]);
-
-  // Initialize filtered conversations when conversations load
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredConversations(conversations);
-    }
-  }, [conversations]);
-
   // Handle pull-to-refresh
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await refreshConversations();
+    await loadConversationsAndMessages();
     setIsRefreshing(false);
   };
 
@@ -142,8 +460,6 @@ export default function ChatHistoryScreen() {
       } else if (convDate >= startOfLastWeek) {
         groups['Last week'].push(conv);
       } else {
-        // For conversations older than last week, we could add more groups
-        // For now, put them in "Last week" to keep it simple
         groups['Last week'].push(conv);
       }
     });
@@ -175,7 +491,6 @@ export default function ChatHistoryScreen() {
         easing: Easing.in(Easing.cubic),
       },
       () => {
-        // Navigate directly to chat instead of router.back() to avoid issues with empty history stack
         runOnJS(() => router.push('/(main)/chat'))();
       }
     );
@@ -212,12 +527,11 @@ export default function ChatHistoryScreen() {
     }
   };
 
-
   // Handle conversation tap
   const handleConversationTap = async (conversationId: string) => {
     console.log('📱 Opening conversation:', conversationId);
     
-    // Save as active conversation in secure storage (persists across sessions)
+    // Save as active conversation in secure storage
     try {
       await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationId);
       console.log('✅ Saved active conversation:', conversationId);
@@ -231,7 +545,6 @@ export default function ChatHistoryScreen() {
 
   // Handle new chat creation
   const handleNewChat = async () => {
-    // Prevent multiple rapid clicks
     if (isCreatingChat) {
       console.log('💬 Already creating a chat, ignoring duplicate click');
       return;
@@ -247,9 +560,8 @@ export default function ChatHistoryScreen() {
       console.log('💬 New conversation created:', conversationData.conversationId);
       
       // Refresh conversations to include the newly created one
-      // This ensures the list updates even if real-time broadcast doesn't fire
       console.log('💬 Refreshing conversations list to include new conversation');
-      await refreshConversations();
+      await loadConversationsAndMessages();
       
       // Create navigation function to be called on the JS thread
       const navigateToNewChat = () => {
@@ -270,9 +582,16 @@ export default function ChatHistoryScreen() {
       );
     } catch (error) {
       console.error('💬 Error creating new chat:', error);
-      // Reset state on error so user can try again
       setIsCreatingChat(false);
     }
+  };
+
+  // Helper function to get display title for a conversation
+  const getConversationDisplayTitle = (
+    metadata?: { summary_title?: string },
+    fallback: string = 'New conversation'
+  ): string => {
+    return metadata?.summary_title || fallback;
   };
 
   // Render conversation item
@@ -336,17 +655,15 @@ export default function ChatHistoryScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          /* Desktop/tablet layout: back arrow and search on separate rows */
-          <>
-            <View style={styles.header}>
-              <TouchableOpacity 
-                style={styles.backButton}
-                onPress={handleBack}
-              >
-                <Ionicons name="arrow-forward" size={24} color="#FBAA69" />
-              </TouchableOpacity>
-            </View>
-          </>
+          /* Desktop/tablet layout: back arrow on separate row */
+          <View style={styles.header}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={handleBack}
+            >
+              <Ionicons name="arrow-forward" size={24} color="#FBAA69" />
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Narrow container for chat history content */}
@@ -459,7 +776,7 @@ const styles = StyleSheet.create({
     maxWidth: 750,
     width: '100%',
     alignSelf: 'center',
-    paddingHorizontal: 6, // Reduced screen-level padding to allow active pill to be wider
+    paddingHorizontal: 6,
   },
   header: {
     flexDirection: 'row',
@@ -488,7 +805,7 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: -8, // Align with edge
+    marginRight: -8,
   },
   mobileSearchContainer: {
     flex: 1,
@@ -527,7 +844,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 5,
     paddingVertical: 12,
-    justifyContent: 'flex-start', // Left align
+    justifyContent: 'flex-start',
     backgroundColor: 'transparent',
   },
   newChatText: {
@@ -586,25 +903,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#000000',
     marginBottom: 16,
-    paddingHorizontal: 8, // Additional 8px padding to create 14px total from screen edge (6+8)
+    paddingHorizontal: 8,
     fontFamily: 'Satoshi',
   },
   conversationWrapper: {
     marginBottom: 16,
   },
   conversationItem: {
-    paddingHorizontal: 8, // Additional 8px padding to create 14px total from screen edge (6+8)
+    paddingHorizontal: 8,
   },
   conversationItemActive: {
     backgroundColor: '#F6C69F',
     borderRadius: 14,
-    paddingHorizontal: 10, // Active conversation gets less additional padding - closer to screen edge
-    paddingVertical: 4, // Add some vertical padding for the pill
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   conversationContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12, // Increased vertical padding for better visual balance
+    paddingVertical: 12,
   },
   activeIndicator: {
     width: 8,
