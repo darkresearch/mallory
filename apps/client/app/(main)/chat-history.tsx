@@ -461,7 +461,7 @@ export default function ChatHistoryScreen() {
   // Filtered conversations based on search (using useMemo for performance)
   const filteredConversations = useMemo(() => {
     return searchConversations(searchQuery);
-  }, [searchQuery, searchConversations]);
+  }, [searchQuery, searchConversations, conversations, allMessages]);
 
   // Handle pull-to-refresh
   const handleRefresh = async () => {
