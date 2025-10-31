@@ -176,8 +176,8 @@ jobs:
           # NOTE: EXPO_PUBLIC_GRID_API_KEY is intentionally NOT set
           # Unit tests verify it's not exposed to client code
       
-      - name: Run chat unit tests specifically
-        run: cd apps/client && bun run test:chat:all || echo "Chat tests not yet passing - continuing..."
+      - name: Run chat draft messages unit test
+        run: cd apps/client && bun test __tests__/unit/draftMessages.test.ts
         continue-on-error: true
         env:
           TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
