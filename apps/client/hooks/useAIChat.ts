@@ -3,7 +3,7 @@ import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import { useWindowDimensions } from 'react-native';
 import { generateAPIUrl } from '../lib';
-import { saveMessagesToSupabase, loadMessagesFromSupabase } from '../features/chat';
+import { loadMessagesFromSupabase } from '../features/chat';
 import { secureStorage } from '../lib/storage';
 import { getDeviceInfo } from '../lib/device';
 import { useEffect, useRef, useState } from 'react';
@@ -32,28 +32,48 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
   
   // Load historical messages when conversation ID changes
   useEffect(() => {
+    // Reset state when conversation ID changes
+    setInitialMessages([]);
+    
+    // Don't load if conversationId is invalid
+    if (!conversationId || conversationId === 'temp-loading') {
+      setIsLoadingHistory(false);
+      return;
+    }
+    
+    let isCancelled = false;
+    
     const loadHistory = async () => {
-      if (!conversationId || conversationId === 'temp-loading') return;
-      
       setIsLoadingHistory(true);
       console.log('📖 Loading historical messages for conversation:', conversationId);
       
       try {
         const historicalMessages = await loadMessagesFromSupabase(conversationId);
-        console.log('📖 Loaded historical messages:', {
-          count: historicalMessages.length,
-          messageIds: historicalMessages.map(m => m.id)
-        });
-        setInitialMessages(historicalMessages);
+        
+        // Only update if this effect hasn't been cancelled (conversationId changed)
+        if (!isCancelled) {
+          console.log('📖 Loaded historical messages:', {
+            count: historicalMessages.length,
+            messageIds: historicalMessages.map(m => m.id)
+          });
+          setInitialMessages(historicalMessages);
+          setIsLoadingHistory(false);
+        }
       } catch (error) {
         console.error('📖 Error loading historical messages:', error);
-        setInitialMessages([]);
-      } finally {
-        setIsLoadingHistory(false);
+        if (!isCancelled) {
+          setInitialMessages([]);
+          setIsLoadingHistory(false);
+        }
       }
     };
 
     loadHistory();
+    
+    // Cleanup: mark as cancelled if conversationId changes before loading completes
+    return () => {
+      isCancelled = true;
+    };
   }, [conversationId]);
   
   const { messages, error, sendMessage, regenerate, status, setMessages, stop } = useChat({
@@ -146,52 +166,10 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
       });
       setMessages(initialMessages);
     }
-  }, [isLoadingHistory, initialMessages, messages.length, setMessages]);
+  }, [isLoadingHistory, initialMessages.length, messages.length, setMessages]);
 
-  // Save messages when streaming completes
-  useEffect(() => {
-    const saveMessages = async () => {
-      console.log('💬 Save messages effect triggered:', {
-        previousStatus: previousStatusRef.current,
-        currentStatus: status,
-        messageCount: messages.length,
-        conversationId,
-        shouldSave: previousStatusRef.current === 'streaming' && status === 'ready' && messages.length > 0
-      });
-
-      if (previousStatusRef.current === 'streaming' && status === 'ready' && messages.length > 0) {
-        console.log('🏁 Stream completed - saving messages:', {
-          messageCount: messages.length,
-          conversationId,
-          timestamp: new Date().toISOString(),
-          messageIds: messages.map(m => m.id),
-          messageRoles: messages.map(m => m.role)
-        });
-
-        try {
-          console.log('🔄 Calling saveMessagesToSupabase...');
-          const success = await saveMessagesToSupabase(conversationId, messages);
-          console.log('🔄 saveMessagesToSupabase returned:', success);
-          
-          if (success) {
-            console.log('✅ Messages saved successfully to Supabase');
-          } else {
-            console.error('❌ Failed to save messages - saveMessagesToSupabase returned false');
-          }
-        } catch (error) {
-          console.error('❌ Error saving messages - exception thrown:', error);
-          console.error('Error details:', {
-            message: error instanceof Error ? error.message : 'Unknown',
-            stack: error instanceof Error ? error.stack : 'N/A'
-          });
-        }
-      }
-      
-      previousStatusRef.current = status;
-    };
-
-    saveMessages();
-  }, [status, messages, conversationId]);
+  // Message persistence is now handled server-side
+  // Complete messages are saved after streaming completes, ensuring reliability without incremental overhead
 
   // x402 payments now handled server-side - no client-side handler needed
 

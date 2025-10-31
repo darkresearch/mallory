@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { useConversations } from '@/contexts/ConversationsContext';
 import { getCurrentOrCreateConversation } from '../features/chat';
 import { secureStorage, SECURE_STORAGE_KEYS } from '../lib';
 
@@ -12,13 +11,18 @@ export function useConversationLoader({ userId }: UseConversationLoaderProps) {
   const params = useLocalSearchParams();
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   
-  // Get conversations context for optimization
-  const { conversations, isInitialized } = useConversations();
+  // Track if we've already loaded from storage to prevent re-runs
+  const hasLoadedFromStorageRef = useRef(false);
 
   // Handle conversation loading
   useEffect(() => {
     const loadConversation = async () => {
-      if (!userId) return;
+      if (!userId) {
+        // Reset if no user
+        setCurrentConversationId(null);
+        hasLoadedFromStorageRef.current = false;
+        return;
+      }
       
       try {
         const conversationIdParam = params.conversationId as string;
@@ -27,27 +31,47 @@ export function useConversationLoader({ userId }: UseConversationLoaderProps) {
           // Opening a specific conversation from history or new chat
           console.log('📱 Opening specific conversation:', conversationIdParam);
           setCurrentConversationId(conversationIdParam);
+          hasLoadedFromStorageRef.current = false; // Reset when explicitly navigating
           
-          // Update the current conversation in storage so future messages go to this conversation
+          // Update the active conversation in storage (persists across sessions)
           await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationIdParam);
         } else {
-          // Normal flow - get existing current conversation or create if none exists
-          // Pass existing conversations data to avoid duplicate queries
-          const existingConversations = isInitialized ? conversations.map(c => ({ id: c.id, updated_at: c.updated_at })) : undefined;
-          const conversationData = await getCurrentOrCreateConversation(userId, existingConversations);
-          console.log('📱 Using conversation:', conversationData.conversationId);
-          setCurrentConversationId(conversationData.conversationId);
+          // FIRST: Try to load active conversation from secure storage immediately
+          // This allows instant loading without waiting for context
+          // Only check storage once to prevent race conditions
+          if (!hasLoadedFromStorageRef.current) {
+            const activeConversationId = await secureStorage.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
+            
+            if (activeConversationId) {
+              console.log('📱 Found active conversation in storage:', activeConversationId);
+              setCurrentConversationId(activeConversationId);
+              hasLoadedFromStorageRef.current = true;
+              return; // Use stored active conversation immediately
+            }
+            
+            hasLoadedFromStorageRef.current = true; // Mark as checked even if not found
+          }
+          
+          // No active conversation in storage - get/create one
+          // Only call getCurrentOrCreateConversation if we don't have a conversationId yet
+          // This prevents unnecessary re-runs
+          if (!currentConversationId) {
+            const conversationData = await getCurrentOrCreateConversation(userId);
+            console.log('📱 Using conversation:', conversationData.conversationId);
+            setCurrentConversationId(conversationData.conversationId);
+          }
         }
       } catch (error) {
         console.error('Error loading conversation:', error);
-        // Fallback to a new conversation
-        const fallbackId = 'fallback-' + Date.now();
-        setCurrentConversationId(fallbackId);
+        // On error, reset to null so user can retry or create new conversation
+        setCurrentConversationId(null);
+        hasLoadedFromStorageRef.current = false;
       }
     };
 
     loadConversation();
-  }, [params.conversationId, isInitialized, conversations, userId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.conversationId, userId]);
 
   return {
     currentConversationId,

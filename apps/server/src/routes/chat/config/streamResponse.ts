@@ -6,6 +6,7 @@
 import { UIMessage } from 'ai';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../../../lib/supabase.js';
+import { saveAssistantMessage } from '../persistence.js';
 
 /**
  * Build UI message stream response configuration
@@ -107,7 +108,8 @@ export function buildStreamResponse(
       return undefined;
     },
 
-    // Message storage is now handled client-side
+    // Save assistant message server-side when stream completes
+    // Saves the full message with all parts (reasoning, text, etc.) after streaming finishes
     onFinish: async ({ messages: allMessages, isAborted }: any) => {
       console.log('🏁 onFinish callback triggered:', { 
         messageCount: allMessages.length, 
@@ -118,6 +120,20 @@ export function buildStreamResponse(
         lastTextDelta: lastTextDelta.substring(0, 50) + '...',
         isOnboarding: onboardingContext?.isOnboarding
       });
+      
+      // Save assistant message to database (server-side persistence)
+      if (!isAborted && allMessages.length > 0) {
+        const assistantMessage = allMessages.find((msg: UIMessage) => msg.role === 'assistant');
+        if (assistantMessage) {
+          console.log('💾 Saving assistant message to database:', {
+            messageId: assistantMessage.id,
+            partsCount: assistantMessage.parts?.length || 0,
+            hasReasoning: assistantMessage.parts?.some((p: any) => p.type === 'reasoning'),
+            contentLength: assistantMessage.content?.length || 0
+          });
+          await saveAssistantMessage(conversationId, assistantMessage);
+        }
+      }
       
       // Mark onboarding complete if this was an onboarding conversation
       if (onboardingContext?.isOnboarding && !isAborted && onboardingContext?.userId) {
@@ -137,8 +153,6 @@ export function buildStreamResponse(
           console.error('❌ Exception marking onboarding complete:', error);
         }
       }
-      
-      // Client-side will handle message persistence
     },
     
     headers: {
