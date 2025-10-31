@@ -4,66 +4,59 @@
  * Tests the draft message persistence functionality in isolation
  */
 
-import { describe, test, expect, beforeEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
 import '../setup/test-env';
 
-// Mock the storage module to avoid React Native dependency issues
+// Mock storage in-memory for unit tests
 const mockStorage: Record<string, string> = {};
 
-const mockGetItem = mock(async (key: string) => mockStorage[key] || null);
-const mockSetItem = mock(async (key: string, value: string) => {
-  mockStorage[key] = value;
-});
-const mockRemoveItem = mock(async (key: string) => {
-  delete mockStorage[key];
-});
+const secureStorage = {
+  getItem: async (key: string) => mockStorage[key] || null,
+  setItem: async (key: string, value: string) => {
+    mockStorage[key] = value;
+  },
+  removeItem: async (key: string) => {
+    delete mockStorage[key];
+  },
+};
 
-// Mock the storage module
-mock.module('@/lib/storage', () => ({
-  secureStorage: {
-    getItem: mockGetItem,
-    setItem: mockSetItem,
-    removeItem: mockRemoveItem,
-  },
-  SECURE_STORAGE_KEYS: {
-    DRAFT_MESSAGES: 'mallory_draft_messages',
-  },
-  getDraftMessage: async (conversationId: string) => {
-    const draftsJson = mockStorage['mallory_draft_messages'];
-    if (!draftsJson) return null;
-    const drafts = JSON.parse(draftsJson);
-    return drafts[conversationId] || null;
-  },
-  saveDraftMessage: async (conversationId: string, message: string) => {
-    const draftsJson = mockStorage['mallory_draft_messages'];
-    const drafts = draftsJson ? JSON.parse(draftsJson) : {};
-    if (message.trim()) {
-      drafts[conversationId] = message;
-    } else {
-      delete drafts[conversationId];
-    }
-    mockStorage['mallory_draft_messages'] = JSON.stringify(drafts);
-  },
-  clearDraftMessage: async (conversationId: string) => {
-    const draftsJson = mockStorage['mallory_draft_messages'];
-    if (!draftsJson) return;
-    const drafts = JSON.parse(draftsJson);
+const SECURE_STORAGE_KEYS = {
+  DRAFT_MESSAGES: 'mallory_draft_messages',
+};
+
+// Implement draft message functions for testing
+async function getDraftMessage(conversationId: string): Promise<string | null> {
+  if (!conversationId) return null;
+  const draftsJson = mockStorage['mallory_draft_messages'];
+  if (!draftsJson) return null;
+  const drafts = JSON.parse(draftsJson);
+  return drafts[conversationId] || null;
+}
+
+async function saveDraftMessage(conversationId: string, message: string): Promise<void> {
+  if (!conversationId) return;
+  const draftsJson = mockStorage['mallory_draft_messages'];
+  const drafts = draftsJson ? JSON.parse(draftsJson) : {};
+  if (message.trim()) {
+    drafts[conversationId] = message;
+  } else {
     delete drafts[conversationId];
-    mockStorage['mallory_draft_messages'] = JSON.stringify(drafts);
-  },
-  clearAllDraftMessages: async () => {
-    delete mockStorage['mallory_draft_messages'];
-  },
-}));
+  }
+  mockStorage['mallory_draft_messages'] = JSON.stringify(drafts);
+}
 
-import {
-  getDraftMessage,
-  saveDraftMessage,
-  clearDraftMessage,
-  clearAllDraftMessages,
-  secureStorage,
-  SECURE_STORAGE_KEYS,
-} from '@/lib/storage';
+async function clearDraftMessage(conversationId: string): Promise<void> {
+  if (!conversationId) return;
+  const draftsJson = mockStorage['mallory_draft_messages'];
+  if (!draftsJson) return;
+  const drafts = JSON.parse(draftsJson);
+  delete drafts[conversationId];
+  mockStorage['mallory_draft_messages'] = JSON.stringify(drafts);
+}
+
+async function clearAllDraftMessages(): Promise<void> {
+  delete mockStorage['mallory_draft_messages'];
+}
 
 describe('Draft Message Storage', () => {
   beforeEach(async () => {
