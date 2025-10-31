@@ -26,6 +26,7 @@ interface UseAIChatProps {
  */
 export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatProps) {
   const previousStatusRef = useRef<string>('ready');
+  const hasSetInitialMessagesRef = useRef(false);
   const [initialMessages, setInitialMessages] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const { width: viewportWidth } = useWindowDimensions();
@@ -34,6 +35,7 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
   useEffect(() => {
     // Reset state when conversation ID changes
     setInitialMessages([]);
+    hasSetInitialMessagesRef.current = false; // Reset flag for new conversation
     
     // Don't load if conversationId is invalid
     if (!conversationId || conversationId === 'temp-loading') {
@@ -159,14 +161,15 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
 
   // Set initial messages after loading from database
   useEffect(() => {
-    if (!isLoadingHistory && initialMessages.length > 0 && messages.length === 0) {
+    if (!isLoadingHistory && initialMessages.length > 0 && !hasSetInitialMessagesRef.current) {
       console.log('📖 Setting initial messages in useChat:', {
         initialCount: initialMessages.length,
         currentCount: messages.length
       });
       setMessages(initialMessages);
+      hasSetInitialMessagesRef.current = true; // Mark as set
     }
-  }, [isLoadingHistory, initialMessages, messages.length, setMessages]);
+  }, [isLoadingHistory, initialMessages.length, setMessages, messages.length]);
 
   // Message persistence is now handled server-side
   // Complete messages are saved after streaming completes, ensuring reliability without incremental overhead
