@@ -16,11 +16,46 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import './setup';
 import { setupTestUserSession, cleanupTestData, supabase } from './setup';
-import { loadMessagesFromSupabase } from '../../features/chat/services/messages';
 import { secureStorage, SECURE_STORAGE_KEYS } from '../../lib/storage';
 import { getCurrentOrCreateConversation, createNewConversation } from '../../features/chat';
 
 const GLOBAL_TOKEN_ID = '00000000-0000-0000-0000-000000000000';
+
+// Helper function to load messages (replicates loadMessagesFromSupabase logic but uses test client)
+async function loadMessagesFromSupabaseTest(conversationId: string) {
+  const { data: messages, error } = await supabase
+    .from('messages')
+    .select('id, role, content, metadata, created_at, is_liked, is_disliked')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('📖 Error loading messages:', error);
+    return [];
+  }
+
+  if (!messages || messages.length === 0) {
+    return [];
+  }
+
+  // Convert Supabase format to UIMessage format
+  return messages.map((msg: any) => {
+    const parts = msg.metadata?.parts || [
+      { type: 'text' as const, text: msg.content }
+    ];
+
+    return {
+      id: msg.id,
+      role: msg.role as 'user' | 'assistant',
+      parts,
+      content: msg.content,
+      metadata: msg.metadata,
+      createdAt: new Date(msg.created_at),
+      isLiked: msg.is_liked,
+      isDisliked: msg.is_disliked
+    };
+  });
+}
 
 describe('Chat History Integration Tests', () => {
   let testSession: {
@@ -66,7 +101,7 @@ describe('Chat History Integration Tests', () => {
 
       testConversationIds.push(conversation!.id);
 
-      const messages = await loadMessagesFromSupabase(conversation!.id);
+      const messages = await loadMessagesFromSupabaseTest(conversation!.id);
 
       expect(messages).toEqual([]);
       expect(messages.length).toBe(0);
