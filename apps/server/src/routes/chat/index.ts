@@ -11,6 +11,7 @@ import type { ChatRequest } from '@darkresearch/mallory-shared';
 import { MALLORY_BASE_PROMPT, buildContextSection, buildVerbosityGuidelines, ONBOARDING_GUIDELINES, ONBOARDING_GREETING_SYSTEM_MESSAGE, ONBOARDING_OPENING_MESSAGE_TEMPLATE } from '../../../prompts/index.js';
 import { buildComponentsGuidelines } from '../../../prompts/components.js';
 import { supabase } from '../../lib/supabase.js';
+import { saveUserMessage } from './persistence.js';
 
 const router: Router = express.Router();
 
@@ -88,6 +89,16 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       isOnboardingGreeting,
       isOnboardingConversation
     });
+
+    // Save user messages immediately (before streaming starts)
+    // This ensures messages persist even if the stream fails or client disconnects
+    const userMessages = conversationMessages.filter((msg: UIMessage) => msg.role === 'user');
+    const lastUserMessage = userMessages[userMessages.length - 1];
+    
+    if (lastUserMessage) {
+      console.log('💾 Saving user message immediately:', lastUserMessage.id);
+      await saveUserMessage(conversationId, lastUserMessage);
+    }
 
     // If system-initiated (proactive) and no messages, add synthetic user prompt
     // AI SDK requires at least one message - can't have just system prompt
@@ -177,6 +188,7 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     console.log('✅ streamText call completed');
 
     // Build UI message stream response
+    // Server-side persistence happens in onFinish callback (saves full message at end)
     console.log('🌊 Creating UI message stream response');
     const { streamResponse } = buildStreamResponse(
       result, 
@@ -185,11 +197,6 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       isOnboardingConversation ? { userId, isOnboarding: true } : undefined
     );
     console.log('🚀 Stream response created');
-
-    // Monitor client connection
-    req.on('close', () => {
-      console.log('🔌 Client disconnected during stream');
-    });
     
     req.on('error', (error) => {
       console.log('❌ Client request error:', error);

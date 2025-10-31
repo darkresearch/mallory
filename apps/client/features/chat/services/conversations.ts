@@ -181,7 +181,7 @@ export async function createNewConversation(userId?: string, metadata?: Record<s
     const newConversationId = uuidv4();
     const now = Date.now();
     
-    // Store in local storage as the current conversation
+    // Store in secure storage as the active conversation (persists across sessions)
     await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, newConversationId);
     await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
     
@@ -243,89 +243,85 @@ export async function getCurrentOrCreateConversation(
   existingConversations?: Array<{ id: string; updated_at: string }>
 ): Promise<ConversationData> {
   try {
+    // Check if we already have an active conversation stored
     const currentConversationId = await secureStorage.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
-    const now = Date.now();
     
     if (currentConversationId) {
-      // Use existing current conversation
-      await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
-      
+      console.log('📱 Using stored active conversation:', currentConversationId);
+      await secureStorage.setItem(LAST_CONVERSATION_KEY, Date.now().toString());
       return {
         conversationId: currentConversationId,
         shouldGreet: false,
       };
-    } else {
-      // No current conversation - check if user has any conversation history
-      console.log('📱 No current conversation, checking conversation history...');
+    }
+    
+    // No active conversation stored - find most recent or create new
+    console.log('📱 No active conversation stored, finding most recent or creating new...');
+    
+    // Try to use existing conversations from context (faster, no DB query)
+    if (existingConversations && existingConversations.length > 0) {
+      const mostRecentConversation = existingConversations[0]; // Already sorted by updated_at DESC
+      console.log('📱 Found existing conversations (from context), using most recent:', mostRecentConversation.id);
       
-      if (existingConversations && existingConversations.length > 0) {
-        // User has conversation history - use the most recent one (already sorted by updated_at DESC)
-        const mostRecentConversation = existingConversations[0];
-        console.log('📱 Found existing conversations (from context), loading most recent:', mostRecentConversation.id);
-        
-        // Set as current conversation
-        await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
-        await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
-        
-        return {
-          conversationId: mostRecentConversation.id,
-          shouldGreet: false,
-        };
-      } else {
-        // No conversation history provided - fallback to database query
-        console.log('📱 No conversation history provided, querying database as fallback...');
-        
-        // Get user ID for database query
-        let authUserId = userId;
-        if (!authUserId) {
-          try {
-            const { data: { user } } = await supabase.auth.getUser();
-            authUserId = user?.id;
-          } catch (error) {
-            console.error('Error getting auth user for conversation check:', error);
-          }
-        }
-        
-        if (!authUserId) {
-          console.error('No user ID available for conversation history check');
-          return await createNewConversation(userId);
-        }
-        
-        // Query for existing conversations as fallback
-        const { data: existingConversationsFromDB, error } = await supabase
-          .from('conversations')
-          .select('id, updated_at')
-          .eq('user_id', authUserId)
-          .eq('token_ca', GLOBAL_TOKEN_ID)
-          .order('updated_at', { ascending: false })
-          .limit(1);
-          
-        if (error) {
-          console.error('Error checking conversation history:', error);
-          // On error, create new conversation as fallback
-          return await createNewConversation(userId);
-        }
-        
-        if (existingConversationsFromDB && existingConversationsFromDB.length > 0) {
-          // User has conversation history - use the most recent one
-          const mostRecentConversation = existingConversationsFromDB[0];
-          console.log('📱 Found existing conversations (from DB), loading most recent:', mostRecentConversation.id);
-          
-          // Set as current conversation
-          await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
-          await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
-          
-          return {
-            conversationId: mostRecentConversation.id,
-            shouldGreet: false,
-          };
-        } else {
-          // User has no conversation history - create their first conversation
-          console.log('📱 No conversation history found, creating first conversation for user');
-          return await createNewConversation(userId);
-        }
+      await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
+      await secureStorage.setItem(LAST_CONVERSATION_KEY, Date.now().toString());
+      
+      return {
+        conversationId: mostRecentConversation.id,
+        shouldGreet: false,
+      };
+    }
+    
+    // No conversations from context - query database as fallback
+    console.log('📱 No conversations from context, querying database...');
+    
+    // Get user ID for database query
+    let authUserId = userId;
+    if (!authUserId) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        authUserId = user?.id;
+      } catch (error) {
+        console.error('Error getting auth user for conversation check:', error);
       }
     }
+    
+    if (!authUserId) {
+      console.error('No user ID available for conversation history check');
+      return await createNewConversation(userId);
+    }
+    
+    // Query for most recent conversation
+    const { data: existingConversationsFromDB, error } = await supabase
+      .from('conversations')
+      .select('id, updated_at')
+      .eq('user_id', authUserId)
+      .eq('token_ca', GLOBAL_TOKEN_ID)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    
+    if (error) {
+      console.error('Error checking conversation history:', error);
+      return await createNewConversation(userId);
+    }
+    
+    if (existingConversationsFromDB && existingConversationsFromDB.length > 0) {
+      const mostRecentConversation = existingConversationsFromDB[0];
+      console.log('📱 Found existing conversations (from DB), using most recent:', mostRecentConversation.id);
+      
+      await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
+      await secureStorage.setItem(LAST_CONVERSATION_KEY, Date.now().toString());
+      
+      return {
+        conversationId: mostRecentConversation.id,
+        shouldGreet: false,
+      };
+    }
+    
+    // No conversation history found - create first conversation
+    console.log('📱 No conversation history found, creating first conversation for user');
+    return await createNewConversation(userId);
+    
   } catch (error) {
     console.error('Error getting current conversation:', error);
     // Fallback: create new conversation on error

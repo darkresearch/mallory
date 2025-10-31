@@ -63,6 +63,7 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
   const hasTriggeredProactiveMessage = useRef(false);
 
   // AI Chat using Vercel's useChat hook
+  // Only initialize when we have a conversation ID to avoid unnecessary loading states
   const aiChatResult = useAIChat({
     conversationId: currentConversationId || 'temp-loading',
     userId: userId || 'unknown', // Pass userId for Supermemory
@@ -70,13 +71,15 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
   });
   
   // Only use results when we have a real conversation ID
-  const rawMessages = currentConversationId ? aiChatResult.messages : [];
-  const sendAIMessage = currentConversationId ? aiChatResult.sendMessage : undefined;
-  const regenerateMessage = currentConversationId ? aiChatResult.regenerate : undefined;
-  const aiError = currentConversationId ? aiChatResult.error : null;
-  const aiStatus = currentConversationId ? aiChatResult.status : 'ready';
-  const isLoadingHistory = currentConversationId ? aiChatResult.isLoadingHistory : false;
-  const stopStreaming = currentConversationId ? aiChatResult.stop : undefined;
+  // When conversationId is null, we show empty state (not loading)
+  const hasConversationId = !!currentConversationId && currentConversationId !== 'temp-loading';
+  const rawMessages = hasConversationId ? aiChatResult.messages : [];
+  const sendAIMessage = hasConversationId ? aiChatResult.sendMessage : undefined;
+  const regenerateMessage = hasConversationId ? aiChatResult.regenerate : undefined;
+  const aiError = hasConversationId ? aiChatResult.error : null;
+  const aiStatus = hasConversationId ? aiChatResult.status : 'ready';
+  const isLoadingHistory = hasConversationId ? aiChatResult.isLoadingHistory : false;
+  const stopStreaming = hasConversationId ? aiChatResult.stop : undefined;
 
   // Create enhanced messages with placeholder when in waiting state
   // Filter out system messages (they're triggers, never displayed)
