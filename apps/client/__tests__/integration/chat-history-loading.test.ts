@@ -493,7 +493,7 @@ describe('Chat History Integration Tests', () => {
       // Reload
       const updatedMessages = await loadMessagesFromSupabase(conversation!.id);
       expect(updatedMessages.length).toBe(1);
-      expect(updatedMessages[0].content).toBe('New message');
+      expect((updatedMessages[0] as any).content).toBe('New message');
     });
   });
 });
