@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,11 +11,12 @@ import Animated, {
   Easing
 } from 'react-native-reanimated';
 import { Dimensions } from 'react-native';
-import { useConversations } from '../../contexts/ConversationsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { secureStorage, SESSION_STORAGE_KEYS, SECURE_STORAGE_KEYS } from '../../lib';
+import { secureStorage, SECURE_STORAGE_KEYS, supabase } from '../../lib';
 import { PressableButton } from '../../components/ui/PressableButton';
 import { createNewConversation } from '../../features/chat';
+
+const GLOBAL_TOKEN_ID = '00000000-0000-0000-0000-000000000000';
 
 interface ConversationWithPreview {
   id: string;
@@ -35,20 +36,33 @@ interface ConversationWithPreview {
   };
 }
 
+interface AllMessagesCache {
+  [conversationId: string]: {
+    id: string;
+    conversation_id: string;
+    content: string;
+    role: 'user' | 'assistant';
+    created_at: string;
+    metadata?: any;
+  }[];
+}
+
 export default function ChatHistoryScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { 
-    conversations, 
-    isLoading, 
-    isInitialized, 
-    refreshConversations, 
-    searchConversations 
-  } = useConversations();
+  
+  // Local state for conversations and messages
+  const [conversations, setConversations] = useState<ConversationWithPreview[]>([]);
+  const [allMessages, setAllMessages] = useState<AllMessagesCache>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Subscription channels refs for cleanup
+  const conversationsChannelRef = useRef<any>(null);
+  const messagesChannelRef = useRef<any>(null);
   
   const translateX = useSharedValue(-Dimensions.get('window').width);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredConversations, setFilteredConversations] = useState<ConversationWithPreview[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
@@ -64,13 +78,364 @@ export default function ChatHistoryScreen() {
     
     return () => subscription?.remove();
   }, []);
-  
-  console.log('📜 ChatHistoryScreen rendered, initialized:', isInitialized, 'conversations:', conversations.length);
-  console.log('📜 ChatHistoryScreen conversations metadata:', conversations.map(c => ({ 
-    id: c.id.substring(0, 8), 
-    title: c.metadata?.summary_title || 'no title',
-    updated_at: c.updated_at 
-  })));
+
+  // Load conversations and all messages
+  const loadConversationsAndMessages = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      setIsLoading(true);
+      
+      // First query: Get all general conversations for the user (including metadata)
+      const { data: conversationsData, error: conversationsError } = await supabase
+        .from('conversations')
+        .select('id, title, token_ca, created_at, updated_at, metadata')
+        .eq('user_id', user.id)
+        .eq('token_ca', GLOBAL_TOKEN_ID)
+        .order('updated_at', { ascending: false });
+      
+      if (conversationsError) {
+        console.error('Error fetching conversations:', conversationsError);
+        setConversations([]);
+        setAllMessages({});
+        return;
+      }
+      
+      if (!conversationsData || conversationsData.length === 0) {
+        console.log('📱 No conversations found for user');
+        setConversations([]);
+        setAllMessages({});
+        return;
+      }
+      
+      // Get conversation IDs for message query
+      const conversationIds = conversationsData.map(conv => conv.id);
+      
+      // Second query: Get ALL messages for these conversations (with metadata for search)
+      const { data: messagesData, error: messagesError } = await supabase
+        .from('messages')
+        .select('id, conversation_id, content, role, created_at, metadata')
+        .in('conversation_id', conversationIds)
+        .order('created_at', { ascending: false });
+      
+      if (messagesError) {
+        console.error('Error fetching messages:', messagesError);
+        // Still show conversations even if messages fail to load
+        const conversationsOnly = conversationsData.map(conv => ({
+          id: conv.id,
+          title: conv.title,
+          token_ca: conv.token_ca,
+          created_at: conv.created_at,
+          updated_at: conv.updated_at,
+          metadata: conv.metadata,
+          lastMessage: undefined
+        }));
+        setConversations(conversationsOnly);
+        setAllMessages({});
+        return;
+      }
+      
+      // Process the data
+      const processedConversations: ConversationWithPreview[] = [];
+      const messagesCache: AllMessagesCache = {};
+      
+      // Group messages by conversation
+      conversationsData.forEach((conv: any) => {
+        const conversationMessages = messagesData?.filter(msg => msg.conversation_id === conv.id) || [];
+        
+        // Store all messages for this conversation for search
+        messagesCache[conv.id] = conversationMessages;
+        
+        // Add conversation with last message preview
+        processedConversations.push({
+          id: conv.id,
+          title: conv.title,
+          token_ca: conv.token_ca,
+          created_at: conv.created_at,
+          updated_at: conv.updated_at,
+          metadata: conv.metadata,
+          lastMessage: conversationMessages[0] || undefined // Already sorted by created_at DESC
+        });
+      });
+      
+      setConversations(processedConversations);
+      setAllMessages(messagesCache);
+      console.log(`📱 Loaded ${processedConversations.length} conversations with ${Object.keys(messagesCache).reduce((total, convId) => total + messagesCache[convId].length, 0)} total messages`);
+      
+    } catch (error) {
+      console.error('Error in loadConversationsAndMessages:', error);
+    } finally {
+      setIsLoading(false);
+      setIsInitialized(true);
+    }
+  }, [user?.id]);
+
+  // Real-time event handlers
+  const handleConversationInsert = useCallback((newRecord: any) => {
+    // Only add global conversations
+    if (newRecord.token_ca !== GLOBAL_TOKEN_ID) return;
+    
+    const newConversation: ConversationWithPreview = {
+      id: newRecord.id,
+      title: newRecord.title,
+      token_ca: newRecord.token_ca,
+      created_at: newRecord.created_at,
+      updated_at: newRecord.updated_at,
+      metadata: newRecord.metadata,
+      lastMessage: undefined
+    };
+    
+    setConversations(prev => [newConversation, ...prev]);
+    console.log('✅ Added new conversation:', newRecord.id);
+  }, []);
+
+  const handleConversationUpdate = useCallback((newRecord: any) => {
+    setConversations(prev => {
+      const updated = prev.map(conv => 
+        conv.id === newRecord.id 
+          ? { ...conv, updated_at: newRecord.updated_at, metadata: newRecord.metadata }
+          : conv
+      ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+      
+      return updated;
+    });
+    console.log('✅ Updated conversation:', newRecord.id);
+  }, []);
+
+  const handleConversationDelete = useCallback((oldRecord: any) => {
+    setConversations(prev => prev.filter(conv => conv.id !== oldRecord.id));
+    setAllMessages(prev => {
+      const updated = { ...prev };
+      delete updated[oldRecord.id];
+      return updated;
+    });
+    console.log('✅ Removed conversation:', oldRecord.id);
+  }, []);
+
+  const handleMessageInsert = useCallback((newRecord: any) => {
+    const conversationId = newRecord.conversation_id;
+    
+    // Add to messages cache
+    setAllMessages(prev => ({
+      ...prev,
+      [conversationId]: [newRecord, ...(prev[conversationId] || [])]
+    }));
+    
+    // Update conversation's last message and updated_at
+    setConversations(prev => 
+      prev.map(conv => 
+        conv.id === conversationId
+          ? { 
+              ...conv, 
+              updated_at: newRecord.created_at, // Use message time as conversation update time
+              lastMessage: {
+                content: newRecord.content,
+                role: newRecord.role,
+                created_at: newRecord.created_at
+              }
+            }
+          : conv
+      ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    );
+    
+    console.log('✅ Added new message to cache for conversation:', conversationId);
+  }, []);
+
+  const handleMessageUpdate = useCallback((newRecord: any) => {
+    const conversationId = newRecord.conversation_id;
+    
+    setAllMessages(prev => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).map(msg =>
+        msg.id === newRecord.id ? newRecord : msg
+      )
+    }));
+    
+    console.log('✅ Updated message in cache:', newRecord.id);
+  }, []);
+
+  const handleMessageDelete = useCallback((oldRecord: any) => {
+    const conversationId = oldRecord.conversation_id;
+    
+    setAllMessages(prev => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).filter(msg => msg.id !== oldRecord.id)
+    }));
+    
+    console.log('✅ Removed message from cache:', oldRecord.id);
+  }, []);
+
+  // In-memory search through cached messages
+  const searchConversations = useCallback((query: string): ConversationWithPreview[] => {
+    if (!query.trim()) {
+      return conversations;
+    }
+    
+    const lowerQuery = query.toLowerCase();
+    const matchingConversations: ConversationWithPreview[] = [];
+    
+    // Search through all cached messages
+    Object.entries(allMessages).forEach(([conversationId, messages]) => {
+      const hasMatch = messages.some(message => 
+        message.content.toLowerCase().includes(lowerQuery)
+      );
+      
+      if (hasMatch) {
+        const conversation = conversations.find(conv => conv.id === conversationId);
+        if (conversation) {
+          // Find the most recent matching message for preview
+          const matchingMessage = messages.find(message =>
+            message.content.toLowerCase().includes(lowerQuery)
+          );
+          
+          matchingConversations.push({
+            ...conversation,
+            lastMessage: matchingMessage || conversation.lastMessage
+          });
+        }
+      }
+    });
+    
+    // Sort by conversation updated_at (most recent first)
+    return matchingConversations.sort((a, b) => 
+      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
+  }, [conversations, allMessages]);
+
+  // Load data when user is available
+  useEffect(() => {
+    if (user?.id && !isInitialized) {
+      console.log('🔄 Loading conversations in background for user:', user.id);
+      loadConversationsAndMessages();
+    }
+  }, [user?.id, isInitialized, loadConversationsAndMessages]);
+
+  // Set up real-time subscriptions for conversations and messages
+  useEffect(() => {
+    if (!user?.id || !isInitialized) return;
+
+    console.log('🔴 [REALTIME] Setting up real-time subscriptions for user:', user.id);
+
+    const setupSubscriptions = async () => {
+      try {
+        // Set up authentication for realtime
+        const { data: session, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError || !session?.session?.access_token) {
+          console.error('🔴 [REALTIME] Session error:', sessionError);
+          return;
+        }
+
+        try {
+          await supabase.realtime.setAuth(session.session.access_token);
+          console.log('🔴 [REALTIME] Realtime auth set successfully');
+        } catch (authError) {
+          console.error('🔴 [REALTIME] Failed to set realtime auth:', authError);
+          return;
+        }
+
+        // Subscribe to conversation changes
+        const conversationsChannelName = `conversations:user:${user.id}`;
+        const conversationsChannel = supabase
+          .channel(conversationsChannelName, {
+            config: { private: true }
+          })
+          .on('broadcast', { event: 'INSERT' }, (payload) => {
+            console.log('🔴 [REALTIME] 📡 Conversation INSERT broadcast received:', payload);
+            const newData = payload.payload?.record || payload.record || payload.new || payload;
+            if (newData) {
+              handleConversationInsert(newData);
+            }
+          })
+          .on('broadcast', { event: 'UPDATE' }, (payload) => {
+            console.log('🔴 [REALTIME] 📡 Conversation UPDATE broadcast received:', payload);
+            const newData = payload.payload?.record || payload.record || payload.new || payload;
+            if (newData) {
+              handleConversationUpdate(newData);
+            }
+          })
+          .on('broadcast', { event: 'DELETE' }, (payload) => {
+            console.log('🔴 [REALTIME] 📡 Conversation DELETE broadcast received:', payload);
+            const oldData = payload.payload?.record || payload.record || payload.old || payload;
+            if (oldData) {
+              handleConversationDelete(oldData);
+            }
+          })
+          .subscribe((status, error) => {
+            console.log('🔴 [REALTIME] Conversations subscription status:', status, error);
+            if (status === 'SUBSCRIBED') {
+              console.log('🔴 [REALTIME] ✅ Successfully subscribed to conversations channel!');
+            }
+          });
+
+        conversationsChannelRef.current = conversationsChannel;
+
+        // Subscribe to message changes across all conversations
+        const messagesChannelName = `messages:user:${user.id}`;
+        const messagesChannel = supabase
+          .channel(messagesChannelName, {
+            config: { private: true }
+          })
+          .on('broadcast', { event: 'INSERT' }, (payload) => {
+            console.log('🔴 [REALTIME] 📡 Message INSERT broadcast received:', payload);
+            const newData = payload.payload?.record || payload.record || payload.new || payload;
+            if (newData) {
+              handleMessageInsert(newData);
+            }
+          })
+          .on('broadcast', { event: 'UPDATE' }, (payload) => {
+            console.log('🔴 [REALTIME] 📡 Message UPDATE broadcast received:', payload);
+            const newData = payload.payload?.record || payload.record || payload.new || payload;
+            if (newData) {
+              handleMessageUpdate(newData);
+            }
+          })
+          .on('broadcast', { event: 'DELETE' }, (payload) => {
+            console.log('🔴 [REALTIME] 📡 Message DELETE broadcast received:', payload);
+            const oldData = payload.payload?.record || payload.record || payload.old || payload;
+            if (oldData) {
+              handleMessageDelete(oldData);
+            }
+          })
+          .subscribe((status, error) => {
+            console.log('🔴 [REALTIME] Messages subscription status:', status, error);
+            if (status === 'SUBSCRIBED') {
+              console.log('🔴 [REALTIME] ✅ Successfully subscribed to messages channel!');
+            }
+          });
+
+        messagesChannelRef.current = messagesChannel;
+        
+      } catch (error) {
+        console.error('🔴 [REALTIME] ❌ Error setting up realtime subscriptions:', error);
+      }
+    };
+
+    setupSubscriptions();
+
+    // Cleanup subscriptions
+    return () => {
+      console.log('🔴 [REALTIME] 🧹 Cleaning up real-time subscriptions');
+      
+      if (conversationsChannelRef.current) {
+        try {
+          supabase.removeChannel(conversationsChannelRef.current);
+          console.log('🔴 [REALTIME] 🧹 Conversations channel removed');
+        } catch (error) {
+          console.error('🔴 [REALTIME] 🧹 Error removing conversations channel:', error);
+        }
+      }
+      
+      if (messagesChannelRef.current) {
+        try {
+          supabase.removeChannel(messagesChannelRef.current);
+          console.log('🔴 [REALTIME] 🧹 Messages channel removed');
+        } catch (error) {
+          console.error('🔴 [REALTIME] 🧹 Error removing messages channel:', error);
+        }
+      }
+    };
+  }, [user?.id, isInitialized, handleConversationInsert, handleConversationUpdate, handleConversationDelete, handleMessageInsert, handleMessageUpdate, handleMessageDelete]);
 
   // Helper function to get display title for a conversation
   const getConversationDisplayTitle = (
@@ -93,27 +458,15 @@ export default function ChatHistoryScreen() {
     loadCurrentConversationId();
   }, []);
 
-  // Handle search with instant response (no network calls!)
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const results = searchConversations(searchQuery);
-      setFilteredConversations(results);
-    } else {
-      setFilteredConversations(conversations);
-    }
-  }, [searchQuery, conversations, searchConversations]);
-
-  // Initialize filtered conversations when conversations load
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredConversations(conversations);
-    }
-  }, [conversations]);
+  // Filtered conversations based on search (using useMemo for performance)
+  const filteredConversations = useMemo(() => {
+    return searchConversations(searchQuery);
+  }, [searchQuery, searchConversations, conversations, allMessages]);
 
   // Handle pull-to-refresh
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await refreshConversations();
+    await loadConversationsAndMessages();
     setIsRefreshing(false);
   };
 
@@ -249,7 +602,7 @@ export default function ChatHistoryScreen() {
       // Refresh conversations to include the newly created one
       // This ensures the list updates even if real-time broadcast doesn't fire
       console.log('💬 Refreshing conversations list to include new conversation');
-      await refreshConversations();
+      await loadConversationsAndMessages();
       
       // Create navigation function to be called on the JS thread
       const navigateToNewChat = () => {

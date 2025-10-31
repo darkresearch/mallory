@@ -312,6 +312,19 @@ jobs:
           TEST_BACKEND_URL: http://localhost:3001
           EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
       
+      - name: Run chat history integration tests
+        run: cd apps/client && bun run test:integration:chat-history
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
+          MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
+          EXPO_PUBLIC_GRID_ENV: production
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
+      
       - name: Stop backend server
         if: always()
         run: |
@@ -459,7 +472,20 @@ jobs:
           TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
           TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
           TEST_BACKEND_URL: http://localhost:3001
-          
+      
+      - name: Run chat history E2E tests
+        run: cd apps/client && bun run test:e2e:chat-history
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
+          MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
+          EXPO_PUBLIC_GRID_ENV: production
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
+      
       - name: Stop backend server
         if: always()
         run: |
