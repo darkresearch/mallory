@@ -24,8 +24,7 @@ export function buildStreamResponse(
   onboardingContext?: {
     userId: string;
     isOnboarding: boolean;
-  },
-  assistantMessageId?: string // Optional: pre-generated message ID for consistency
+  }
 ) {
   // Track stream progress
   let partCount = 0;
@@ -35,9 +34,7 @@ export function buildStreamResponse(
   const streamResponse = result.toUIMessageStreamResponse({
     sendReasoning: true, // Enable reasoning content in stream
     generateMessageId: () => {
-      // Use pre-generated ID if provided (for consistency with incremental saves)
-      // Otherwise generate a new one
-      const id = assistantMessageId || uuidv4();
+      const id = uuidv4();
       console.log('🆔 Generated message ID:', id);
       return id;
     },
@@ -111,9 +108,8 @@ export function buildStreamResponse(
       return undefined;
     },
 
-    // Final save when stream completes
-    // Note: Incremental saving during streaming is handled via onStepFinish callback in streamConfig
-    // This callback saves the final complete message state
+    // Save assistant message server-side when stream completes
+    // Saves the full message with all parts (reasoning, text, etc.) after streaming finishes
     onFinish: async ({ messages: allMessages, isAborted }: any) => {
       console.log('🏁 onFinish callback triggered:', { 
         messageCount: allMessages.length, 
@@ -125,12 +121,16 @@ export function buildStreamResponse(
         isOnboarding: onboardingContext?.isOnboarding
       });
       
-      // Save final assistant message state (complete)
-      // This ensures the message is marked as complete even if incremental saves failed
+      // Save assistant message to database (server-side persistence)
       if (!isAborted && allMessages.length > 0) {
         const assistantMessage = allMessages.find((msg: UIMessage) => msg.role === 'assistant');
         if (assistantMessage) {
-          console.log('💾 Saving final assistant message (complete):', assistantMessage.id);
+          console.log('💾 Saving assistant message to database:', {
+            messageId: assistantMessage.id,
+            partsCount: assistantMessage.parts?.length || 0,
+            hasReasoning: assistantMessage.parts?.some((p: any) => p.type === 'reasoning'),
+            contentLength: assistantMessage.content?.length || 0
+          });
           await saveAssistantMessage(conversationId, assistantMessage, true);
         }
       }

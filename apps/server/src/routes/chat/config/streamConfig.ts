@@ -16,14 +16,13 @@ interface StreamConfigOptions {
     useExtendedThinking: boolean;
     useSupermemoryProxy: boolean;
   };
-  incrementalSaveCallback?: (stepData: any) => Promise<void>;
 }
 
 /**
  * Build complete configuration for streamText
  */
 export function buildStreamConfig(options: StreamConfigOptions) {
-  const { model, processedMessages, systemPrompt, tools, strategy, incrementalSaveCallback } = options;
+  const { model, processedMessages, systemPrompt, tools, strategy } = options;
   
   return {
     model,
@@ -36,8 +35,8 @@ export function buildStreamConfig(options: StreamConfigOptions) {
     // Multi-step reasoning
     stopWhen: stepCountIs(10),
     
-    // Agent lifecycle hooks for monitoring and incremental saving
-    onStepFinish: async ({ text, toolCalls, toolResults, finishReason, ...step }: any) => {
+    // Agent lifecycle hooks for monitoring
+    onStepFinish: ({ text, toolCalls, toolResults, finishReason, ...step }: any) => {
       const stepNumber = (step as any).stepNumber || 'unknown';
       console.log(`🤖 AGENT STEP ${stepNumber} COMPLETED:`);
       console.log('- Text generated:', !!text);
@@ -52,11 +51,6 @@ export function buildStreamConfig(options: StreamConfigOptions) {
         console.log('- Tool results available:', formatToolResultsForLog(toolResults));
         console.log('- Expected: AI should continue to generate response using these results');
         console.log('- Full tool results:', JSON.stringify(toolResults, null, 2));
-      }
-      
-      // Trigger incremental save if callback provided
-      if (incrementalSaveCallback && text) {
-        await incrementalSaveCallback({ text, stepNumber, ...step });
       }
     },
     

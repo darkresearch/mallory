@@ -1,6 +1,6 @@
 /**
  * Server-side message persistence utilities
- * Handles saving messages to Supabase as they are created/streamed
+ * Handles saving messages to Supabase (user messages immediately, AI messages when streaming completes)
  */
 
 import { UIMessage } from 'ai';
@@ -117,13 +117,13 @@ export async function saveUserMessage(
 }
 
 /**
- * Save or update an AI assistant message incrementally
- * Called during streaming to persist partial messages
+ * Save an AI assistant message to database
+ * Called when streaming completes to persist the full message
  */
 export async function saveAssistantMessage(
   conversationId: string,
   message: UIMessage,
-  isComplete: boolean = false
+  isComplete: boolean = true
 ): Promise<boolean> {
   try {
     if (message.role !== 'assistant') {
@@ -153,7 +153,7 @@ export async function saveAssistantMessage(
       updated_at: new Date().toISOString()
     };
 
-    // Use upsert to handle incremental updates (same message ID, different content)
+    // Use upsert to handle message updates (same message ID)
     const { error } = await supabase
       .from('messages')
       .upsert(messageData, {
@@ -174,7 +174,7 @@ export async function saveAssistantMessage(
         .eq('id', conversationId);
     }
 
-    console.log(`✅ Assistant message ${isComplete ? 'completed' : 'updated'}:`, messageData.id);
+    console.log(`✅ Assistant message ${isComplete ? 'saved' : 'updated'}:`, messageData.id);
     return true;
 
   } catch (error) {
