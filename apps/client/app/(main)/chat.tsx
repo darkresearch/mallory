@@ -10,7 +10,7 @@ import { useSmartScroll } from '../../hooks/useSmartScroll';
 import { ChatHeader } from '../../components/chat/ChatHeader';
 import { MessageList } from '../../components/chat/MessageList';
 import { useChatState } from '../../hooks/useChatState';
-import { useConversationLoader } from '../../hooks/useConversationLoader';
+import { useActiveConversation } from '../../hooks/useActiveConversation';
 import { OnboardingConversationHandler } from '../../components/chat/OnboardingConversationHandler';
 
 export default function ChatScreen() {
@@ -19,8 +19,8 @@ export default function ChatScreen() {
   const { user, isLoading } = auth;
   const { walletData } = useWallet(); // Get wallet data for balance context
 
-  // Load conversation
-  const { currentConversationId, conversationParam } = useConversationLoader({ 
+  // Load active conversation (simplified - no ConversationsContext dependency)
+  const { conversationId: currentConversationId, conversationParam } = useActiveConversation({ 
     userId: user?.id 
   });
 
