@@ -131,7 +131,7 @@ export function buildStreamResponse(
             hasReasoning: assistantMessage.parts?.some((p: any) => p.type === 'reasoning'),
             contentLength: assistantMessage.content?.length || 0
           });
-          await saveAssistantMessage(conversationId, assistantMessage, true);
+          await saveAssistantMessage(conversationId, assistantMessage);
         }
       }
       

@@ -122,8 +122,7 @@ export async function saveUserMessage(
  */
 export async function saveAssistantMessage(
   conversationId: string,
-  message: UIMessage,
-  isComplete: boolean = true
+  message: UIMessage
 ): Promise<boolean> {
   try {
     if (message.role !== 'assistant') {
@@ -143,7 +142,6 @@ export async function saveAssistantMessage(
         parts: message.parts,
         chainOfThought,
         source: 'claude_stream',
-        isComplete,
         timestamp: new Date().toISOString(),
         ...(message.metadata || {})
       },
@@ -153,28 +151,22 @@ export async function saveAssistantMessage(
       updated_at: new Date().toISOString()
     };
 
-    // Use upsert to handle message updates (same message ID)
     const { error } = await supabase
       .from('messages')
-      .upsert(messageData, {
-        onConflict: 'id',
-        ignoreDuplicates: false // Update existing messages
-      });
+      .insert(messageData);
 
     if (error) {
       console.error('💾 Failed to save assistant message:', error);
       return false;
     }
 
-    // Update conversation updated_at timestamp when message is complete
-    if (isComplete) {
-      await supabase
-        .from('conversations')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', conversationId);
-    }
+    // Update conversation updated_at timestamp
+    await supabase
+      .from('conversations')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', conversationId);
 
-    console.log(`✅ Assistant message ${isComplete ? 'saved' : 'updated'}:`, messageData.id);
+    console.log('✅ Assistant message saved:', messageData.id);
     return true;
 
   } catch (error) {

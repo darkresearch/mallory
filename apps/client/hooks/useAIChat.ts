@@ -169,7 +169,7 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
   }, [isLoadingHistory, initialMessages, messages.length, setMessages]);
 
   // Message persistence is now handled server-side
-  // Messages are saved incrementally as they stream, so they persist even if client disconnects
+  // Complete messages are saved after streaming completes, ensuring reliability without incremental overhead
 
   // x402 payments now handled server-side - no client-side handler needed
 
