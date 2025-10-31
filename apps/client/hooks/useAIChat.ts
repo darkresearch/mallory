@@ -26,7 +26,6 @@ interface UseAIChatProps {
  */
 export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatProps) {
   const previousStatusRef = useRef<string>('ready');
-  const hasSetInitialMessagesRef = useRef(false);
   const lastVerifiedMessageCountRef = useRef(0);
   const [initialMessages, setInitialMessages] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -36,7 +35,6 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
   useEffect(() => {
     // Reset state when conversation ID changes
     setInitialMessages([]);
-    hasSetInitialMessagesRef.current = false; // Reset flag for new conversation
     lastVerifiedMessageCountRef.current = 0; // Reset verification count
     
     // Don't load if conversationId is invalid
@@ -163,13 +161,12 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
 
   // Set initial messages after loading from database
   useEffect(() => {
-    if (!isLoadingHistory && initialMessages.length > 0 && !hasSetInitialMessagesRef.current) {
+    if (!isLoadingHistory && initialMessages.length > 0 && messages.length === 0) {
       console.log('📖 Setting initial messages in useChat:', {
         initialCount: initialMessages.length,
         currentCount: messages.length
       });
       setMessages(initialMessages);
-      hasSetInitialMessagesRef.current = true; // Mark as set
       lastVerifiedMessageCountRef.current = initialMessages.length;
     }
   }, [isLoadingHistory, initialMessages.length, setMessages, messages.length]);
