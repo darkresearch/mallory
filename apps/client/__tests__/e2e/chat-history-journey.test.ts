@@ -14,16 +14,70 @@
  * - Test user with Grid wallet
  */
 
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
 import { authenticateTestUser, loadGridSession } from '../setup/test-helpers';
 import { supabase } from '../setup/supabase-test-client';
-import { secureStorage, SECURE_STORAGE_KEYS } from '../../lib/storage';
-import { createNewConversation } from '../../features/chat';
 
 const BACKEND_URL = process.env.TEST_BACKEND_URL || 'http://localhost:3001';
 const GLOBAL_TOKEN_ID = '00000000-0000-0000-0000-000000000000';
 
+// Mock secureStorage to avoid React Native imports
+let mockSecureStorage: Record<string, string> = {};
+const secureStorage = {
+  getItem: async (key: string) => mockSecureStorage[key] || null,
+  setItem: async (key: string, value: string) => {
+    mockSecureStorage[key] = value;
+  },
+  removeItem: async (key: string) => {
+    delete mockSecureStorage[key];
+  },
+};
+
+// Storage keys (matching SECURE_STORAGE_KEYS)
+const SECURE_STORAGE_KEYS = {
+  CURRENT_CONVERSATION_ID: 'mallory_current_conversation_id',
+};
+
+// Helper to create new conversation (replicates createNewConversation logic)
+async function createNewConversationTest(userId: string) {
+  const { v4: uuidv4 } = await import('uuid');
+  const conversationId = uuidv4();
+  
+  await secureStorage.setItem(
+    SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID,
+    conversationId
+  );
+
+  const { data, error } = await supabase
+    .from('conversations')
+    .insert({
+      id: conversationId,
+      title: 'mallory-global',
+      token_ca: GLOBAL_TOKEN_ID,
+      user_id: userId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      metadata: {}
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    conversationId: data!.id,
+    shouldGreet: true,
+  };
+}
+
 describe('Chat History E2E Tests', () => {
+  beforeEach(() => {
+    // Reset mock storage between tests
+    mockSecureStorage = {};
+  });
+
   describe('JOURNEY: User opens chat history → views conversations → opens conversation', () => {
     test('should display conversation list with messages', async () => {
       console.log('\n📋 E2E: Chat History Display Test\n');
@@ -263,7 +317,7 @@ describe('Chat History E2E Tests', () => {
       const { userId } = await authenticateTestUser();
 
       // Create new conversation
-      const conversationData = await createNewConversation(userId);
+      const conversationData = await createNewConversationTest(userId);
 
       console.log('✅ Created new conversation:', conversationData.conversationId);
 
