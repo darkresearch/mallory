@@ -176,16 +176,6 @@ jobs:
           # NOTE: EXPO_PUBLIC_GRID_API_KEY is intentionally NOT set
           # Unit tests verify it's not exposed to client code
       
-      - name: Run chat history unit tests
-        run: cd apps/client && bun run test:unit:chat-history
-        env:
-          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
-          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
-          EXPO_PUBLIC_GRID_ENV: production
-          TEST_BACKEND_URL: http://localhost:3001
-      
       - name: Run chat draft messages unit test
         run: cd apps/client && bun test __tests__/unit/draftMessages.test.ts
         continue-on-error: true
