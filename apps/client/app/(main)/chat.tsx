@@ -147,6 +147,7 @@ export default function ChatScreen() {
               isStreaming={aiStatus === 'streaming'}
               pendingMessage={pendingMessage}
               onPendingMessageCleared={clearPendingMessage}
+              conversationId={currentConversationId}
             />
           )}
         </KeyboardAvoidingView>

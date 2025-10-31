@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPlaceholder } from './AnimatedPlaceholder';
+import { getDraftMessage, saveDraftMessage, clearDraftMessage } from '@/lib/storage';
 
 interface ChatInputProps {
   onSend?: (message: string) => void;
@@ -14,6 +15,7 @@ interface ChatInputProps {
   isStreaming?: boolean;
   pendingMessage?: string | null;
   onPendingMessageCleared?: () => void;
+  conversationId?: string | null; // For draft message persistence
 }
 
 export function ChatInput({
@@ -26,11 +28,34 @@ export function ChatInput({
   hasMessages = false,
   isStreaming = false,
   pendingMessage = null,
-  onPendingMessageCleared
+  onPendingMessageCleared,
+  conversationId = null
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [height, setHeight] = useState(44); // Starting height as specified
   const textInputRef = useRef<TextInput>(null);
+  const draftSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Load draft message when conversation changes
+  useEffect(() => {
+    if (!conversationId) return;
+    
+    let isMounted = true;
+    
+    async function loadDraft() {
+      const draft = await getDraftMessage(conversationId!);
+      if (draft && isMounted) {
+        console.log('📝 [ChatInput] Loading draft message for conversation:', conversationId);
+        setText(draft);
+      }
+    }
+    
+    loadDraft();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [conversationId]);
   
   // Restore pending message after OTP completion
   useEffect(() => {
@@ -40,6 +65,15 @@ export function ChatInput({
       onPendingMessageCleared?.();
     }
   }, [pendingMessage, onPendingMessageCleared]);
+  
+  // Cleanup draft save timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (draftSaveTimeoutRef.current) {
+        clearTimeout(draftSaveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSend = async () => {
     const messageText = text.trim();
@@ -54,6 +88,12 @@ export function ChatInput({
     // Clear input after async validation completes
     setText('');
     setHeight(44); // Reset to starting height
+    
+    // Clear draft message from storage
+    if (conversationId) {
+      console.log('🗑️ [ChatInput] Clearing draft message after send');
+      await clearDraftMessage(conversationId);
+    }
   };
 
   const handleStop = () => {
@@ -76,7 +116,25 @@ export function ChatInput({
     // If text is empty, reset height to minimum immediately
     if (newText.trim() === '') {
       setHeight(44);
+      // Clear draft if text is empty
+      if (conversationId) {
+        clearDraftMessage(conversationId);
+      }
       return;
+    }
+
+    // Debounce draft message saving
+    if (conversationId) {
+      // Clear existing timeout
+      if (draftSaveTimeoutRef.current) {
+        clearTimeout(draftSaveTimeoutRef.current);
+      }
+      
+      // Save draft after 500ms of no typing
+      draftSaveTimeoutRef.current = setTimeout(() => {
+        console.log('💾 [ChatInput] Saving draft message');
+        saveDraftMessage(conversationId, newText);
+      }, 500);
     }
 
     // Let onContentSizeChange handle all height adjustments based on native measurement

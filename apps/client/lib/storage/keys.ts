@@ -32,6 +32,9 @@ export const SECURE_STORAGE_KEYS = {
   
   // Conversation state
   CURRENT_CONVERSATION_ID: 'mallory_current_conversation_id',
+  
+  // Draft messages (in-progress messages per conversation)
+  DRAFT_MESSAGES: 'mallory_draft_messages',
 } as const;
 
 // ═══════════════════════════════════════════════════════════════
