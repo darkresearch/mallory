@@ -6,6 +6,7 @@
 import { UIMessage } from 'ai';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../../../lib/supabase.js';
+import { saveAssistantMessage } from '../persistence.js';
 
 /**
  * Build UI message stream response configuration
@@ -29,6 +30,27 @@ export function buildStreamResponse(
   let partCount = 0;
   let textParts = 0;
   let lastTextDelta = '';
+  let assistantMessageId: string | null = null;
+  let lastSavedContent = '';
+  let saveThrottleTimeout: NodeJS.Timeout | null = null;
+  
+  // Throttled save function - saves every 500ms during streaming
+  const throttledSave = async (message: UIMessage) => {
+    if (saveThrottleTimeout) {
+      clearTimeout(saveThrottleTimeout);
+    }
+    
+    saveThrottleTimeout = setTimeout(async () => {
+      if (message && message.role === 'assistant') {
+        const currentContent = message.parts?.map((p: any) => p.text || '').join('') || '';
+        // Only save if content has changed significantly (avoid saving empty/unchanged messages)
+        if (currentContent !== lastSavedContent && currentContent.length > 0) {
+          await saveAssistantMessage(conversationId, message, false);
+          lastSavedContent = currentContent;
+        }
+      }
+    }, 500); // Save every 500ms
+  };
   
   const streamResponse = result.toUIMessageStreamResponse({
     sendReasoning: true, // Enable reasoning content in stream
@@ -107,7 +129,7 @@ export function buildStreamResponse(
       return undefined;
     },
 
-    // Message storage is now handled client-side
+    // Final save when stream completes
     onFinish: async ({ messages: allMessages, isAborted }: any) => {
       console.log('🏁 onFinish callback triggered:', { 
         messageCount: allMessages.length, 
@@ -118,6 +140,21 @@ export function buildStreamResponse(
         lastTextDelta: lastTextDelta.substring(0, 50) + '...',
         isOnboarding: onboardingContext?.isOnboarding
       });
+      
+      // Clear throttle timeout
+      if (saveThrottleTimeout) {
+        clearTimeout(saveThrottleTimeout);
+        saveThrottleTimeout = null;
+      }
+      
+      // Save final assistant message state (complete)
+      if (!isAborted && allMessages.length > 0) {
+        const assistantMessage = allMessages.find((msg: UIMessage) => msg.role === 'assistant');
+        if (assistantMessage) {
+          console.log('💾 Saving final assistant message (complete):', assistantMessage.id);
+          await saveAssistantMessage(conversationId, assistantMessage, true);
+        }
+      }
       
       // Mark onboarding complete if this was an onboarding conversation
       if (onboardingContext?.isOnboarding && !isAborted && onboardingContext?.userId) {
@@ -137,8 +174,6 @@ export function buildStreamResponse(
           console.error('❌ Exception marking onboarding complete:', error);
         }
       }
-      
-      // Client-side will handle message persistence
     },
     
     headers: {

@@ -3,7 +3,7 @@ import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import { useWindowDimensions } from 'react-native';
 import { generateAPIUrl } from '../lib';
-import { saveMessagesToSupabase, loadMessagesFromSupabase } from '../features/chat';
+import { loadMessagesFromSupabase } from '../features/chat';
 import { secureStorage } from '../lib/storage';
 import { getDeviceInfo } from '../lib/device';
 import { useEffect, useRef, useState } from 'react';
@@ -168,50 +168,8 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
     }
   }, [isLoadingHistory, initialMessages, messages.length, setMessages]);
 
-  // Save messages when streaming completes
-  useEffect(() => {
-    const saveMessages = async () => {
-      console.log('💬 Save messages effect triggered:', {
-        previousStatus: previousStatusRef.current,
-        currentStatus: status,
-        messageCount: messages.length,
-        conversationId,
-        shouldSave: previousStatusRef.current === 'streaming' && status === 'ready' && messages.length > 0
-      });
-
-      if (previousStatusRef.current === 'streaming' && status === 'ready' && messages.length > 0) {
-        console.log('🏁 Stream completed - saving messages:', {
-          messageCount: messages.length,
-          conversationId,
-          timestamp: new Date().toISOString(),
-          messageIds: messages.map(m => m.id),
-          messageRoles: messages.map(m => m.role)
-        });
-
-        try {
-          console.log('🔄 Calling saveMessagesToSupabase...');
-          const success = await saveMessagesToSupabase(conversationId, messages);
-          console.log('🔄 saveMessagesToSupabase returned:', success);
-          
-          if (success) {
-            console.log('✅ Messages saved successfully to Supabase');
-          } else {
-            console.error('❌ Failed to save messages - saveMessagesToSupabase returned false');
-          }
-        } catch (error) {
-          console.error('❌ Error saving messages - exception thrown:', error);
-          console.error('Error details:', {
-            message: error instanceof Error ? error.message : 'Unknown',
-            stack: error instanceof Error ? error.stack : 'N/A'
-          });
-        }
-      }
-      
-      previousStatusRef.current = status;
-    };
-
-    saveMessages();
-  }, [status, messages, conversationId]);
+  // Message persistence is now handled server-side
+  // Messages are saved incrementally as they stream, so they persist even if client disconnects
 
   // x402 payments now handled server-side - no client-side handler needed
 
