@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { useConversations } from '@/contexts/ConversationsContext';
 import { getCurrentOrCreateConversation } from '../features/chat';
 import { secureStorage, SECURE_STORAGE_KEYS } from '../lib';
 
@@ -11,9 +10,6 @@ interface UseConversationLoaderProps {
 export function useConversationLoader({ userId }: UseConversationLoaderProps) {
   const params = useLocalSearchParams();
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  
-  // Get conversations context for optimization
-  const { conversations, isInitialized } = useConversations();
   
   // Track if we've already loaded from storage to prevent re-runs
   const hasLoadedFromStorageRef = useRef(false);
@@ -41,7 +37,7 @@ export function useConversationLoader({ userId }: UseConversationLoaderProps) {
           await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationIdParam);
         } else {
           // FIRST: Try to load active conversation from secure storage immediately
-          // This allows instant loading without waiting for ConversationsContext
+          // This allows instant loading without waiting for context
           // Only check storage once to prevent race conditions
           if (!hasLoadedFromStorageRef.current) {
             const activeConversationId = await secureStorage.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
@@ -57,25 +53,10 @@ export function useConversationLoader({ userId }: UseConversationLoaderProps) {
           }
           
           // No active conversation in storage - get/create one
-          // Only use conversations data if context is initialized AND we don't already have a conversationId
-          // This prevents re-running when conversations array changes after we've already loaded
-          if (!currentConversationId && isInitialized && conversations.length > 0) {
-            const mostRecentConversation = conversations[0]; // Already sorted by updated_at DESC
-            console.log('📱 Found conversations in context, using most recent:', mostRecentConversation.id);
-            
-            setCurrentConversationId(mostRecentConversation.id);
-            await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
-            return;
-          }
-          
           // Only call getCurrentOrCreateConversation if we don't have a conversationId yet
-          // This prevents unnecessary re-runs when conversations array updates
+          // This prevents unnecessary re-runs
           if (!currentConversationId) {
-            const existingConversations = isInitialized && conversations.length > 0 
-              ? conversations.map(c => ({ id: c.id, updated_at: c.updated_at })) 
-              : undefined;
-            
-            const conversationData = await getCurrentOrCreateConversation(userId, existingConversations);
+            const conversationData = await getCurrentOrCreateConversation(userId);
             console.log('📱 Using conversation:', conversationData.conversationId);
             setCurrentConversationId(conversationData.conversationId);
           }
@@ -90,7 +71,7 @@ export function useConversationLoader({ userId }: UseConversationLoaderProps) {
 
     loadConversation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.conversationId, userId, isInitialized, conversations.length]);
+  }, [params.conversationId, userId]);
 
   return {
     currentConversationId,
