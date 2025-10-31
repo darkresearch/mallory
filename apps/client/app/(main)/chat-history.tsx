@@ -63,7 +63,6 @@ export default function ChatHistoryScreen() {
   
   const translateX = useSharedValue(-Dimensions.get('window').width);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredConversations, setFilteredConversations] = useState<ConversationWithPreview[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
@@ -171,6 +170,101 @@ export default function ChatHistoryScreen() {
     }
   }, [user?.id]);
 
+  // Real-time event handlers
+  const handleConversationInsert = useCallback((newRecord: any) => {
+    // Only add global conversations
+    if (newRecord.token_ca !== GLOBAL_TOKEN_ID) return;
+    
+    const newConversation: ConversationWithPreview = {
+      id: newRecord.id,
+      title: newRecord.title,
+      token_ca: newRecord.token_ca,
+      created_at: newRecord.created_at,
+      updated_at: newRecord.updated_at,
+      metadata: newRecord.metadata,
+      lastMessage: undefined
+    };
+    
+    setConversations(prev => [newConversation, ...prev]);
+    console.log('✅ Added new conversation:', newRecord.id);
+  }, []);
+
+  const handleConversationUpdate = useCallback((newRecord: any) => {
+    setConversations(prev => {
+      const updated = prev.map(conv => 
+        conv.id === newRecord.id 
+          ? { ...conv, updated_at: newRecord.updated_at, metadata: newRecord.metadata }
+          : conv
+      ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+      
+      return updated;
+    });
+    console.log('✅ Updated conversation:', newRecord.id);
+  }, []);
+
+  const handleConversationDelete = useCallback((oldRecord: any) => {
+    setConversations(prev => prev.filter(conv => conv.id !== oldRecord.id));
+    setAllMessages(prev => {
+      const updated = { ...prev };
+      delete updated[oldRecord.id];
+      return updated;
+    });
+    console.log('✅ Removed conversation:', oldRecord.id);
+  }, []);
+
+  const handleMessageInsert = useCallback((newRecord: any) => {
+    const conversationId = newRecord.conversation_id;
+    
+    // Add to messages cache
+    setAllMessages(prev => ({
+      ...prev,
+      [conversationId]: [newRecord, ...(prev[conversationId] || [])]
+    }));
+    
+    // Update conversation's last message and updated_at
+    setConversations(prev => 
+      prev.map(conv => 
+        conv.id === conversationId
+          ? { 
+              ...conv, 
+              updated_at: newRecord.created_at, // Use message time as conversation update time
+              lastMessage: {
+                content: newRecord.content,
+                role: newRecord.role,
+                created_at: newRecord.created_at
+              }
+            }
+          : conv
+      ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    );
+    
+    console.log('✅ Added new message to cache for conversation:', conversationId);
+  }, []);
+
+  const handleMessageUpdate = useCallback((newRecord: any) => {
+    const conversationId = newRecord.conversation_id;
+    
+    setAllMessages(prev => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).map(msg =>
+        msg.id === newRecord.id ? newRecord : msg
+      )
+    }));
+    
+    console.log('✅ Updated message in cache:', newRecord.id);
+  }, []);
+
+  const handleMessageDelete = useCallback((oldRecord: any) => {
+    const conversationId = oldRecord.conversation_id;
+    
+    setAllMessages(prev => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).filter(msg => msg.id !== oldRecord.id)
+    }));
+    
+    console.log('✅ Removed message from cache:', oldRecord.id);
+  }, []);
+
   // In-memory search through cached messages
   const searchConversations = useCallback((query: string): ConversationWithPreview[] => {
     if (!query.trim()) {
@@ -249,52 +343,22 @@ export default function ChatHistoryScreen() {
           .on('broadcast', { event: 'INSERT' }, (payload) => {
             console.log('🔴 [REALTIME] 📡 Conversation INSERT broadcast received:', payload);
             const newData = payload.payload?.record || payload.record || payload.new || payload;
-            
             if (newData) {
-              const newConversation: ConversationWithPreview = {
-                id: newData.id,
-                title: newData.title,
-                token_ca: newData.token_ca,
-                created_at: newData.created_at,
-                updated_at: newData.updated_at,
-                metadata: newData.metadata,
-                lastMessage: undefined
-              };
-              
-              setConversations(prev => {
-                const updated = [newConversation, ...prev];
-                return updated;
-              });
-              console.log('✅ Added new conversation:', newData.id);
+              handleConversationInsert(newData);
             }
           })
           .on('broadcast', { event: 'UPDATE' }, (payload) => {
             console.log('🔴 [REALTIME] 📡 Conversation UPDATE broadcast received:', payload);
             const newData = payload.payload?.record || payload.record || payload.new || payload;
-            
             if (newData) {
-              setConversations(prev => 
-                prev.map(conv => 
-                  conv.id === newData.id 
-                    ? { ...conv, updated_at: newData.updated_at, metadata: newData.metadata }
-                    : conv
-                ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-              );
-              console.log('✅ Updated conversation:', newData.id);
+              handleConversationUpdate(newData);
             }
           })
           .on('broadcast', { event: 'DELETE' }, (payload) => {
             console.log('🔴 [REALTIME] 📡 Conversation DELETE broadcast received:', payload);
             const oldData = payload.payload?.record || payload.record || payload.old || payload;
-            
             if (oldData) {
-              setConversations(prev => prev.filter(conv => conv.id !== oldData.id));
-              setAllMessages(prev => {
-                const updated = { ...prev };
-                delete updated[oldData.id];
-                return updated;
-              });
-              console.log('✅ Removed conversation:', oldData.id);
+              handleConversationDelete(oldData);
             }
           })
           .subscribe((status, error) => {
@@ -315,66 +379,22 @@ export default function ChatHistoryScreen() {
           .on('broadcast', { event: 'INSERT' }, (payload) => {
             console.log('🔴 [REALTIME] 📡 Message INSERT broadcast received:', payload);
             const newData = payload.payload?.record || payload.record || payload.new || payload;
-            
             if (newData) {
-              const conversationId = newData.conversation_id;
-              
-              // Add to messages cache
-              setAllMessages(prev => ({
-                ...prev,
-                [conversationId]: [newData, ...(prev[conversationId] || [])]
-              }));
-              
-              // Update conversation's last message and updated_at
-              setConversations(prev => 
-                prev.map(conv => 
-                  conv.id === conversationId
-                    ? { 
-                        ...conv, 
-                        updated_at: newData.created_at,
-                        lastMessage: {
-                          content: newData.content,
-                          role: newData.role,
-                          created_at: newData.created_at
-                        }
-                      }
-                    : conv
-                ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-              );
-              
-              console.log('✅ Added new message to cache for conversation:', conversationId);
+              handleMessageInsert(newData);
             }
           })
           .on('broadcast', { event: 'UPDATE' }, (payload) => {
             console.log('🔴 [REALTIME] 📡 Message UPDATE broadcast received:', payload);
             const newData = payload.payload?.record || payload.record || payload.new || payload;
-            
             if (newData) {
-              const conversationId = newData.conversation_id;
-              
-              setAllMessages(prev => ({
-                ...prev,
-                [conversationId]: (prev[conversationId] || []).map(msg =>
-                  msg.id === newData.id ? newData : msg
-                )
-              }));
-              
-              console.log('✅ Updated message in cache:', newData.id);
+              handleMessageUpdate(newData);
             }
           })
           .on('broadcast', { event: 'DELETE' }, (payload) => {
             console.log('🔴 [REALTIME] 📡 Message DELETE broadcast received:', payload);
             const oldData = payload.payload?.record || payload.record || payload.old || payload;
-            
             if (oldData) {
-              const conversationId = oldData.conversation_id;
-              
-              setAllMessages(prev => ({
-                ...prev,
-                [conversationId]: (prev[conversationId] || []).filter(msg => msg.id !== oldData.id)
-              }));
-              
-              console.log('✅ Removed message from cache:', oldData.id);
+              handleMessageDelete(oldData);
             }
           })
           .subscribe((status, error) => {
@@ -415,7 +435,7 @@ export default function ChatHistoryScreen() {
         }
       }
     };
-  }, [user?.id, isInitialized]);
+  }, [user?.id, isInitialized, handleConversationInsert, handleConversationUpdate, handleConversationDelete, handleMessageInsert, handleMessageUpdate, handleMessageDelete]);
 
   // Helper function to get display title for a conversation
   const getConversationDisplayTitle = (
@@ -438,22 +458,10 @@ export default function ChatHistoryScreen() {
     loadCurrentConversationId();
   }, []);
 
-  // Handle search with instant response (no network calls!)
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const results = searchConversations(searchQuery);
-      setFilteredConversations(results);
-    } else {
-      setFilteredConversations(conversations);
-    }
-  }, [searchQuery, conversations, searchConversations]);
-
-  // Initialize filtered conversations when conversations load
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredConversations(conversations);
-    }
-  }, [conversations]);
+  // Filtered conversations based on search (using useMemo for performance)
+  const filteredConversations = useMemo(() => {
+    return searchConversations(searchQuery);
+  }, [searchQuery, searchConversations]);
 
   // Handle pull-to-refresh
   const handleRefresh = async () => {
