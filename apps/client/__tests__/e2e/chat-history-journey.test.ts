@@ -76,7 +76,7 @@ describe('Chat History E2E Tests', () => {
 
       expect(error).toBe(null);
       expect(loadedConversations).not.toBe(null);
-      expect(loadedConversations!.length).toBeGreaterThanOrEqual(3);
+      expect(loadedConversations!.length >= 3).toBe(true);
 
       console.log('✅ Loaded conversations:', loadedConversations!.length);
 
@@ -89,7 +89,7 @@ describe('Chat History E2E Tests', () => {
         .order('created_at', { ascending: false });
 
       expect(allMessages).not.toBe(null);
-      expect(allMessages!.length).toBeGreaterThanOrEqual(6); // 3 conversations * 2 messages each
+      expect(allMessages!.length >= 6).toBe(true); // 3 conversations * 2 messages each
 
       console.log('✅ Loaded messages:', allMessages!.length);
 
@@ -239,13 +239,13 @@ describe('Chat History E2E Tests', () => {
 
       // Verify message order
       expect(loadedMessages![0].role).toBe('user');
-      expect(loadedMessages![0].content).toBe('First message');
+      expect((loadedMessages![0] as any).content).toBe('First message');
       expect(loadedMessages![1].role).toBe('assistant');
-      expect(loadedMessages![1].content).toBe('First response');
+      expect((loadedMessages![1] as any).content).toBe('First response');
       expect(loadedMessages![2].role).toBe('user');
-      expect(loadedMessages![2].content).toBe('Second message');
+      expect((loadedMessages![2] as any).content).toBe('Second message');
       expect(loadedMessages![3].role).toBe('assistant');
-      expect(loadedMessages![3].content).toBe('Second response');
+      expect((loadedMessages![3] as any).content).toBe('Second response');
 
       console.log('✅ Messages loaded in correct order');
 
@@ -334,7 +334,7 @@ describe('Chat History E2E Tests', () => {
 
       expect(error).toBe(null);
       expect(loadedConversations).not.toBe(null);
-      expect(loadedConversations!.length).toBeGreaterThanOrEqual(20);
+      expect(loadedConversations!.length >= 20).toBe(true);
 
       console.log(`✅ Loaded ${loadedConversations!.length} conversations in ${loadTime}ms`);
 

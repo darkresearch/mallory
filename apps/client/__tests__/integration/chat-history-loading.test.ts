@@ -116,7 +116,7 @@ describe('Chat History Integration Tests', () => {
 
       expect(loadedMessages.length).toBe(3);
       expect(loadedMessages[0].role).toBe('user');
-      expect(loadedMessages[0].content).toBe('First question');
+      expect((loadedMessages[0] as any).content).toBe('First question');
       expect(loadedMessages[1].role).toBe('assistant');
       expect(loadedMessages[2].role).toBe('user');
     });
@@ -164,9 +164,9 @@ describe('Chat History Integration Tests', () => {
       const loadedMessages = await loadMessagesFromSupabase(conversation!.id);
 
       expect(loadedMessages.length).toBe(3);
-      expect(loadedMessages[0].content).toBe('Message 1');
-      expect(loadedMessages[1].content).toBe('Message 2');
-      expect(loadedMessages[2].content).toBe('Message 3');
+      expect((loadedMessages[0] as any).content).toBe('Message 1');
+      expect((loadedMessages[1] as any).content).toBe('Message 2');
+      expect((loadedMessages[2] as any).content).toBe('Message 3');
     });
 
     test('should load messages with reasoning parts', async () => {
@@ -361,7 +361,7 @@ describe('Chat History Integration Tests', () => {
       const loadedMessages = await loadMessagesFromSupabase(conversation!.id);
 
       expect(loadedMessages.length).toBe(1);
-      expect(loadedMessages[0].content).toBe('Message without metadata');
+      expect((loadedMessages[0] as any).content).toBe('Message without metadata');
       // Should reconstruct parts from content
       expect(loadedMessages[0].parts.length).toBeGreaterThan(0);
     });
@@ -393,8 +393,8 @@ describe('Chat History Integration Tests', () => {
       const loadedMessages = await loadMessagesFromSupabase(conversation!.id);
 
       expect(loadedMessages.length).toBe(100);
-      expect(loadedMessages[0].content).toBe('Message 0');
-      expect(loadedMessages[99].content).toBe('Message 99');
+      expect((loadedMessages[0] as any).content).toBe('Message 0');
+      expect((loadedMessages[99] as any).content).toBe('Message 99');
     });
 
     test('should handle concurrent loads for same conversation', async () => {
@@ -459,7 +459,7 @@ describe('Chat History Integration Tests', () => {
       const loadedMessages = await loadMessagesFromSupabase(conversation!.id);
 
       expect(loadedMessages.length).toBe(1);
-      expect(loadedMessages[0].content).toBe(specialContent);
+      expect((loadedMessages[0] as any).content).toBe(specialContent);
     });
   });
 
