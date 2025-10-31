@@ -4,20 +4,71 @@
  * Tests the draft message persistence functionality in isolation
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach, mock } from 'bun:test';
 import '../setup/test-env';
+
+// Mock the storage module to avoid React Native dependency issues
+const mockStorage: Record<string, string> = {};
+
+const mockGetItem = mock(async (key: string) => mockStorage[key] || null);
+const mockSetItem = mock(async (key: string, value: string) => {
+  mockStorage[key] = value;
+});
+const mockRemoveItem = mock(async (key: string) => {
+  delete mockStorage[key];
+});
+
+// Mock the storage module
+mock.module('@/lib/storage', () => ({
+  secureStorage: {
+    getItem: mockGetItem,
+    setItem: mockSetItem,
+    removeItem: mockRemoveItem,
+  },
+  SECURE_STORAGE_KEYS: {
+    DRAFT_MESSAGES: 'mallory_draft_messages',
+  },
+  getDraftMessage: async (conversationId: string) => {
+    const draftsJson = mockStorage['mallory_draft_messages'];
+    if (!draftsJson) return null;
+    const drafts = JSON.parse(draftsJson);
+    return drafts[conversationId] || null;
+  },
+  saveDraftMessage: async (conversationId: string, message: string) => {
+    const draftsJson = mockStorage['mallory_draft_messages'];
+    const drafts = draftsJson ? JSON.parse(draftsJson) : {};
+    if (message.trim()) {
+      drafts[conversationId] = message;
+    } else {
+      delete drafts[conversationId];
+    }
+    mockStorage['mallory_draft_messages'] = JSON.stringify(drafts);
+  },
+  clearDraftMessage: async (conversationId: string) => {
+    const draftsJson = mockStorage['mallory_draft_messages'];
+    if (!draftsJson) return;
+    const drafts = JSON.parse(draftsJson);
+    delete drafts[conversationId];
+    mockStorage['mallory_draft_messages'] = JSON.stringify(drafts);
+  },
+  clearAllDraftMessages: async () => {
+    delete mockStorage['mallory_draft_messages'];
+  },
+}));
+
 import {
   getDraftMessage,
   saveDraftMessage,
   clearDraftMessage,
   clearAllDraftMessages,
-} from '@/lib/storage/draftMessages';
-import { secureStorage, SECURE_STORAGE_KEYS } from '@/lib/storage';
+  secureStorage,
+  SECURE_STORAGE_KEYS,
+} from '@/lib/storage';
 
 describe('Draft Message Storage', () => {
   beforeEach(async () => {
-    // Clear all drafts before each test
-    await clearAllDraftMessages();
+    // Clear mock storage
+    Object.keys(mockStorage).forEach(key => delete mockStorage[key]);
   });
 
   describe('Save and Retrieve Draft Messages', () => {
