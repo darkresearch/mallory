@@ -214,8 +214,17 @@ export default function ChatHistoryScreen() {
 
 
   // Handle conversation tap
-  const handleConversationTap = (conversationId: string) => {
+  const handleConversationTap = async (conversationId: string) => {
     console.log('📱 Opening conversation:', conversationId);
+    
+    // Save as active conversation in secure storage (persists across sessions)
+    try {
+      await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationId);
+      console.log('✅ Saved active conversation:', conversationId);
+    } catch (error) {
+      console.error('Error saving active conversation:', error);
+    }
+    
     // Navigate to chat with the specific conversation ID
     router.push(`/(main)/chat?conversationId=${conversationId}`);
   };

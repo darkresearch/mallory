@@ -181,7 +181,7 @@ export async function createNewConversation(userId?: string, metadata?: Record<s
     const newConversationId = uuidv4();
     const now = Date.now();
     
-    // Store in local storage as the current conversation
+    // Store in secure storage as the active conversation (persists across sessions)
     await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, newConversationId);
     await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
     
@@ -247,9 +247,10 @@ export async function getCurrentOrCreateConversation(
     const now = Date.now();
     
     if (currentConversationId) {
-      // Use existing current conversation
+      // Use existing current conversation (from secure storage)
       await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
       
+      console.log('📱 Using stored active conversation:', currentConversationId);
       return {
         conversationId: currentConversationId,
         shouldGreet: false,
@@ -258,20 +259,20 @@ export async function getCurrentOrCreateConversation(
       // No current conversation - check if user has any conversation history
       console.log('📱 No current conversation, checking conversation history...');
       
-      if (existingConversations && existingConversations.length > 0) {
-        // User has conversation history - use the most recent one (already sorted by updated_at DESC)
-        const mostRecentConversation = existingConversations[0];
-        console.log('📱 Found existing conversations (from context), loading most recent:', mostRecentConversation.id);
-        
-        // Set as current conversation
-        await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
-        await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
-        
-        return {
-          conversationId: mostRecentConversation.id,
-          shouldGreet: false,
-        };
-      } else {
+        if (existingConversations && existingConversations.length > 0) {
+          // User has conversation history - use the most recent one (already sorted by updated_at DESC)
+          const mostRecentConversation = existingConversations[0];
+          console.log('📱 Found existing conversations (from context), loading most recent:', mostRecentConversation.id);
+          
+          // Set as active conversation (persists across sessions)
+          await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
+          await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
+          
+          return {
+            conversationId: mostRecentConversation.id,
+            shouldGreet: false,
+          };
+        } else {
         // No conversation history provided - fallback to database query
         console.log('📱 No conversation history provided, querying database as fallback...');
         
@@ -311,7 +312,7 @@ export async function getCurrentOrCreateConversation(
           const mostRecentConversation = existingConversationsFromDB[0];
           console.log('📱 Found existing conversations (from DB), loading most recent:', mostRecentConversation.id);
           
-          // Set as current conversation
+          // Set as active conversation (persists across sessions)
           await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
           await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
           

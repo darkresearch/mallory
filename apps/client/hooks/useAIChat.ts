@@ -33,19 +33,32 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
   // Load historical messages when conversation ID changes
   useEffect(() => {
     const loadHistory = async () => {
-      if (!conversationId || conversationId === 'temp-loading') return;
+      if (!conversationId || conversationId === 'temp-loading') {
+        setIsLoadingHistory(false);
+        return;
+      }
       
       setIsLoadingHistory(true);
       console.log('📖 Loading historical messages for conversation:', conversationId);
       
+      // Add timeout to prevent perpetual loading
+      const timeoutId = setTimeout(() => {
+        console.warn('📖 Loading messages timeout after 10 seconds, setting to empty');
+        setIsLoadingHistory(false);
+        setInitialMessages([]);
+      }, 10000); // 10 second timeout
+      
       try {
         const historicalMessages = await loadMessagesFromSupabase(conversationId);
+        clearTimeout(timeoutId);
+        
         console.log('📖 Loaded historical messages:', {
           count: historicalMessages.length,
           messageIds: historicalMessages.map(m => m.id)
         });
         setInitialMessages(historicalMessages);
       } catch (error) {
+        clearTimeout(timeoutId);
         console.error('📖 Error loading historical messages:', error);
         setInitialMessages([]);
       } finally {
