@@ -132,7 +132,7 @@ describe('Chat Flow Integration Tests (Updated)', () => {
 
       expect(error).toBe(null);
       expect(messages).not.toBe(null);
-      expect(messages!.length).toBeGreaterThanOrEqual(2); // User + Assistant
+      expect(messages!.length).toBeGreaterThan(1); // User + Assistant (at least 2)
 
       // Verify user message
       const userMsg = messages!.find(m => m.role === 'user');
@@ -402,7 +402,7 @@ describe('Chat Flow Integration Tests (Updated)', () => {
         .order('created_at', { ascending: false })
         .limit(2);
 
-      expect(messages!.length).toBeGreaterThanOrEqual(2);
+      expect(messages!.length).toBeGreaterThan(1);
       console.log('   ✅ Step 5: Messages persisted');
       console.log('\n✅ Complete flow test passed!\n');
     });
@@ -520,7 +520,7 @@ describe('Chat Flow Integration Tests (Updated)', () => {
         .select('*')
         .eq('conversation_id', testConversationId);
 
-      expect(persistedMessages!.length).toBeGreaterThanOrEqual(6); // 3 user + 3 assistant
+      expect(persistedMessages!.length).toBeGreaterThan(5); // 3 user + 3 assistant (at least 6)
     });
   });
 });

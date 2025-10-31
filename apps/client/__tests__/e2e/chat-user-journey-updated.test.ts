@@ -230,7 +230,7 @@ describe('Chat Screen E2E (Complete User Journey)', () => {
 
     expect(msgError).toBe(null);
     expect(messages).not.toBe(null);
-    expect(messages!.length).toBeGreaterThanOrEqual(2); // User + Assistant
+    expect(messages!.length).toBeGreaterThan(1); // User + Assistant (at least 2)
 
     const userMsg = messages!.find(m => m.role === 'user');
     const assistantMsg = messages!.find(m => m.role === 'assistant');
@@ -557,7 +557,7 @@ describe('Chat Screen E2E (Complete User Journey)', () => {
     console.log('   Expected:', turns.length * 2); // Each turn = user + assistant
 
     // Verify all turns are present
-    expect(messages!.length).toBeGreaterThanOrEqual(turns.length * 2);
+    expect(messages!.length).toBeGreaterThan(turns.length * 2 - 1); // Each turn = user + assistant (at least)
 
     // Verify message order (should alternate user/assistant)
     for (let i = 0; i < messages!.length; i++) {

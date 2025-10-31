@@ -34,7 +34,7 @@ export function ChatInput({
   const [text, setText] = useState('');
   const [height, setHeight] = useState(44); // Starting height as specified
   const textInputRef = useRef<TextInput>(null);
-  const draftSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Load draft message when conversation changes
   useEffect(() => {

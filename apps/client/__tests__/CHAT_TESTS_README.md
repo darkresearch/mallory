@@ -169,7 +169,7 @@ const messages = await supabase
   .select('*')
   .eq('conversation_id', convId);
 
-expect(messages.length).toBeGreaterThanOrEqual(2); // user + assistant
+expect(messages.length).toBeGreaterThan(1); // user + assistant (at least 2)
 ```
 
 ## Migration Notes
