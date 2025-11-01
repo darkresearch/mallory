@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, usePathname } from 'expo-router';
 import { secureStorage, SECURE_STORAGE_KEYS } from '../lib';
 import { getCurrentOrCreateConversation } from '../features/chat';
 
@@ -13,11 +13,12 @@ interface UseActiveConversationProps {
  */
 export function useActiveConversation({ userId }: UseActiveConversationProps) {
   const params = useLocalSearchParams();
+  const pathname = usePathname();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const hasLoadedRef = useRef(false);
-  const previousUserIdRef = useRef<string | undefined>(userId);
-  const previousConversationIdParamRef = useRef<string | undefined>(params.conversationId as string);
+  const previousPathnameRef = useRef<string | null>(null);
+  const loadInProgressRef = useRef(false);
 
   useEffect(() => {
     const loadActiveConversation = async () => {
@@ -25,23 +26,37 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
         setConversationId(null);
         setIsLoading(false);
         hasLoadedRef.current = false;
+        loadInProgressRef.current = false;
         return;
       }
 
-      // Reset loading flag if dependencies changed (allows reloading when navigating between screens)
-      const userIdChanged = previousUserIdRef.current !== userId;
-      const conversationIdParamChanged = previousConversationIdParamRef.current !== (params.conversationId as string);
+      // Reset loading flag if we navigated to chat screen (page refresh or navigation)
+      // This ensures conversations load both on refresh AND when navigating between screens
+      const isOnChatScreen = pathname.includes('/chat');
+      const pathnameChanged = previousPathnameRef.current !== pathname;
+      const isInitialMount = previousPathnameRef.current === null;
       
-      if (userIdChanged || conversationIdParamChanged) {
+      // Reset loading state if:
+      // 1. Initial mount on chat screen (page refresh)
+      // 2. Navigated to chat screen from another screen
+      if (isOnChatScreen && (isInitialMount || pathnameChanged)) {
+        console.log('📱 On chat screen - resetting loading state', { isInitialMount, pathnameChanged, pathname });
         hasLoadedRef.current = false;
-        previousUserIdRef.current = userId;
-        previousConversationIdParamRef.current = params.conversationId as string;
+        previousPathnameRef.current = pathname;
       }
 
-      // Prevent multiple loads
-      if (hasLoadedRef.current) return;
+      // Only load if we're on the chat screen
+      if (!isOnChatScreen) {
+        return;
+      }
+
+      // Prevent multiple concurrent loads (but allow new loads when navigating)
+      if (hasLoadedRef.current || loadInProgressRef.current) {
+        return;
+      }
 
       try {
+        loadInProgressRef.current = true;
         setIsLoading(true);
         
         // Check URL param first (explicit navigation)
@@ -54,6 +69,7 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
           // Update active conversation in storage
           await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationIdParam);
           hasLoadedRef.current = true;
+          loadInProgressRef.current = false;
           setIsLoading(false);
           return;
         }
@@ -65,6 +81,7 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
           console.log('📱 Found active conversation in storage:', activeConversationId);
           setConversationId(activeConversationId);
           hasLoadedRef.current = true;
+          loadInProgressRef.current = false;
           setIsLoading(false);
           return;
         }
@@ -76,6 +93,7 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
         
         setConversationId(conversationData.conversationId);
         hasLoadedRef.current = true;
+        loadInProgressRef.current = false;
         setIsLoading(false);
         
       } catch (error) {
@@ -83,11 +101,17 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
         setConversationId(null);
         setIsLoading(false);
         hasLoadedRef.current = false;
+        loadInProgressRef.current = false;
       }
     };
 
     loadActiveConversation();
-  }, [userId, params.conversationId]);
+    
+    // Cleanup: reset in-progress flag if component unmounts or dependencies change
+    return () => {
+      loadInProgressRef.current = false;
+    };
+  }, [userId, params.conversationId, pathname]);
 
   return {
     conversationId,
