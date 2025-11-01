@@ -71,14 +71,15 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
   });
   
   // Only use results when we have a real conversation ID
-  // When conversationId is null, we show empty state (not loading)
+  // When conversationId is null, we show loading state until it loads
   const hasConversationId = !!currentConversationId && currentConversationId !== 'temp-loading';
   const rawMessages = hasConversationId ? aiChatResult.messages : [];
   const sendAIMessage = hasConversationId ? aiChatResult.sendMessage : undefined;
   const regenerateMessage = hasConversationId ? aiChatResult.regenerate : undefined;
   const aiError = hasConversationId ? aiChatResult.error : null;
   const aiStatus = hasConversationId ? aiChatResult.status : 'ready';
-  const isLoadingHistory = hasConversationId ? aiChatResult.isLoadingHistory : false;
+  // Show loading when we don't have a conversation ID yet (still determining active conversation)
+  const isLoadingHistory = hasConversationId ? aiChatResult.isLoadingHistory : true;
   const stopStreaming = hasConversationId ? aiChatResult.stop : undefined;
 
   // Create enhanced messages with placeholder when in waiting state
