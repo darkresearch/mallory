@@ -5,6 +5,7 @@ import { supabase } from '../lib';
 
 interface UseChatStateProps {
   currentConversationId: string | null;
+  isLoadingConversation?: boolean; // Whether the conversation ID is still being loaded
   userId: string | undefined; // Required for Supermemory
   walletBalance?: {
     sol?: number;
@@ -50,7 +51,7 @@ async function markUserOnboardingComplete(userId: string): Promise<boolean> {
   }
 }
 
-export function useChatState({ currentConversationId, userId, walletBalance, userHasCompletedOnboarding }: UseChatStateProps) {
+export function useChatState({ currentConversationId, isLoadingConversation = false, userId, walletBalance, userHasCompletedOnboarding }: UseChatStateProps) {
   // Transaction guard for Grid session validation
   const { ensureGridSession } = useTransactionGuard();
   
@@ -78,7 +79,8 @@ export function useChatState({ currentConversationId, userId, walletBalance, use
   const regenerateMessage = hasConversationId ? aiChatResult.regenerate : undefined;
   const aiError = hasConversationId ? aiChatResult.error : null;
   const aiStatus = hasConversationId ? aiChatResult.status : 'ready';
-  const isLoadingHistory = hasConversationId ? aiChatResult.isLoadingHistory : false;
+  // Show loading state if conversation is still loading OR if history is loading
+  const isLoadingHistory = isLoadingConversation || (hasConversationId ? aiChatResult.isLoadingHistory : false);
   const stopStreaming = hasConversationId ? aiChatResult.stop : undefined;
 
   // Create enhanced messages with placeholder when in waiting state

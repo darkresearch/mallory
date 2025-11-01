@@ -20,7 +20,7 @@ export default function ChatScreen() {
   const { walletData } = useWallet(); // Get wallet data for balance context
 
   // Load active conversation (simplified - no ConversationsContext dependency)
-  const { conversationId: currentConversationId, conversationParam } = useActiveConversation({ 
+  const { conversationId: currentConversationId, conversationParam, isLoading: isLoadingConversation } = useActiveConversation({ 
     userId: user?.id 
   });
 
@@ -53,6 +53,7 @@ export default function ChatScreen() {
     clearPendingMessage,
   } = useChatState({ 
     currentConversationId,
+    isLoadingConversation,
     userId: user?.id,  // Pass userId for Supermemory memory management
     walletBalance: walletBalance,  // Pass wallet balance for x402 threshold checking
     userHasCompletedOnboarding: user?.hasCompletedOnboarding // For intro message safeguard
