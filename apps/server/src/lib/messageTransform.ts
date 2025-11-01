@@ -169,7 +169,7 @@ export function ensureToolMessageStructure(messages: UIMessage[]): UIMessage[] {
           result.push({
             id: uuidv4(),
             role: 'user' as const,
-            parts: toolResults,
+            parts: toolResults as any, // Runtime tool result data
             content: '', // Tool results don't have text content
           } as UIMessage);
         }
@@ -205,7 +205,7 @@ export function ensureToolMessageStructure(messages: UIMessage[]): UIMessage[] {
         const userMessageWithResults: UIMessage = {
           id: uuidv4(),
           role: 'user' as const,
-          parts: toolResults,
+          parts: toolResults as any, // Runtime tool result data
           content: '',
         } as UIMessage;
         
@@ -341,15 +341,16 @@ export function logMessageStructure(messages: UIMessage[], label: string = 'Mess
     console.log(`    Parts: ${parts.length}`);
     
     for (const part of parts) {
+      const partAny = part as any; // Type assertion for accessing runtime properties
       if (part.type === 'tool-call') {
-        console.log(`    - 🔧 tool-call: ${part.toolName} (id: ${part.toolCallId})`);
+        console.log(`    - 🔧 tool-call: ${partAny.toolName || 'unknown'} (id: ${part.toolCallId})`);
       } else if (part.type === 'tool-result') {
-        console.log(`    - ✅ tool-result: ${part.toolName} (id: ${part.toolCallId})`);
+        console.log(`    - ✅ tool-result: ${partAny.toolName || 'unknown'} (id: ${part.toolCallId})`);
       } else if (part.type === 'text') {
-        const preview = part.text?.substring(0, 50) || '';
+        const preview = partAny.text?.substring(0, 50) || '';
         console.log(`    - 💬 text: "${preview}${preview.length >= 50 ? '...' : ''}"`);
       } else if (part.type === 'reasoning') {
-        const preview = part.text?.substring(0, 50) || '';
+        const preview = partAny.text?.substring(0, 50) || '';
         console.log(`    - 🧠 reasoning: "${preview}${preview.length >= 50 ? '...' : ''}"`);
       } else {
         console.log(`    - ${part.type}`);
