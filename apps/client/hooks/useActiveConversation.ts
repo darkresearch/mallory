@@ -16,6 +16,8 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const hasLoadedRef = useRef(false);
+  const previousUserIdRef = useRef<string | undefined>(userId);
+  const previousConversationIdParamRef = useRef<string | undefined>(params.conversationId as string);
 
   useEffect(() => {
     const loadActiveConversation = async () => {
@@ -24,6 +26,16 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
         setIsLoading(false);
         hasLoadedRef.current = false;
         return;
+      }
+
+      // Reset loading flag if dependencies changed (allows reloading when navigating between screens)
+      const userIdChanged = previousUserIdRef.current !== userId;
+      const conversationIdParamChanged = previousConversationIdParamRef.current !== (params.conversationId as string);
+      
+      if (userIdChanged || conversationIdParamChanged) {
+        hasLoadedRef.current = false;
+        previousUserIdRef.current = userId;
+        previousConversationIdParamRef.current = params.conversationId as string;
       }
 
       // Prevent multiple loads
@@ -75,11 +87,6 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
     };
 
     loadActiveConversation();
-  }, [userId, params.conversationId]);
-
-  // Reset loading flag when userId or conversationId param changes
-  useEffect(() => {
-    hasLoadedRef.current = false;
   }, [userId, params.conversationId]);
 
   return {
