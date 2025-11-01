@@ -12,6 +12,7 @@ import { MALLORY_BASE_PROMPT, buildContextSection, buildVerbosityGuidelines, ONB
 import { buildComponentsGuidelines } from '../../../prompts/components.js';
 import { supabase } from '../../lib/supabase.js';
 import { saveUserMessage } from './persistence.js';
+import { ensureToolMessageStructure, validateToolMessageStructure, logMessageStructure } from '../../lib/messageTransform.js';
 
 const router: Router = express.Router();
 
@@ -81,7 +82,7 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     const originalMessages = messages.filter((msg: UIMessage) => msg.role !== 'system');
     
     // Filter out system messages (they're triggers, not conversation history)
-    const conversationMessages = messages.filter((msg: UIMessage) => msg.role !== 'system');
+    let conversationMessages = messages.filter((msg: UIMessage) => msg.role !== 'system');
     console.log('💬 Message processing:', {
       totalMessages: messages.length,
       systemMessages: messages.length - conversationMessages.length,
@@ -89,6 +90,29 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       isOnboardingGreeting,
       isOnboardingConversation
     });
+
+    // CRITICAL: Ensure tool_use and tool_result blocks are properly structured
+    // Anthropic API requires tool_use in assistant messages followed by tool_result in user messages
+    console.log('🔧 Checking tool message structure...');
+    logMessageStructure(conversationMessages, 'BEFORE transformation');
+    
+    const validation = validateToolMessageStructure(conversationMessages);
+    if (!validation.isValid) {
+      console.warn('⚠️ Tool message structure validation failed:', validation.errors);
+      console.log('🔧 Attempting to fix tool message structure...');
+      conversationMessages = ensureToolMessageStructure(conversationMessages);
+      logMessageStructure(conversationMessages, 'AFTER transformation');
+      
+      // Validate again after transformation
+      const revalidation = validateToolMessageStructure(conversationMessages);
+      if (!revalidation.isValid) {
+        console.error('❌ Tool message structure still invalid after transformation:', revalidation.errors);
+      } else {
+        console.log('✅ Tool message structure fixed successfully!');
+      }
+    } else {
+      console.log('✅ Tool message structure is valid');
+    }
 
     // Save user messages immediately (before streaming starts)
     // This ensures messages persist even if the stream fails or client disconnects
