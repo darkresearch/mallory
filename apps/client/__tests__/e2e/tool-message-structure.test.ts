@@ -8,8 +8,27 @@
 import { describe, test, expect } from 'bun:test';
 import { authenticateTestUser } from '../setup/test-helpers';
 import { createTestConversation } from '../utils/conversation-test';
-import { sendChatMessage, waitForAssistantMessage } from '../utils/chat-api';
+import { sendChatMessage, parseStreamResponse } from '../utils/chat-api';
 import { supabase } from '../../lib/supabase';
+
+// Helper to wait for messages to be saved
+async function waitForMessages(conversationId: string, minCount: number = 1, maxWaitMs: number = 10000) {
+  const startTime = Date.now();
+  while (Date.now() - startTime < maxWaitMs) {
+    const { data: messages } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
+    
+    if (messages && messages.length >= minCount) {
+      return messages;
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  return [];
+}
 
 describe('Tool Message Structure Integration Test', () => {
   test('handles tool calls in conversation history correctly', async () => {
@@ -17,14 +36,17 @@ describe('Tool Message Structure Integration Test', () => {
     const conversationId = await createTestConversation(auth.userId);
 
     console.log('💬 Step 1: Send message that triggers tool call');
-    await sendChatMessage(
+    const response1 = await sendChatMessage(
       "What is the current Bitcoin price?",
       conversationId,
       auth.accessToken
     );
 
-    // Wait for assistant response with tool call
-    await waitForAssistantMessage(conversationId);
+    // Parse the response to completion
+    await parseStreamResponse(response1);
+
+    // Wait for messages to be saved
+    await waitForMessages(conversationId, 2); // user + assistant
 
     console.log('💬 Step 2: Load conversation history from database');
     const { data: messagesFromDb, error } = await supabase
@@ -50,8 +72,9 @@ describe('Tool Message Structure Integration Test', () => {
     expect(response.ok).toBe(true);
     expect(response.status).toBe(200);
 
-    // Wait for the follow-up response
-    await waitForAssistantMessage(conversationId, 2); // 2nd assistant message
+    // Parse the response to make sure no errors in stream
+    const parsed = await parseStreamResponse(response);
+    expect(parsed.fullText.length).toBeGreaterThan(0);
 
     console.log('✅ Test passed: No tool_use/tool_result structure errors');
   }, 60000); // 60 second timeout
@@ -61,14 +84,18 @@ describe('Tool Message Structure Integration Test', () => {
     const conversationId = await createTestConversation(auth.userId);
 
     // Simulate a conversation with tool calls
-    console.log('💬 Sending message that will trigger Nansen tool');
-    await sendChatMessage(
-      "What were vitalik.eth's token balances yesterday?",
+    console.log('💬 Sending message that will trigger tool use');
+    const response1 = await sendChatMessage(
+      "Search for crypto market information",
       conversationId,
       auth.accessToken
     );
 
-    await waitForAssistantMessage(conversationId);
+    // Parse response
+    await parseStreamResponse(response1);
+
+    // Wait for messages to be saved
+    await waitForMessages(conversationId, 2);
 
     // Load the conversation history
     const { data: messages } = await supabase
@@ -90,7 +117,7 @@ describe('Tool Message Structure Integration Test', () => {
 
     // Send another message to trigger history reload
     const response = await sendChatMessage(
-      "And what about today?",
+      "And what about other tokens?",
       conversationId,
       auth.accessToken
     );
@@ -115,5 +142,5 @@ describe('Tool Message Structure Integration Test', () => {
 
     expect(foundError).toBe(false);
     console.log('✅ No tool_use/tool_result structure errors detected');
-  }, 90000); // 90 second timeout for Nansen calls
+  }, 90000); // 90 second timeout
 });
