@@ -6,6 +6,7 @@
 import { convertToModelMessages, UIMessage, stepCountIs } from 'ai';
 import { AnthropicProviderOptions } from '@ai-sdk/anthropic';
 import { getToolDisplayName, formatToolResultsForLog } from '../../../lib/toolDisplayNames';
+import { validateAndFixMessages } from './validateMessages';
 
 interface StreamConfigOptions {
   model: any;
@@ -24,9 +25,45 @@ interface StreamConfigOptions {
 export function buildStreamConfig(options: StreamConfigOptions) {
   const { model, processedMessages, systemPrompt, tools, strategy } = options;
   
+  // Validate and fix tool_use/tool_result pairs before converting to API format
+  // This prevents API errors: "tool_use ids were found without tool_result blocks"
+  const { messages: validatedMessages, validation, fixesApplied } = validateAndFixMessages(
+    processedMessages,
+    {
+      fixErrors: true,
+      logErrors: true
+    }
+  );
+
+  // Log validation summary
+  if (!validation.isValid || fixesApplied.length > 0) {
+    console.log('🔍 Message validation summary:', {
+      isValid: validation.isValid,
+      errorsFound: validation.errors.length,
+      warningsFound: validation.warnings.length,
+      fixesApplied: fixesApplied.length
+    });
+  }
+
+  // Convert to API format
+  let apiMessages;
+  try {
+    apiMessages = convertToModelMessages(validatedMessages);
+  } catch (error: any) {
+    // If conversion fails, log details and re-throw
+    console.error('❌ Failed to convert messages to API format:', error);
+    console.error('Validation details:', {
+      isValid: validation.isValid,
+      errors: validation.errors,
+      warnings: validation.warnings,
+      fixesApplied
+    });
+    throw error;
+  }
+  
   return {
     model,
-    messages: convertToModelMessages(processedMessages),
+    messages: apiMessages,
     system: systemPrompt,
     temperature: 0.7,
     

@@ -243,9 +243,24 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
 
   } catch (error) {
     console.error('❌ Chat handler error:', error);
+    
+    // Check if this is the specific tool_use/tool_result validation error
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('tool_use ids were found without tool_result blocks')) {
+      console.error('🚨 Detected tool_use/tool_result mismatch error:', errorMessage);
+      console.error('   This error should be prevented by validation in buildStreamConfig');
+      console.error('   If you see this, there may be an edge case not covered by validation');
+      
+      return res.status(400).json({
+        error: 'Message validation error',
+        details: 'tool_use blocks must be immediately followed by tool_result blocks',
+        message: errorMessage
+      });
+    }
+    
     return res.status(500).json({ 
       error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      details: errorMessage
     });
   }
 });
