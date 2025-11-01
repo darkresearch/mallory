@@ -147,13 +147,30 @@ export const SimpleMessageRenderer: React.FC<SimpleMessageRendererProps> = ({
 
         // Render text response blocks
         if (block.type === 'text') {
+          // Extract text from block - handle both block.text and block.originalPart.text
+          const textContent = block.text || block.originalPart?.text || '';
+          
+          console.log('📝 Rendering text block:', {
+            blockId: block.id,
+            hasBlockText: !!block.text,
+            hasOriginalPartText: !!block.originalPart?.text,
+            textLength: textContent.length,
+            textPreview: textContent.substring(0, 50)
+          });
+          
+          // Don't render empty text blocks
+          if (!textContent || textContent.trim().length === 0) {
+            console.log('⚠️ Skipping empty text block');
+            return null;
+          }
+          
           return (
             <View key={key} style={{ width: '100%', maxWidth: '100%', flexShrink: 1, minWidth: 0, alignSelf: 'stretch' }}>
               <AssistantResponse 
                 styleOverrides={styleOverrides}
                 onComponentError={onComponentError}
               >
-                {block.text}
+                {textContent}
               </AssistantResponse>
             </View>
           );

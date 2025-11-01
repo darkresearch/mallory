@@ -124,7 +124,33 @@ export const MessageList: React.FC<MessageListProps> = ({
           {/* Messages display in chronological order */}
           {aiMessages.map((message, index) => {
             const isUser = message.role === 'user';
+            
+            // DEBUG: Log the full message structure
+            console.log('🔍 [MessageList] Rendering message:', {
+              index,
+              id: message.id,
+              role: message.role,
+              partsCount: message.parts?.length || 0,
+              parts: message.parts?.map((p: any) => ({
+                type: p.type,
+                hasText: !!p.text,
+                textLength: p.text?.length || 0,
+                textPreview: p.text?.substring(0, 30) + '...'
+              })),
+              hasContent: !!message.content,
+              contentLength: message.content?.length || 0,
+              contentPreview: message.content?.substring(0, 30) + '...'
+            });
+            
             const textParts = message.parts.filter((part: any) => part.type === 'text');
+            
+            console.log('🔍 [MessageList] Filtered text parts:', {
+              textPartsCount: textParts.length,
+              textParts: textParts.map((p: any) => ({
+                type: p.type,
+                text: p.text?.substring(0, 50) + '...'
+              }))
+            });
 
             // For user messages, require text parts
             if (isUser && textParts.length === 0) {
