@@ -41,7 +41,12 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
         }
 
         // Load active conversation from storage
-        const activeConversationId = await secureStorage.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
+        let activeConversationId: string | null = null;
+        try {
+          activeConversationId = await secureStorage.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
+        } catch (error) {
+          console.warn('Could not read from secure storage, will create new conversation:', error);
+        }
         
         if (activeConversationId) {
           console.log('📱 Found active conversation in storage:', activeConversationId);
