@@ -465,7 +465,6 @@ describe('Infinite Loop Prevention Tests', () => {
       expect(createConversationCount).toBeLessThan(20);
       console.log(`✅ Multiple mount/unmount cycles: ${createConversationCount} executions - SAFE`);
     });
-    });
 
     test('should handle storage updates from external source', async () => {
       const { result } = renderHook(() => 
