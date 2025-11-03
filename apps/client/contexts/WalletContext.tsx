@@ -60,7 +60,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           await initiateGridSignIn(user.email, {
             backgroundColor: '#FFEFE3',
             textColor: '#000000',
-            returnPath: '/(main)/wallet'
+            returnPath: '/(main)/chat'
           });
           // Don't set error here - Grid sign-in will navigate to OTP screen
           // Wallet data will load after OTP completion via the useEffect below
