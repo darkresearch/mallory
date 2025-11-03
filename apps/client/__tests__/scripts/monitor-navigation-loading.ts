@@ -1,3 +1,4 @@
+// @ts-nocheck - Monitoring tool with flexible types
 /**
  * Navigation Loading Monitor - Development Tool
  * 

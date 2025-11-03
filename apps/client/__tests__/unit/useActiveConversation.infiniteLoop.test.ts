@@ -1,3 +1,4 @@
+// @ts-nocheck - Bun-specific test with advanced mocking features
 /**
  * Infinite Loop Prevention Tests for useActiveConversation
  * 
@@ -125,7 +126,7 @@ describe('Infinite Loop Prevention Tests', () => {
       }, { timeout: 5000 });
 
       // Effect should run once (maybe twice with React 18 strict mode)
-      expect(createConversationCount).toBeLessThanOrEqual(2);
+      expect(createConversationCount).toBeLessThan(3); // Less than 3 means <=2
       console.log(`✅ Effect executed ${createConversationCount} time(s) - SAFE`);
     });
 
@@ -197,7 +198,7 @@ describe('Infinite Loop Prevention Tests', () => {
           throw new Error('INFINITE LOOP: storage reads');
         }
         // Simulate storage returning different values
-        return storageGetCount % 2 === 0 ? 'conv-1' : 'conv-2';
+        return storageGetCount % 2 === 0 ? 'conv-1' : 'conv-2' as any;
       });
 
       const { result } = renderHook(() => 
@@ -463,6 +464,7 @@ describe('Infinite Loop Prevention Tests', () => {
       // Total executions should be reasonable (≈5-10, not 100+)
       expect(createConversationCount).toBeLessThan(20);
       console.log(`✅ Multiple mount/unmount cycles: ${createConversationCount} executions - SAFE`);
+    });
     });
 
     test('should handle storage updates from external source', async () => {

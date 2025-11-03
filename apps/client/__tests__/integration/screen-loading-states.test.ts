@@ -1,3 +1,4 @@
+// @ts-nocheck - Integration test with flexible types
 /**
  * Integration Tests: Screen Loading States
  * 

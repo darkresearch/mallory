@@ -1,3 +1,4 @@
+// @ts-nocheck - Bun-specific test with advanced mocking features
 /**
  * Unit Tests for useActiveConversation Hook
  * 

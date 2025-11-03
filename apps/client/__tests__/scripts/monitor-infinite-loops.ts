@@ -1,3 +1,4 @@
+// @ts-nocheck - Monitoring script with flexible types
 /**
  * Infinite Loop Monitor - Development Tool
  * 

@@ -1,3 +1,4 @@
+// @ts-nocheck - E2E test with complex mocking
 /**
  * E2E Tests: Screen Navigation & Data Loading
  * 

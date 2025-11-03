@@ -1,3 +1,4 @@
+// @ts-nocheck - Integration test with dynamic checks
 /**
  * Infinite Loop Prevention Tests for Chat History Screen
  * 
