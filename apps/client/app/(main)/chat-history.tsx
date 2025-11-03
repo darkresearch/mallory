@@ -12,7 +12,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Dimensions } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
-import { useChatPreloader } from '../../hooks/useChatPreloader';
 import { secureStorage, SECURE_STORAGE_KEYS, supabase } from '../../lib';
 import { PressableButton } from '../../components/ui/PressableButton';
 import { createNewConversation } from '../../features/chat';
@@ -51,14 +50,6 @@ interface AllMessagesCache {
 export default function ChatHistoryScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  
-  // Preload chat data in the background so it's ready when user navigates to chat
-  const { isPreloading, isPreloaded } = useChatPreloader({ 
-    userId: user?.id,
-    enabled: !!user?.id // Only preload when user is authenticated
-  });
-  
-  console.log('🔄 [ChatHistoryScreen] Chat preload status:', { isPreloading, isPreloaded });
   
   // Local state for conversations and messages
   const [conversations, setConversations] = useState<ConversationWithPreview[]>([]);

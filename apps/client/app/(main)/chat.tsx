@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { ChatInput } from '../../components/chat/ChatInput';
 import { useSmartScroll } from '../../hooks/useSmartScroll';
+import { useChatHistoryPreloader } from '../../hooks/useChatHistoryPreloader';
 import { ChatHeader } from '../../components/chat/ChatHeader';
 import { MessageList } from '../../components/chat/MessageList';
 import { useChatState } from '../../hooks/useChatState';
@@ -18,6 +19,17 @@ export default function ChatScreen() {
   const auth = useAuth(); // Must call hooks unconditionally
   const { user, isLoading } = auth;
   const { walletData } = useWallet(); // Get wallet data for balance context
+
+  // Preload chat history data in the background so it's ready when user navigates to chat history
+  const { 
+    isPreloading: isPreloadingHistory, 
+    isPreloaded: isPreloadedHistory 
+  } = useChatHistoryPreloader({ 
+    userId: user?.id,
+    enabled: !!user?.id // Only preload when user is authenticated
+  });
+  
+  console.log('🔄 [ChatScreen] Chat history preload status:', { isPreloadingHistory, isPreloadedHistory });
 
   // Load active conversation (simplified - no ConversationsContext dependency)
   const { conversationId: currentConversationId, conversationParam, isLoading: isLoadingConversation } = useActiveConversation({ 

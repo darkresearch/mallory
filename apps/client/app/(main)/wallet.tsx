@@ -18,6 +18,7 @@ import { useWallet } from '../../contexts/WalletContext';
 import { useGrid } from '../../contexts/GridContext';
 import { useTransactionGuard } from '../../hooks/useTransactionGuard';
 import { useChatPreloader } from '../../hooks/useChatPreloader';
+import { useChatHistoryPreloader } from '../../hooks/useChatHistoryPreloader';
 import { WalletItem } from '../../components/wallet/WalletItem';
 import DepositModal from '../../components/wallet/DepositModal';
 import SendModal from '../../components/wallet/SendModal';
@@ -38,7 +39,17 @@ export default function WalletScreen() {
     enabled: !!user?.id // Only preload when user is authenticated
   });
   
+  // Preload chat history data in the background so it's ready when user navigates to chat history
+  const { 
+    isPreloading: isPreloadingHistory, 
+    isPreloaded: isPreloadedHistory 
+  } = useChatHistoryPreloader({ 
+    userId: user?.id,
+    enabled: !!user?.id // Only preload when user is authenticated
+  });
+  
   console.log('🔄 [WalletScreen] Chat preload status:', { isPreloading, isPreloaded });
+  console.log('🔄 [WalletScreen] Chat history preload status:', { isPreloadingHistory, isPreloadedHistory });
   
   const translateX = useSharedValue(Dimensions.get('window').width);
   const [addressCopied, setAddressCopied] = useState(false);
