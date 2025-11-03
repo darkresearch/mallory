@@ -55,7 +55,6 @@ export default function ChatHistoryScreen() {
   const [conversations, setConversations] = useState<ConversationWithPreview[]>([]);
   const [allMessages, setAllMessages] = useState<AllMessagesCache>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
   
   // Subscription channels refs for cleanup
   const conversationsChannelRef = useRef<any>(null);
@@ -166,7 +165,6 @@ export default function ChatHistoryScreen() {
       console.error('Error in loadConversationsAndMessages:', error);
     } finally {
       setIsLoading(false);
-      setIsInitialized(true);
     }
   }, [user?.id]);
 
@@ -302,17 +300,17 @@ export default function ChatHistoryScreen() {
     );
   }, [conversations, allMessages]);
 
-  // Load data when user is available
+  // Load data when user is available - simple approach, loads every time
   useEffect(() => {
-    if (user?.id && !isInitialized) {
-      console.log('🔄 Loading conversations in background for user:', user.id);
+    if (user?.id) {
+      console.log('🔄 Loading conversations for user:', user.id);
       loadConversationsAndMessages();
     }
-  }, [user?.id, isInitialized, loadConversationsAndMessages]);
+  }, [user?.id, loadConversationsAndMessages]);
 
   // Set up real-time subscriptions for conversations and messages
   useEffect(() => {
-    if (!user?.id || !isInitialized) return;
+    if (!user?.id) return;
 
     console.log('🔴 [REALTIME] Setting up real-time subscriptions for user:', user.id);
 
@@ -435,7 +433,7 @@ export default function ChatHistoryScreen() {
         }
       }
     };
-  }, [user?.id, isInitialized, handleConversationInsert, handleConversationUpdate, handleConversationDelete, handleMessageInsert, handleMessageUpdate, handleMessageDelete]);
+  }, [user?.id, handleConversationInsert, handleConversationUpdate, handleConversationDelete, handleMessageInsert, handleMessageUpdate, handleMessageDelete]);
 
   // Helper function to get display title for a conversation
   const getConversationDisplayTitle = (
@@ -675,7 +673,7 @@ export default function ChatHistoryScreen() {
                 selectionColor="rgba(0, 0, 0, 0.3)"
                 underlineColorAndroid="transparent"
               />
-              {!isInitialized && (
+              {isLoading && (
                 <ActivityIndicator size="small" color="#E67B25" style={styles.searchSpinner} />
               )}
             </View>
@@ -721,7 +719,7 @@ export default function ChatHistoryScreen() {
                 selectionColor="rgba(0, 0, 0, 0.3)"
                 underlineColorAndroid="transparent"
               />
-              {!isInitialized && (
+              {isLoading && (
                 <ActivityIndicator size="small" color="#E67B25" style={styles.searchSpinner} />
               )}
             </View>
@@ -743,7 +741,7 @@ export default function ChatHistoryScreen() {
 
           {/* Content area */}
           <View style={styles.content}>
-          {!isInitialized && filteredConversations.length === 0 ? (
+          {isLoading && filteredConversations.length === 0 ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#E67B25" />
               <Text style={styles.loadingText}>Loading conversations...</Text>
