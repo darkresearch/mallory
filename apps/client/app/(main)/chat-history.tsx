@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Dimensions } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
-import { secureStorage, SECURE_STORAGE_KEYS, supabase } from '../../lib';
+import { storage, SECURE_STORAGE_KEYS, supabase } from '../../lib';
 import { PressableButton } from '../../components/ui/PressableButton';
 import { createNewConversation } from '../../features/chat';
 
@@ -452,7 +452,7 @@ export default function ChatHistoryScreen() {
   useEffect(() => {
     const loadCurrentConversationId = async () => {
       try {
-        const currentId = await secureStorage.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
+        const currentId = await storage.persistent.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
         setCurrentConversationId(currentId);
       } catch (error) {
         console.error('Error loading current conversation ID:', error);
@@ -575,7 +575,7 @@ export default function ChatHistoryScreen() {
     
     // Save as active conversation in secure storage (persists across sessions)
     try {
-      await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationId);
+      await storage.persistent.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationId);
       console.log('✅ Saved active conversation:', conversationId);
     } catch (error) {
       console.error('Error saving active conversation:', error);

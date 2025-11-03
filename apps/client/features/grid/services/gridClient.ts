@@ -1,4 +1,4 @@
-import { secureStorage, config, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '@/lib';
+import { storage, config, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '@/lib';
 import { GridClient } from '@sqds/grid';
 
 /**
@@ -111,7 +111,7 @@ class GridClientService {
 
       // Call backend proxy (backend uses stateless detection)
       const backendUrl = config.backendApiUrl || 'http://localhost:3001';
-      const token = await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
+      const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
 
       const response = await fetch(`${backendUrl}/api/grid/start-sign-in`, {
         method: 'POST',
@@ -132,11 +132,9 @@ class GridClientService {
 
       // Store flow hint for completeSignIn()
       // This is the KEY to the stateless pattern - passing hint between phases
-      // CRITICAL: Use sessionStorage (temporary) not secureStorage (persistent)
+      // CRITICAL: Use SESSION_STORAGE_KEYS (temporary) not SECURE_STORAGE_KEYS (persistent)
       const isExistingUser = data.isExistingUser ?? false;
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.setItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER, String(isExistingUser));
-      }
+      await storage.session.setItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER, String(isExistingUser));
 
       console.log(`✅ [Grid Client] Sign-in started, OTP sent to email (${isExistingUser ? 'existing' : 'new'} user)`);
 
@@ -203,10 +201,8 @@ class GridClientService {
       console.log('🔐 [Grid Client] Completing sign-in with OTP');
 
       // Retrieve flow hint from storage (set in startSignIn)
-      // CRITICAL: Read from sessionStorage where we stored it
-      const isExistingUserStr = typeof window !== 'undefined' && window.sessionStorage
-        ? sessionStorage.getItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER)
-        : null;
+      // CRITICAL: Read from SESSION_STORAGE_KEYS where we stored it
+      const isExistingUserStr = await storage.session.getItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
       const isExistingUser = isExistingUserStr === 'true';
 
       console.log(`🔐 [Grid Client] Flow hint: ${isExistingUser ? 'existing' : 'new'} user`);
@@ -229,7 +225,7 @@ class GridClientService {
 
       // Call backend proxy to complete auth (passes flow hint for optimal routing)
       const backendUrl = config.backendApiUrl || 'http://localhost:3001';
-      const token = await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
+      const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
 
       const response = await fetch(`${backendUrl}/api/grid/complete-sign-in`, {
         method: 'POST',
@@ -254,17 +250,15 @@ class GridClientService {
       }
 
       // Store account data (includes authentication tokens)
-      await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT, JSON.stringify(authResult.data));
+      await storage.persistent.setItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT, JSON.stringify(authResult.data));
 
       // Store session secrets for future transactions
       // These never expire - they're permanent "device credentials"
-      await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS, JSON.stringify(sessionSecrets));
+      await storage.persistent.setItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS, JSON.stringify(sessionSecrets));
 
       // Clean up flow hint (no longer needed)
-      // CRITICAL: Remove from sessionStorage where we stored it
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.removeItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
-      }
+      // CRITICAL: Remove from SESSION_STORAGE_KEYS where we stored it
+      await storage.session.removeItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
 
       console.log('✅ [Grid Client] Sign-in complete:', authResult.data.address);
 
@@ -279,7 +273,7 @@ class GridClientService {
    * Get stored Grid account
    */
   async getAccount() {
-    const accountJson = await secureStorage.getItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
+    const accountJson = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
     return accountJson ? JSON.parse(accountJson) : null;
   }
 
@@ -309,14 +303,14 @@ class GridClientService {
       const { recipient, amount, tokenMint } = params;
       
       // Retrieve session secrets and account
-      const sessionSecretsJson = await secureStorage.getItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
+      const sessionSecretsJson = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
       if (!sessionSecretsJson) {
         throw new Error('Session secrets not found');
       }
       
       const sessionSecrets = JSON.parse(sessionSecretsJson);
       
-      const accountJson = await secureStorage.getItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
+      const accountJson = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
       if (!accountJson) {
         throw new Error('Grid account not found');
       }
@@ -325,7 +319,7 @@ class GridClientService {
 
       // Call backend proxy
       const backendUrl = config.backendApiUrl || 'http://localhost:3001';
-      const token = await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
+      const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
       
       const response = await fetch(`${backendUrl}/api/grid/send-tokens`, {
         method: 'POST',
@@ -362,8 +356,8 @@ class GridClientService {
    * Clear stored Grid data (logout)
    */
   async clearAccount() {
-    await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
-    await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
+    await storage.persistent.removeItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
+    await storage.persistent.removeItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
     console.log('🔐 Grid account data cleared');
   }
 }
