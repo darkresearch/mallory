@@ -55,7 +55,7 @@ export default function ChatHistoryScreen() {
   const [conversations, setConversations] = useState<ConversationWithPreview[]>([]);
   const [allMessages, setAllMessages] = useState<AllMessagesCache>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false); // Guard for real-time subscriptions
   
   // Subscription channels refs for cleanup
   const conversationsChannelRef = useRef<any>(null);
@@ -166,7 +166,7 @@ export default function ChatHistoryScreen() {
       console.error('Error in loadConversationsAndMessages:', error);
     } finally {
       setIsLoading(false);
-      setIsInitialized(true);
+      setIsInitialized(true); // Mark as initialized - safe for real-time subscriptions now (even if load failed)
     }
   }, [user?.id]);
 
@@ -302,15 +302,18 @@ export default function ChatHistoryScreen() {
     );
   }, [conversations, allMessages]);
 
-  // Load data when user is available
+  // Load data when user is available - simple approach, loads every time
   useEffect(() => {
-    if (user?.id && !isInitialized) {
-      console.log('🔄 Loading conversations in background for user:', user.id);
+    if (user?.id) {
+      console.log('🔄 Loading conversations for user:', user.id);
+      setIsInitialized(false); // Reset - prevent subscriptions from firing during reload
+      setIsLoading(true); // Set loading state immediately to show spinner during async load
       loadConversationsAndMessages();
     }
-  }, [user?.id, isInitialized, loadConversationsAndMessages]);
+  }, [user?.id, loadConversationsAndMessages]);
 
   // Set up real-time subscriptions for conversations and messages
+  // IMPORTANT: Only set up after initial load completes to prevent race conditions
   useEffect(() => {
     if (!user?.id || !isInitialized) return;
 
@@ -675,7 +678,7 @@ export default function ChatHistoryScreen() {
                 selectionColor="rgba(0, 0, 0, 0.3)"
                 underlineColorAndroid="transparent"
               />
-              {!isInitialized && (
+              {isLoading && (
                 <ActivityIndicator size="small" color="#E67B25" style={styles.searchSpinner} />
               )}
             </View>
@@ -721,7 +724,7 @@ export default function ChatHistoryScreen() {
                 selectionColor="rgba(0, 0, 0, 0.3)"
                 underlineColorAndroid="transparent"
               />
-              {!isInitialized && (
+              {isLoading && (
                 <ActivityIndicator size="small" color="#E67B25" style={styles.searchSpinner} />
               )}
             </View>
@@ -743,7 +746,7 @@ export default function ChatHistoryScreen() {
 
           {/* Content area */}
           <View style={styles.content}>
-          {!isInitialized && filteredConversations.length === 0 ? (
+          {isLoading && filteredConversations.length === 0 ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#E67B25" />
               <Text style={styles.loadingText}>Loading conversations...</Text>
