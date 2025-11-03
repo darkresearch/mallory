@@ -160,13 +160,13 @@ export default function ChatHistoryScreen() {
       
       setConversations(processedConversations);
       setAllMessages(messagesCache);
-      setIsInitialized(true); // Mark as initialized - safe for real-time subscriptions now
       console.log(`📱 Loaded ${processedConversations.length} conversations with ${Object.keys(messagesCache).reduce((total, convId) => total + messagesCache[convId].length, 0)} total messages`);
       
     } catch (error) {
       console.error('Error in loadConversationsAndMessages:', error);
     } finally {
       setIsLoading(false);
+      setIsInitialized(true); // Mark as initialized - safe for real-time subscriptions now (even if load failed)
     }
   }, [user?.id]);
 
