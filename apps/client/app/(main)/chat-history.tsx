@@ -55,6 +55,7 @@ export default function ChatHistoryScreen() {
   const [conversations, setConversations] = useState<ConversationWithPreview[]>([]);
   const [allMessages, setAllMessages] = useState<AllMessagesCache>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false); // Guard for real-time subscriptions
   
   // Subscription channels refs for cleanup
   const conversationsChannelRef = useRef<any>(null);
@@ -159,6 +160,7 @@ export default function ChatHistoryScreen() {
       
       setConversations(processedConversations);
       setAllMessages(messagesCache);
+      setIsInitialized(true); // Mark as initialized - safe for real-time subscriptions now
       console.log(`📱 Loaded ${processedConversations.length} conversations with ${Object.keys(messagesCache).reduce((total, convId) => total + messagesCache[convId].length, 0)} total messages`);
       
     } catch (error) {
@@ -304,13 +306,15 @@ export default function ChatHistoryScreen() {
   useEffect(() => {
     if (user?.id) {
       console.log('🔄 Loading conversations for user:', user.id);
+      setIsInitialized(false); // Reset - prevent subscriptions from firing during reload
       loadConversationsAndMessages();
     }
   }, [user?.id, loadConversationsAndMessages]);
 
   // Set up real-time subscriptions for conversations and messages
+  // IMPORTANT: Only set up after initial load completes to prevent race conditions
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !isInitialized) return;
 
     console.log('🔴 [REALTIME] Setting up real-time subscriptions for user:', user.id);
 
@@ -433,7 +437,7 @@ export default function ChatHistoryScreen() {
         }
       }
     };
-  }, [user?.id, handleConversationInsert, handleConversationUpdate, handleConversationDelete, handleMessageInsert, handleMessageUpdate, handleMessageDelete]);
+  }, [user?.id, isInitialized, handleConversationInsert, handleConversationUpdate, handleConversationDelete, handleMessageInsert, handleMessageUpdate, handleMessageDelete]);
 
   // Helper function to get display title for a conversation
   const getConversationDisplayTitle = (
