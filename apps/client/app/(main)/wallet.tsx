@@ -98,8 +98,8 @@ export default function WalletScreen() {
     // Check Grid session before transaction
     const canProceed = await ensureGridSession(
       'send transaction',
-      '/(main)/wallet',
-      '#FFEFE3', // Wallet screen background
+      '/(main)/chat',
+      '#FFEFE3', // Chat screen background
       '#000000'  // Black text on cream background
     );
     
