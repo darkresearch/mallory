@@ -10,6 +10,7 @@ import { AuthProvider } from '../contexts/AuthContext';
 import { GridProvider } from '../contexts/GridContext';
 import { WalletProvider } from '../contexts/WalletContext';
 import { initializeComponentRegistry } from '../components/registry';
+import { DataPreloader } from '../components/DataPreloader';
 import 'react-native-url-polyfill/auto';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -61,6 +62,7 @@ export default function RootLayout() {
         <AuthProvider>
           <GridProvider>
             <WalletProvider>
+              <DataPreloader />
               <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any }}>
                 <Stack
                   screenOptions={{

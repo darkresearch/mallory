@@ -117,6 +117,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // COUPLED SESSION VALIDATION: Check both Supabase AND Grid sessions
           // Note: Grid session check is now in GridContext
           console.log('🔄 [Token Refresh] Supabase token refreshed');
+          console.log('🔍 [Token Refresh] Session details:', {
+            hasAccessToken: !!session.access_token,
+            hasRefreshToken: !!session.refresh_token,
+            hasUser: !!session.user,
+            expiresAt: session.expires_at,
+            expiresIn: session.expires_at 
+              ? Math.floor((session.expires_at * 1000 - Date.now()) / 1000) + ' seconds'
+              : 'N/A'
+          });
           
           // Update Supabase tokens
           await storage.persistent.setItem(SECURE_STORAGE_KEYS.AUTH_TOKEN, session.access_token);
