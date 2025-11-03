@@ -307,6 +307,7 @@ export default function ChatHistoryScreen() {
     if (user?.id) {
       console.log('🔄 Loading conversations for user:', user.id);
       setIsInitialized(false); // Reset - prevent subscriptions from firing during reload
+      setIsLoading(true); // Set loading state immediately to show spinner during async load
       loadConversationsAndMessages();
     }
   }, [user?.id, loadConversationsAndMessages]);
