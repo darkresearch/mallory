@@ -17,6 +17,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useWallet } from '../../contexts/WalletContext';
 import { useGrid } from '../../contexts/GridContext';
 import { useTransactionGuard } from '../../hooks/useTransactionGuard';
+import { useChatPreloader } from '../../hooks/useChatPreloader';
 import { WalletItem } from '../../components/wallet/WalletItem';
 import DepositModal from '../../components/wallet/DepositModal';
 import SendModal from '../../components/wallet/SendModal';
@@ -30,6 +31,15 @@ export default function WalletScreen() {
   const { user, logout, triggerReauth } = useAuth();
   const { gridAccount, solanaAddress } = useGrid();
   const { ensureGridSession } = useTransactionGuard();
+  
+  // Preload chat data in the background so it's ready when user navigates back to chat
+  const { isPreloading, isPreloaded } = useChatPreloader({ 
+    userId: user?.id,
+    enabled: !!user?.id // Only preload when user is authenticated
+  });
+  
+  console.log('🔄 [WalletScreen] Chat preload status:', { isPreloading, isPreloaded });
+  
   const translateX = useSharedValue(Dimensions.get('window').width);
   const [addressCopied, setAddressCopied] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
