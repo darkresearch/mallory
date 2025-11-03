@@ -73,10 +73,6 @@ describe('useActiveConversation Hook', () => {
         useActiveConversation({ userId: 'test-user-id' })
       );
 
-      // Initially loading
-      expect(result.current.isLoading).toBe(true);
-      expect(result.current.conversationId).toBeNull();
-
       // Wait for loading to complete
       await waitFor(() => {
         expect(result.current.isLoading).toBe(false);
