@@ -151,6 +151,7 @@
     "babel-preset-expo": "^12.0.2",
     "buffer": "^6.0.3",
     "dotenv": "^16.4.7",
+    "happy-dom": "^16.10.5",
     "lightningcss-darwin-arm64": "^1.30.1",
     "radon-ide": "^0.0.1",
     "react-test-renderer": "^19.2.0",

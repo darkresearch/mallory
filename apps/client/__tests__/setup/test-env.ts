@@ -64,6 +64,21 @@ export function loadTestEnv(): void {
 // Auto-load on import
 loadTestEnv();
 
+// Setup DOM environment for React hooks testing
+// @testing-library/react requires a DOM environment
+if (typeof (globalThis as any).document === 'undefined') {
+  const { Window } = require('happy-dom');
+  const window = new Window();
+  
+  (globalThis as any).window = window;
+  (globalThis as any).document = window.document;
+  (globalThis as any).navigator = window.navigator;
+  (globalThis as any).HTMLElement = window.HTMLElement;
+  (globalThis as any).Element = window.Element;
+  
+  console.log('✅ DOM environment setup (happy-dom)');
+}
+
 // Polyfill sessionStorage for Node.js test environment
 if (typeof (globalThis as any).sessionStorage === 'undefined') {
   const storage = new Map<string, string>();
