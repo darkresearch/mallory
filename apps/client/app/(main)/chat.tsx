@@ -20,6 +20,14 @@ export default function ChatScreen() {
   const { user, isLoading } = auth;
   const { walletData } = useWallet(); // Get wallet data for balance context
 
+  // DEBUG: Log auth state on every render
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🖥️  [ChatScreen] Render');
+  console.log('   user:', user ? `${user.email} (${user.id})` : 'UNDEFINED');
+  console.log('   isLoading:', isLoading);
+  console.log('   user.id available:', !!user?.id);
+  console.log('═══════════════════════════════════════════════════════════');
+
   // Preload chat history data in the background so it's ready when user navigates to chat history
   const { 
     isPreloading: isPreloadingHistory, 
