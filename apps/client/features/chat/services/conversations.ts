@@ -89,13 +89,16 @@ async function createConversationDirectly(conversationId: string, userId?: strin
     console.log('[createConversation] Creating conversation directly (no existence check needed with UUIDs)');
     
     // Create new conversation with explicit user_id
-    console.log('[createConversation] Attempting to insert conversation:', {
+    console.log('[createConversation] Preparing INSERT with data:', {
       id: conversationId,
-      title: 'scout-global',
+      title: 'mallory-global',
       token_ca: GLOBAL_TOKEN_ID,
       user_id: authUser.id,
       authUserObject: authUser
     });
+    
+    console.log('[createConversation] Calling Supabase INSERT...');
+    const insertStartTime = Date.now();
     
     const { data, error } = await supabase
       .from('conversations')
@@ -109,6 +112,9 @@ async function createConversationDirectly(conversationId: string, userId?: strin
         metadata: {}
       })
       .select(); // Add select to get the inserted data back
+    
+    const insertDuration = Date.now() - insertStartTime;
+    console.log(`[createConversation] INSERT completed in ${insertDuration}ms`);
     
     if (error) {
       // If it's a duplicate key error, that's fine - conversation exists
@@ -133,6 +139,12 @@ async function createConversationDirectly(conversationId: string, userId?: strin
       conversationId,
       insertedData: data
     });
+    
+    // NOTE: Broadcast is now handled by database trigger (migration 089)
+    // No need for manual broadcast anymore
+    console.log('📡 [BROADCAST] Database trigger will handle broadcasting this INSERT');
+    console.log('📡 [BROADCAST] Skipping manual broadcast (handled by handle_conversations_changes trigger)');
+    
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     return true;
@@ -175,6 +187,12 @@ async function createConversationWithMetadata(conversationId: string, userId: st
     }
     
     console.log('[createConversationWithMetadata] Successfully created conversation with metadata');
+    
+    // NOTE: Broadcast is now handled by database trigger (migration 089)
+    // No need for manual broadcast anymore
+    console.log('📡 [BROADCAST] Database trigger will handle broadcasting this INSERT');
+    console.log('📡 [BROADCAST] Skipping manual broadcast (handled by handle_conversations_changes trigger)');
+    
     return true;
   } catch (error) {
     console.error('Error creating conversation with metadata:', error);

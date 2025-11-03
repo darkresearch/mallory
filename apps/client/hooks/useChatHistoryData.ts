@@ -172,8 +172,16 @@ export function useChatHistoryData(userId?: string) {
 
   // Real-time event handlers
   const handleConversationInsert = useCallback((newRecord: any) => {
+    console.log('━━━ [HANDLE INSERT] Starting ━━━');
+    console.log('📝 [HANDLE INSERT] Received newRecord:', newRecord);
+    console.log('📝 [HANDLE INSERT] newRecord.token_ca:', newRecord.token_ca);
+    console.log('📝 [HANDLE INSERT] GLOBAL_TOKEN_ID:', GLOBAL_TOKEN_ID);
+    
     // Only add global conversations
-    if (newRecord.token_ca !== GLOBAL_TOKEN_ID) return;
+    if (newRecord.token_ca !== GLOBAL_TOKEN_ID) {
+      console.log('⚠️ [HANDLE INSERT] Skipping - not a global conversation');
+      return;
+    }
     
     const newConversation: ConversationWithPreview = {
       id: newRecord.id,
@@ -184,12 +192,18 @@ export function useChatHistoryData(userId?: string) {
       metadata: newRecord.metadata,
     };
     
+    console.log('📝 [HANDLE INSERT] Created conversation object:', newConversation);
+    
     setConversations(prev => {
+      console.log('📝 [HANDLE INSERT] Previous conversations count:', prev.length);
       const updated = [newConversation, ...prev];
+      console.log('📝 [HANDLE INSERT] Updated conversations count:', updated.length);
       cache.conversations = updated; // Update cache
+      console.log('📝 [HANDLE INSERT] Cache updated');
       return updated;
     });
-    console.log('✅ [useChatHistoryData] Added new conversation:', newRecord.id);
+    console.log('✅ [HANDLE INSERT] Added new conversation:', newRecord.id);
+    console.log('━━━ [HANDLE INSERT] Complete ━━━');
   }, []);
 
   const handleConversationUpdate = useCallback((newRecord: any) => {
@@ -222,20 +236,36 @@ export function useChatHistoryData(userId?: string) {
   }, []);
 
   const handleMessageInsert = useCallback((newRecord: any) => {
+    console.log('━━━ [HANDLE MESSAGE INSERT] Starting ━━━');
+    console.log('💬 [HANDLE MESSAGE INSERT] Received newRecord:', {
+      id: newRecord.id,
+      conversation_id: newRecord.conversation_id,
+      role: newRecord.role,
+      contentLength: newRecord.content?.length
+    });
+    
     const conversationId = newRecord.conversation_id;
+    console.log('💬 [HANDLE MESSAGE INSERT] Conversation ID:', conversationId);
     
     // Add to messages cache (at end, since oldest-first)
     setAllMessages(prev => {
+      const previousCount = prev[conversationId]?.length || 0;
+      console.log('💬 [HANDLE MESSAGE INSERT] Previous messages count for conversation:', previousCount);
+      
       const updated = {
         ...prev,
         [conversationId]: [...(prev[conversationId] || []), newRecord]
       };
+      
+      console.log('💬 [HANDLE MESSAGE INSERT] Updated messages count:', updated[conversationId].length);
       cache.allMessages = updated; // Update cache
+      console.log('💬 [HANDLE MESSAGE INSERT] Cache updated');
       return updated;
     });
     
     // Update conversation's updated_at
     setConversations(prev => {
+      console.log('💬 [HANDLE MESSAGE INSERT] Updating conversation updated_at timestamp');
       const updated = prev.map(conv => 
         conv.id === conversationId
           ? { 
@@ -249,7 +279,8 @@ export function useChatHistoryData(userId?: string) {
       return updated;
     });
     
-    console.log('✅ [useChatHistoryData] Added new message to cache for conversation:', conversationId);
+    console.log('✅ [HANDLE MESSAGE INSERT] Added new message to cache for conversation:', conversationId);
+    console.log('━━━ [HANDLE MESSAGE INSERT] Complete ━━━');
   }, []);
 
   const handleMessageUpdate = useCallback((newRecord: any) => {

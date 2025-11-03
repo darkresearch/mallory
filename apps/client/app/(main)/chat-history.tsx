@@ -145,11 +145,24 @@ export default function ChatHistoryScreen() {
             config: { private: true }
           })
           .on('broadcast', { event: 'INSERT' }, (payload) => {
-            console.log('🔴 [REALTIME] 📡 Conversation INSERT broadcast received:', payload);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('🔴 [REALTIME RECEIVE] 📡 Conversation INSERT broadcast received!');
+            console.log('🔴 [REALTIME RECEIVE] Full payload:', JSON.stringify(payload, null, 2));
+            console.log('🔴 [REALTIME RECEIVE] payload.payload:', payload.payload);
+            console.log('🔴 [REALTIME RECEIVE] payload.record:', payload.record);
+            console.log('🔴 [REALTIME RECEIVE] payload.new:', payload.new);
+            
             const newData = payload.payload?.record || payload.record || payload.new || payload;
+            console.log('🔴 [REALTIME RECEIVE] Extracted newData:', newData);
+            
             if (newData) {
+              console.log('🔴 [REALTIME RECEIVE] Calling handleConversationInsert with:', newData);
               handleConversationInsert(newData);
+              console.log('🔴 [REALTIME RECEIVE] handleConversationInsert called successfully');
+            } else {
+              console.error('🔴 [REALTIME RECEIVE] ❌ No valid data found in payload!');
             }
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           })
           .on('broadcast', { event: 'UPDATE' }, (payload) => {
             console.log('🔴 [REALTIME] 📡 Conversation UPDATE broadcast received:', payload);
@@ -181,18 +194,49 @@ export default function ChatHistoryScreen() {
             config: { private: true }
           })
           .on('broadcast', { event: 'INSERT' }, (payload) => {
-            console.log('🔴 [REALTIME] 📡 Message INSERT broadcast received:', payload);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('💬 [REALTIME RECEIVE] 📡 Message INSERT broadcast received!');
+            console.log('💬 [REALTIME RECEIVE] Full payload:', JSON.stringify(payload, null, 2));
+            console.log('💬 [REALTIME RECEIVE] payload.payload:', payload.payload);
+            console.log('💬 [REALTIME RECEIVE] payload.record:', payload.record);
+            console.log('💬 [REALTIME RECEIVE] payload.new:', payload.new);
+            
             const newData = payload.payload?.record || payload.record || payload.new || payload;
+            console.log('💬 [REALTIME RECEIVE] Extracted newData:', newData);
+            
             if (newData) {
+              console.log('💬 [REALTIME RECEIVE] Calling handleMessageInsert with:', {
+                messageId: newData.id,
+                conversationId: newData.conversation_id,
+                role: newData.role,
+                contentLength: newData.content?.length
+              });
               handleMessageInsert(newData);
+              console.log('💬 [REALTIME RECEIVE] handleMessageInsert called successfully');
+            } else {
+              console.error('💬 [REALTIME RECEIVE] ❌ No valid data found in payload!');
             }
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           })
           .on('broadcast', { event: 'UPDATE' }, (payload) => {
-            console.log('🔴 [REALTIME] 📡 Message UPDATE broadcast received:', payload);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('💬 [REALTIME RECEIVE] 📡 Message UPDATE broadcast received!');
+            console.log('💬 [REALTIME RECEIVE] Full payload:', JSON.stringify(payload, null, 2));
+            
             const newData = payload.payload?.record || payload.record || payload.new || payload;
+            console.log('💬 [REALTIME RECEIVE] Extracted newData:', newData);
+            
             if (newData) {
+              console.log('💬 [REALTIME RECEIVE] Calling handleMessageUpdate with:', {
+                messageId: newData.id,
+                conversationId: newData.conversation_id
+              });
               handleMessageUpdate(newData);
+              console.log('💬 [REALTIME RECEIVE] handleMessageUpdate called successfully');
+            } else {
+              console.error('💬 [REALTIME RECEIVE] ❌ No valid data found in payload!');
             }
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           })
           .on('broadcast', { event: 'DELETE' }, (payload) => {
             console.log('🔴 [REALTIME] 📡 Message DELETE broadcast received:', payload);
@@ -417,11 +461,6 @@ export default function ChatHistoryScreen() {
       const conversationData = await createNewConversation(user?.id);
       
       console.log('💬 New conversation created:', conversationData.conversationId);
-      
-      // Refresh conversations to include the newly created one
-      // This ensures the list updates even if real-time broadcast doesn't fire
-      console.log('💬 Refreshing conversations list to include new conversation');
-      await refreshData();
       
       // Create navigation function to be called on the JS thread
       const navigateToNewChat = () => {
