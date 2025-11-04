@@ -28,6 +28,13 @@ mock.module('@/lib/storage', () => ({
 
 // Import after mocking - use require for better compatibility
 const ActiveConversationModule = require('@/contexts/ActiveConversationContext');
+
+// Debug: log what we got
+console.log('📦 ActiveConversationModule:', ActiveConversationModule);
+console.log('📦 Keys:', Object.keys(ActiveConversationModule || {}));
+console.log('📦 ActiveConversationProvider:', ActiveConversationModule?.ActiveConversationProvider);
+console.log('📦 useActiveConversationContext:', ActiveConversationModule?.useActiveConversationContext);
+
 const { ActiveConversationProvider, useActiveConversationContext } = ActiveConversationModule;
 
 describe('ActiveConversationProvider Context', () => {
