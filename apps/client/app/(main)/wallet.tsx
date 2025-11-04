@@ -22,7 +22,7 @@ import DepositModal from '../../components/wallet/DepositModal';
 import SendModal from '../../components/wallet/SendModal';
 import { sendToken } from '../../features/wallet';
 import { walletService } from '../../features/wallet';
-import { SESSION_STORAGE_KEYS, storage } from '../../lib';
+import { SESSION_STORAGE_KEYS, storage, getAppVersion } from '../../lib';
 
 
 export default function WalletScreen() {
@@ -387,6 +387,11 @@ export default function WalletScreen() {
               <Ionicons name="log-out-outline" size={16} color="#212121" />
               <Text style={styles.signOutText}>Sign out</Text>
             </TouchableOpacity>
+            
+            {/* Version tag below sign out button */}
+            <View>
+              <Text style={styles.versionText}>{getAppVersion()}</Text>
+            </View>
           </View>
 
           {/* Bottom Fade Gradient */}
@@ -578,7 +583,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 6,
     paddingHorizontal: 16,
   },
   signOutText: {
@@ -587,6 +593,15 @@ const styles = StyleSheet.create({
     color: '#212121',
     letterSpacing: 0.5,
     fontFamily: 'Satoshi',
+  },
+  
+  // Version tag
+  versionText: {
+    fontSize: 10, // 14px (wallet address) - 4px = 10px
+    fontWeight: '300',
+    fontFamily: 'Satoshi',
+    color: '#212121',
+    opacity: 0.3,
   },
   
   // Top fade gradient (under Current holdings)
