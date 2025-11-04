@@ -23,6 +23,7 @@ mallory/
 - 🔑 **Client-Side Signing**: Secure transaction signing (keys never leave device)
 - 📱 **Cross-Platform**: iOS, Android, and Web from single codebase
 - 🎨 **Modern UI**: Beautiful, responsive design with Reanimated
+- 🏷️ **Version Tracking**: Automatic version display with git commit hash
 
 ### Server (Backend API)
 - 🤖 **AI Streaming**: Claude integration with Server-Sent Events and extended thinking
@@ -31,6 +32,11 @@ mallory/
 - 💎 **Wallet Data**: Price enrichment via Birdeye API
 - 🔒 **Secure Auth**: Supabase JWT validation
 - 🚀 **Production Ready**: Comprehensive testing infrastructure
+
+### Monorepo Management
+- 🔄 **Synchronized Versioning**: Single command updates all packages
+- 🏷️ **Automatic Releases**: GitHub releases created on version tags
+- 📝 **Generated Changelogs**: Commit history automatically compiled
 
 ## 🚀 Quick Start
 
@@ -196,6 +202,30 @@ See [apps/client/README.md](./apps/client/README.md#deployment) for details.
 - **Node.js**: Any Node.js 18+ hosting
 
 See [apps/server/README.md](./apps/server/README.md#deployment) for details.
+
+## 🏷️ Version Management
+
+Mallory uses synchronized semantic versioning across all packages.
+
+### Auto-Release via PR
+
+Include `[release: v*.*.*]` in your PR title:
+
+```
+feat: add new wallet feature [release: v0.2.0]
+```
+
+When merged to `main`, the version automatically bumps and a GitHub release is created! 🚀
+
+### Manual Release
+
+```bash
+bun scripts/sync-version.js 0.2.0
+git add . && git commit -m "chore: bump version to 0.2.0"
+git tag v0.2.0 && git push && git push --tags
+```
+
+See [VERSION.md](./VERSION.md) for details.
 
 ## 🤝 Contributing
 
