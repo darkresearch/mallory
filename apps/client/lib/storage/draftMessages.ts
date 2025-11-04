@@ -3,7 +3,7 @@
  * Manages in-progress messages per conversation using secure storage
  */
 
-import { secureStorage, SECURE_STORAGE_KEYS } from './index';
+import { storage, SECURE_STORAGE_KEYS } from './index';
 
 // Type for the draft messages map
 export type DraftMessagesMap = Record<string, string>;
@@ -13,7 +13,7 @@ export type DraftMessagesMap = Record<string, string>;
  */
 async function getAllDrafts(): Promise<DraftMessagesMap> {
   try {
-    const draftsJson = await secureStorage.getItem(SECURE_STORAGE_KEYS.DRAFT_MESSAGES);
+    const draftsJson = await storage.persistent.getItem(SECURE_STORAGE_KEYS.DRAFT_MESSAGES);
     if (!draftsJson) return {};
     
     return JSON.parse(draftsJson) as DraftMessagesMap;
@@ -28,7 +28,7 @@ async function getAllDrafts(): Promise<DraftMessagesMap> {
  */
 async function saveAllDrafts(drafts: DraftMessagesMap): Promise<void> {
   try {
-    await secureStorage.setItem(SECURE_STORAGE_KEYS.DRAFT_MESSAGES, JSON.stringify(drafts));
+    await storage.persistent.setItem(SECURE_STORAGE_KEYS.DRAFT_MESSAGES, JSON.stringify(drafts));
   } catch (error) {
     console.error('Error saving draft messages:', error);
   }
@@ -79,7 +79,7 @@ export async function clearDraftMessage(conversationId: string): Promise<void> {
  */
 export async function clearAllDraftMessages(): Promise<void> {
   try {
-    await secureStorage.removeItem(SECURE_STORAGE_KEYS.DRAFT_MESSAGES);
+    await storage.persistent.removeItem(SECURE_STORAGE_KEYS.DRAFT_MESSAGES);
   } catch (error) {
     console.error('Error clearing all draft messages:', error);
   }

@@ -58,6 +58,31 @@ function buildChainOfThoughtMetadata(parts: any[]) {
 }
 
 /**
+ * Ensure conversation exists before saving a message
+ * If conversation doesn't exist, this will fail silently and return false
+ */
+async function ensureConversationExists(conversationId: string): Promise<boolean> {
+  try {
+    // Check if conversation exists
+    const { data: conversation, error: checkError } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .single();
+
+    if (checkError || !conversation) {
+      console.warn(`⚠️ Conversation ${conversationId} does not exist in database. Message will not be saved.`);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('💾 Error checking conversation existence:', error);
+    return false;
+  }
+}
+
+/**
  * Save a user message immediately to database
  * Called when user sends a message (before AI streaming starts)
  */
@@ -68,6 +93,13 @@ export async function saveUserMessage(
   try {
     if (message.role !== 'user') {
       console.error('saveUserMessage called with non-user message');
+      return false;
+    }
+
+    // Ensure conversation exists before attempting to save
+    const conversationExists = await ensureConversationExists(conversationId);
+    if (!conversationExists) {
+      console.warn(`⚠️ Skipping user message save - conversation ${conversationId} not found`);
       return false;
     }
 
@@ -127,6 +159,13 @@ export async function saveAssistantMessage(
   try {
     if (message.role !== 'assistant') {
       console.error('saveAssistantMessage called with non-assistant message');
+      return false;
+    }
+
+    // Ensure conversation exists before attempting to save
+    const conversationExists = await ensureConversationExists(conversationId);
+    if (!conversationExists) {
+      console.warn(`⚠️ Skipping assistant message save - conversation ${conversationId} not found`);
       return false;
     }
 
@@ -191,6 +230,13 @@ export async function saveMessages(
 
     if (conversationMessages.length === 0) {
       return true;
+    }
+
+    // Ensure conversation exists before attempting to save
+    const conversationExists = await ensureConversationExists(conversationId);
+    if (!conversationExists) {
+      console.warn(`⚠️ Skipping batch message save - conversation ${conversationId} not found`);
+      return false;
     }
 
     const messagesToInsert = conversationMessages.map(msg => {

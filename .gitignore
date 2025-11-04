@@ -36,3 +36,5 @@ yarn-error.log*
 .cache/
 .metro-cache/
 
+.core
+core

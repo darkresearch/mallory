@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Platform } from 'react-native';
 import { router, usePathname } from 'expo-router';
-import { supabase, secureStorage, config, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../lib';
+import { supabase, storage, config, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../lib';
 import { configureGoogleSignIn, signInWithGoogle, signOutFromGoogle } from '../features/auth';
 import { walletDataService } from '../features/wallet';
 
@@ -63,15 +63,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   console.log('AuthProvider rendering, user:', user?.email || 'none', 'isLoading:', isLoading);
 
-  // RESTORE isSigningIn from sessionStorage on app init (after OAuth redirect)
+  // RESTORE isSigningIn from storage on app init (after OAuth redirect)
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      const oauthInProgress = sessionStorage.getItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS) === 'true';
+    const restoreSigningInState = async () => {
+      const oauthInProgress = await storage.session.getItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS) === 'true';
       if (oauthInProgress) {
-        console.log('🔐 [Init] Restoring isSigningIn=true from sessionStorage');
+        console.log('🔐 [Init] Restoring isSigningIn=true from storage');
         setIsSigningIn(true);
       }
-    }
+    };
+    restoreSigningInState();
   }, []);
 
   useEffect(() => {
@@ -82,23 +83,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // Check for existing session
     // SKIP if we're returning from OAuth - let onAuthStateChange handle it instead
-    // We use sessionStorage to persist this flag across React StrictMode double-renders
+    // We use secureStorage to persist this flag across React StrictMode double-renders
     // (in dev mode, React mounts components twice, and Supabase consumes the hash on first mount)
-    const isOAuthCallback = typeof window !== 'undefined' && (
-      window.location.hash.includes('access_token=') ||
-      window.sessionStorage.getItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS) === 'true'
-    );
-    
-    if (isOAuthCallback) {
-      console.log('🔍 [Init] Skipping initial auth check (OAuth callback detected)');
-      // Set flag in sessionStorage so it persists across StrictMode double-renders
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS, 'true');
+    const checkOAuthCallback = async () => {
+      const oauthInProgress = await storage.session.getItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS) === 'true';
+      const isOAuthCallback = typeof window !== 'undefined' && (
+        window.location.hash.includes('access_token=') ||
+        oauthInProgress
+      );
+      
+      if (isOAuthCallback) {
+        console.log('🔍 [Init] Skipping initial auth check (OAuth callback detected)');
+        // Set flag in storage so it persists across StrictMode double-renders
+        await storage.session.setItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS, 'true');
+      } else {
+        console.log('🔍 [Init] Running initial auth check (not an OAuth callback)');
+        checkAuthSession();
       }
-    } else {
-      console.log('🔍 [Init] Running initial auth check (not an OAuth callback)');
-      checkAuthSession();
-    }
+    };
+    
+    checkOAuthCallback();
 
     // Listen for auth state changes - simplified
     const { data: authListener } = supabase.auth.onAuthStateChange(
@@ -113,11 +117,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // COUPLED SESSION VALIDATION: Check both Supabase AND Grid sessions
           // Note: Grid session check is now in GridContext
           console.log('🔄 [Token Refresh] Supabase token refreshed');
+          console.log('🔍 [Token Refresh] Session details:', {
+            hasAccessToken: !!session.access_token,
+            hasRefreshToken: !!session.refresh_token,
+            hasUser: !!session.user,
+            expiresAt: session.expires_at,
+            expiresIn: session.expires_at 
+              ? Math.floor((session.expires_at * 1000 - Date.now()) / 1000) + ' seconds'
+              : 'N/A'
+          });
           
           // Update Supabase tokens
-          await secureStorage.setItem(SECURE_STORAGE_KEYS.AUTH_TOKEN, session.access_token);
+          await storage.persistent.setItem(SECURE_STORAGE_KEYS.AUTH_TOKEN, session.access_token);
           if (session.refresh_token) {
-            await secureStorage.setItem(SECURE_STORAGE_KEYS.REFRESH_TOKEN, session.refresh_token);
+            await storage.persistent.setItem(SECURE_STORAGE_KEYS.REFRESH_TOKEN, session.refresh_token);
           }
           console.log('✅ [Token Refresh] Tokens updated');
         } else if (event === 'SIGNED_OUT') {
@@ -237,16 +250,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('User metadata:', session?.user?.user_metadata);
     
     // Clear OAuth-in-progress flag now that we're handling the sign-in
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
-      console.log('🔐 Cleared OAuth-in-progress flag');
-    }
+    await storage.session.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
+    console.log('🔐 Cleared OAuth-in-progress flag');
     
     try {
       // Store tokens securely
-      await secureStorage.setItem(SECURE_STORAGE_KEYS.AUTH_TOKEN, session.access_token);
+      await storage.persistent.setItem(SECURE_STORAGE_KEYS.AUTH_TOKEN, session.access_token);
       if (session.refresh_token) {
-        await secureStorage.setItem(SECURE_STORAGE_KEYS.REFRESH_TOKEN, session.refresh_token);
+        await storage.persistent.setItem(SECURE_STORAGE_KEYS.REFRESH_TOKEN, session.refresh_token);
       }
       console.log('✅ Tokens stored securely');
 
@@ -290,8 +301,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // If no wallet exists, it will auto-initiate Grid sign-in
       if (user.email) {
         console.log('🏦 Setting auto-initiate flag for GridContext');
-        await secureStorage.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE, 'true');
-        await secureStorage.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL, user.email);
+        await storage.session.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE, 'true');
+        await storage.session.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL, user.email);
       }
       
       // Clear signing-in state - Grid flow is separate
@@ -339,15 +350,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // CRITICAL: Set logout flag in secure storage BEFORE clearing user
       // This tells GridContext to clear Grid credentials
-      await secureStorage.setItem(SESSION_STORAGE_KEYS.IS_LOGGING_OUT, 'true');
+      await storage.session.setItem(SESSION_STORAGE_KEYS.IS_LOGGING_OUT, 'true');
       console.log('🚪 [LOGOUT] Set logout flag for GridContext');
       
       // STEP 1: Clear signing-in state immediately
       setIsSigningIn(false);
       // Clear OAuth-in-progress flag
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
-      }
+      await storage.session.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
       console.log('🚪 [LOGOUT] Signing-in state cleared');
       
       // STEP 2: Sign out from native Google Sign-In (mobile only)
@@ -361,8 +370,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       // STEP 3: Clear auth tokens
-      await secureStorage.removeItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
-      await secureStorage.removeItem(SECURE_STORAGE_KEYS.REFRESH_TOKEN);
+      await storage.persistent.removeItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
+      await storage.persistent.removeItem(SECURE_STORAGE_KEYS.REFRESH_TOKEN);
       console.log('🚪 [LOGOUT] Auth tokens cleared');
       
       // STEP 4: Clear Supabase persisted session from AsyncStorage
@@ -444,7 +453,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       console.log('🔐 Step 1: Getting auth token...');
-      const token = await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
+      const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
       if (!token) {
         throw new Error('No auth token available');
       }
@@ -558,12 +567,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Set signing-in state when user explicitly starts the login process
       setIsSigningIn(true);
       
-      // IMPORTANT: Persist to sessionStorage for OAuth redirect on web
+      // IMPORTANT: Persist to storage for OAuth redirect on web
       // When OAuth redirects back, the app reloads and loses React state
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.setItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS, 'true');
-        console.log('🔐 Set OAuth-in-progress flag in sessionStorage');
-      }
+      await storage.session.setItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS, 'true');
+      console.log('🔐 Set OAuth-in-progress flag in storage');
       
       if (Platform.OS === 'web') {
         // Use Supabase OAuth for web

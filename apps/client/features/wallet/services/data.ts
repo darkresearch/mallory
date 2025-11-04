@@ -1,4 +1,4 @@
-import { secureStorage, config } from '../../../lib';
+import { storage, config } from '../../../lib';
 import { gridClientService } from '../../grid';
 
 export interface TokenBalance {
@@ -297,7 +297,7 @@ class WalletDataService {
     try {
       // Use centralized storage key constant
       const { SECURE_STORAGE_KEYS } = await import('@/lib/storage/keys');
-      return await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
+      return await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
     } catch (error) {
       console.error('Failed to get auth token:', error);
       return null;

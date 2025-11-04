@@ -1,4 +1,4 @@
-import { secureStorage, config } from '../../../lib';
+import { storage, config } from '../../../lib';
 
 interface WalletStatus {
   exists: boolean;
@@ -61,7 +61,7 @@ class WalletService {
     try {
       // Use centralized storage key constant
       const { SECURE_STORAGE_KEYS } = await import('@/lib/storage/keys');
-      const token = await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
+      const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
       return token;
     } catch (error) {
       console.error('Error getting auth token:', error);

@@ -371,7 +371,7 @@ describe('Wallet Holdings Integration with Grid Client', () => {
   describe('Module integration', () => {
     test('should have correct import chain: wallet -> grid -> lib', async () => {
       // Verify all modules loaded successfully (imported at top of file)
-      expect(lib.secureStorage).toBeDefined();
+      expect(lib.storage).toBeDefined();
       expect(lib.config).toBeDefined();
       expect(gridClientService).toBeDefined();
       expect(walletDataService).toBeDefined();

@@ -12,9 +12,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Dimensions } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
-import { secureStorage, SECURE_STORAGE_KEYS, supabase } from '../../lib';
+import { storage, SECURE_STORAGE_KEYS, supabase } from '../../lib';
 import { PressableButton } from '../../components/ui/PressableButton';
 import { createNewConversation } from '../../features/chat';
+import { useChatHistoryData } from '../../hooks/useChatHistoryData';
 
 const GLOBAL_TOKEN_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -28,11 +29,6 @@ interface ConversationWithPreview {
     summary_title?: string;
     last_summary_generated_at?: string;
     message_count_at_last_summary?: number;
-  };
-  lastMessage?: {
-    content: string;
-    role: 'user' | 'assistant';
-    created_at: string;
   };
 }
 
@@ -51,11 +47,20 @@ export default function ChatHistoryScreen() {
   const router = useRouter();
   const { user } = useAuth();
   
-  // Local state for conversations and messages
-  const [conversations, setConversations] = useState<ConversationWithPreview[]>([]);
-  const [allMessages, setAllMessages] = useState<AllMessagesCache>({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false); // Guard for real-time subscriptions
+  // Use the shared hook for data loading with caching
+  const {
+    conversations,
+    allMessages,
+    isLoading,
+    isInitialized,
+    refresh: refreshData,
+    handleConversationInsert,
+    handleConversationUpdate,
+    handleConversationDelete,
+    handleMessageInsert,
+    handleMessageUpdate,
+    handleMessageDelete,
+  } = useChatHistoryData(user?.id);
   
   // Subscription channels refs for cleanup
   const conversationsChannelRef = useRef<any>(null);
@@ -79,192 +84,6 @@ export default function ChatHistoryScreen() {
     return () => subscription?.remove();
   }, []);
 
-  // Load conversations and all messages
-  const loadConversationsAndMessages = useCallback(async () => {
-    if (!user?.id) return;
-    
-    try {
-      setIsLoading(true);
-      
-      // First query: Get all general conversations for the user (including metadata)
-      const { data: conversationsData, error: conversationsError } = await supabase
-        .from('conversations')
-        .select('id, title, token_ca, created_at, updated_at, metadata')
-        .eq('user_id', user.id)
-        .eq('token_ca', GLOBAL_TOKEN_ID)
-        .order('updated_at', { ascending: false });
-      
-      if (conversationsError) {
-        console.error('Error fetching conversations:', conversationsError);
-        setConversations([]);
-        setAllMessages({});
-        return;
-      }
-      
-      if (!conversationsData || conversationsData.length === 0) {
-        console.log('📱 No conversations found for user');
-        setConversations([]);
-        setAllMessages({});
-        return;
-      }
-      
-      // Get conversation IDs for message query
-      const conversationIds = conversationsData.map(conv => conv.id);
-      
-      // Second query: Get ALL messages for these conversations (with metadata for search)
-      const { data: messagesData, error: messagesError } = await supabase
-        .from('messages')
-        .select('id, conversation_id, content, role, created_at, metadata')
-        .in('conversation_id', conversationIds)
-        .order('created_at', { ascending: false });
-      
-      if (messagesError) {
-        console.error('Error fetching messages:', messagesError);
-        // Still show conversations even if messages fail to load
-        const conversationsOnly = conversationsData.map(conv => ({
-          id: conv.id,
-          title: conv.title,
-          token_ca: conv.token_ca,
-          created_at: conv.created_at,
-          updated_at: conv.updated_at,
-          metadata: conv.metadata,
-          lastMessage: undefined
-        }));
-        setConversations(conversationsOnly);
-        setAllMessages({});
-        return;
-      }
-      
-      // Process the data
-      const processedConversations: ConversationWithPreview[] = [];
-      const messagesCache: AllMessagesCache = {};
-      
-      // Group messages by conversation
-      conversationsData.forEach((conv: any) => {
-        const conversationMessages = messagesData?.filter(msg => msg.conversation_id === conv.id) || [];
-        
-        // Store all messages for this conversation for search
-        messagesCache[conv.id] = conversationMessages;
-        
-        // Add conversation with last message preview
-        processedConversations.push({
-          id: conv.id,
-          title: conv.title,
-          token_ca: conv.token_ca,
-          created_at: conv.created_at,
-          updated_at: conv.updated_at,
-          metadata: conv.metadata,
-          lastMessage: conversationMessages[0] || undefined // Already sorted by created_at DESC
-        });
-      });
-      
-      setConversations(processedConversations);
-      setAllMessages(messagesCache);
-      console.log(`📱 Loaded ${processedConversations.length} conversations with ${Object.keys(messagesCache).reduce((total, convId) => total + messagesCache[convId].length, 0)} total messages`);
-      
-    } catch (error) {
-      console.error('Error in loadConversationsAndMessages:', error);
-    } finally {
-      setIsLoading(false);
-      setIsInitialized(true); // Mark as initialized - safe for real-time subscriptions now (even if load failed)
-    }
-  }, [user?.id]);
-
-  // Real-time event handlers
-  const handleConversationInsert = useCallback((newRecord: any) => {
-    // Only add global conversations
-    if (newRecord.token_ca !== GLOBAL_TOKEN_ID) return;
-    
-    const newConversation: ConversationWithPreview = {
-      id: newRecord.id,
-      title: newRecord.title,
-      token_ca: newRecord.token_ca,
-      created_at: newRecord.created_at,
-      updated_at: newRecord.updated_at,
-      metadata: newRecord.metadata,
-      lastMessage: undefined
-    };
-    
-    setConversations(prev => [newConversation, ...prev]);
-    console.log('✅ Added new conversation:', newRecord.id);
-  }, []);
-
-  const handleConversationUpdate = useCallback((newRecord: any) => {
-    setConversations(prev => {
-      const updated = prev.map(conv => 
-        conv.id === newRecord.id 
-          ? { ...conv, updated_at: newRecord.updated_at, metadata: newRecord.metadata }
-          : conv
-      ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-      
-      return updated;
-    });
-    console.log('✅ Updated conversation:', newRecord.id);
-  }, []);
-
-  const handleConversationDelete = useCallback((oldRecord: any) => {
-    setConversations(prev => prev.filter(conv => conv.id !== oldRecord.id));
-    setAllMessages(prev => {
-      const updated = { ...prev };
-      delete updated[oldRecord.id];
-      return updated;
-    });
-    console.log('✅ Removed conversation:', oldRecord.id);
-  }, []);
-
-  const handleMessageInsert = useCallback((newRecord: any) => {
-    const conversationId = newRecord.conversation_id;
-    
-    // Add to messages cache
-    setAllMessages(prev => ({
-      ...prev,
-      [conversationId]: [newRecord, ...(prev[conversationId] || [])]
-    }));
-    
-    // Update conversation's last message and updated_at
-    setConversations(prev => 
-      prev.map(conv => 
-        conv.id === conversationId
-          ? { 
-              ...conv, 
-              updated_at: newRecord.created_at, // Use message time as conversation update time
-              lastMessage: {
-                content: newRecord.content,
-                role: newRecord.role,
-                created_at: newRecord.created_at
-              }
-            }
-          : conv
-      ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-    );
-    
-    console.log('✅ Added new message to cache for conversation:', conversationId);
-  }, []);
-
-  const handleMessageUpdate = useCallback((newRecord: any) => {
-    const conversationId = newRecord.conversation_id;
-    
-    setAllMessages(prev => ({
-      ...prev,
-      [conversationId]: (prev[conversationId] || []).map(msg =>
-        msg.id === newRecord.id ? newRecord : msg
-      )
-    }));
-    
-    console.log('✅ Updated message in cache:', newRecord.id);
-  }, []);
-
-  const handleMessageDelete = useCallback((oldRecord: any) => {
-    const conversationId = oldRecord.conversation_id;
-    
-    setAllMessages(prev => ({
-      ...prev,
-      [conversationId]: (prev[conversationId] || []).filter(msg => msg.id !== oldRecord.id)
-    }));
-    
-    console.log('✅ Removed message from cache:', oldRecord.id);
-  }, []);
-
   // In-memory search through cached messages
   const searchConversations = useCallback((query: string): ConversationWithPreview[] => {
     if (!query.trim()) {
@@ -283,15 +102,7 @@ export default function ChatHistoryScreen() {
       if (hasMatch) {
         const conversation = conversations.find(conv => conv.id === conversationId);
         if (conversation) {
-          // Find the most recent matching message for preview
-          const matchingMessage = messages.find(message =>
-            message.content.toLowerCase().includes(lowerQuery)
-          );
-          
-          matchingConversations.push({
-            ...conversation,
-            lastMessage: matchingMessage || conversation.lastMessage
-          });
+          matchingConversations.push(conversation);
         }
       }
     });
@@ -301,16 +112,6 @@ export default function ChatHistoryScreen() {
       new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     );
   }, [conversations, allMessages]);
-
-  // Load data when user is available - simple approach, loads every time
-  useEffect(() => {
-    if (user?.id) {
-      console.log('🔄 Loading conversations for user:', user.id);
-      setIsInitialized(false); // Reset - prevent subscriptions from firing during reload
-      setIsLoading(true); // Set loading state immediately to show spinner during async load
-      loadConversationsAndMessages();
-    }
-  }, [user?.id, loadConversationsAndMessages]);
 
   // Set up real-time subscriptions for conversations and messages
   // IMPORTANT: Only set up after initial load completes to prevent race conditions
@@ -344,11 +145,24 @@ export default function ChatHistoryScreen() {
             config: { private: true }
           })
           .on('broadcast', { event: 'INSERT' }, (payload) => {
-            console.log('🔴 [REALTIME] 📡 Conversation INSERT broadcast received:', payload);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('🔴 [REALTIME RECEIVE] 📡 Conversation INSERT broadcast received!');
+            console.log('🔴 [REALTIME RECEIVE] Full payload:', JSON.stringify(payload, null, 2));
+            console.log('🔴 [REALTIME RECEIVE] payload.payload:', payload.payload);
+            console.log('🔴 [REALTIME RECEIVE] payload.record:', payload.record);
+            console.log('🔴 [REALTIME RECEIVE] payload.new:', payload.new);
+            
             const newData = payload.payload?.record || payload.record || payload.new || payload;
+            console.log('🔴 [REALTIME RECEIVE] Extracted newData:', newData);
+            
             if (newData) {
+              console.log('🔴 [REALTIME RECEIVE] Calling handleConversationInsert with:', newData);
               handleConversationInsert(newData);
+              console.log('🔴 [REALTIME RECEIVE] handleConversationInsert called successfully');
+            } else {
+              console.error('🔴 [REALTIME RECEIVE] ❌ No valid data found in payload!');
             }
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           })
           .on('broadcast', { event: 'UPDATE' }, (payload) => {
             console.log('🔴 [REALTIME] 📡 Conversation UPDATE broadcast received:', payload);
@@ -380,18 +194,49 @@ export default function ChatHistoryScreen() {
             config: { private: true }
           })
           .on('broadcast', { event: 'INSERT' }, (payload) => {
-            console.log('🔴 [REALTIME] 📡 Message INSERT broadcast received:', payload);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('💬 [REALTIME RECEIVE] 📡 Message INSERT broadcast received!');
+            console.log('💬 [REALTIME RECEIVE] Full payload:', JSON.stringify(payload, null, 2));
+            console.log('💬 [REALTIME RECEIVE] payload.payload:', payload.payload);
+            console.log('💬 [REALTIME RECEIVE] payload.record:', payload.record);
+            console.log('💬 [REALTIME RECEIVE] payload.new:', payload.new);
+            
             const newData = payload.payload?.record || payload.record || payload.new || payload;
+            console.log('💬 [REALTIME RECEIVE] Extracted newData:', newData);
+            
             if (newData) {
+              console.log('💬 [REALTIME RECEIVE] Calling handleMessageInsert with:', {
+                messageId: newData.id,
+                conversationId: newData.conversation_id,
+                role: newData.role,
+                contentLength: newData.content?.length
+              });
               handleMessageInsert(newData);
+              console.log('💬 [REALTIME RECEIVE] handleMessageInsert called successfully');
+            } else {
+              console.error('💬 [REALTIME RECEIVE] ❌ No valid data found in payload!');
             }
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           })
           .on('broadcast', { event: 'UPDATE' }, (payload) => {
-            console.log('🔴 [REALTIME] 📡 Message UPDATE broadcast received:', payload);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('💬 [REALTIME RECEIVE] 📡 Message UPDATE broadcast received!');
+            console.log('💬 [REALTIME RECEIVE] Full payload:', JSON.stringify(payload, null, 2));
+            
             const newData = payload.payload?.record || payload.record || payload.new || payload;
+            console.log('💬 [REALTIME RECEIVE] Extracted newData:', newData);
+            
             if (newData) {
+              console.log('💬 [REALTIME RECEIVE] Calling handleMessageUpdate with:', {
+                messageId: newData.id,
+                conversationId: newData.conversation_id
+              });
               handleMessageUpdate(newData);
+              console.log('💬 [REALTIME RECEIVE] handleMessageUpdate called successfully');
+            } else {
+              console.error('💬 [REALTIME RECEIVE] ❌ No valid data found in payload!');
             }
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           })
           .on('broadcast', { event: 'DELETE' }, (payload) => {
             console.log('🔴 [REALTIME] 📡 Message DELETE broadcast received:', payload);
@@ -452,7 +297,7 @@ export default function ChatHistoryScreen() {
   useEffect(() => {
     const loadCurrentConversationId = async () => {
       try {
-        const currentId = await secureStorage.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
+        const currentId = await storage.persistent.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
         setCurrentConversationId(currentId);
       } catch (error) {
         console.error('Error loading current conversation ID:', error);
@@ -469,7 +314,7 @@ export default function ChatHistoryScreen() {
   // Handle pull-to-refresh
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await loadConversationsAndMessages();
+    await refreshData(); // Use refresh from hook
     setIsRefreshing(false);
   };
 
@@ -575,14 +420,29 @@ export default function ChatHistoryScreen() {
     
     // Save as active conversation in secure storage (persists across sessions)
     try {
-      await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationId);
+      await storage.persistent.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationId);
       console.log('✅ Saved active conversation:', conversationId);
     } catch (error) {
       console.error('Error saving active conversation:', error);
     }
     
-    // Navigate to chat with the specific conversation ID
-    router.push(`/(main)/chat?conversationId=${conversationId}`);
+    // Create navigation function to be called on the JS thread
+    const navigateToChat = () => {
+      console.log('📱 Navigating to conversation:', conversationId);
+      router.push(`/(main)/chat?conversationId=${conversationId}`);
+    };
+    
+    // Slide out to left with smooth transition, then navigate to chat
+    translateX.value = withTiming(
+      -Dimensions.get('window').width,
+      {
+        duration: 350,
+        easing: Easing.in(Easing.cubic),
+      },
+      () => {
+        runOnJS(navigateToChat)();
+      }
+    );
   };
 
   // Handle new chat creation
@@ -601,11 +461,6 @@ export default function ChatHistoryScreen() {
       const conversationData = await createNewConversation(user?.id);
       
       console.log('💬 New conversation created:', conversationData.conversationId);
-      
-      // Refresh conversations to include the newly created one
-      // This ensures the list updates even if real-time broadcast doesn't fire
-      console.log('💬 Refreshing conversations list to include new conversation');
-      await loadConversationsAndMessages();
       
       // Create navigation function to be called on the JS thread
       const navigateToNewChat = () => {

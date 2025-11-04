@@ -22,7 +22,7 @@ import DepositModal from '../../components/wallet/DepositModal';
 import SendModal from '../../components/wallet/SendModal';
 import { sendToken } from '../../features/wallet';
 import { walletService } from '../../features/wallet';
-import { SESSION_STORAGE_KEYS } from '../../lib';
+import { SESSION_STORAGE_KEYS, storage } from '../../lib';
 
 
 export default function WalletScreen() {
@@ -36,21 +36,22 @@ export default function WalletScreen() {
   const [showSendModal, setShowSendModal] = useState(false);
   const [pendingSend, setPendingSend] = useState<{ recipientAddress: string; amount: string; tokenAddress?: string } | null>(null);
 
-  // Load pending send from sessionStorage on mount
+  // Load pending send from storage on mount
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      const stored = sessionStorage.getItem(SESSION_STORAGE_KEYS.PENDING_SEND);
+    const loadPendingSend = async () => {
+      const stored = await storage.session.getItem(SESSION_STORAGE_KEYS.PENDING_SEND);
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          console.log('🔄 [WalletScreen] Restored pending send from sessionStorage:', parsed);
+          console.log('🔄 [WalletScreen] Restored pending send from storage:', parsed);
           setPendingSend(parsed);
         } catch (error) {
           console.error('❌ [WalletScreen] Failed to parse stored pending send:', error);
-          sessionStorage.removeItem(SESSION_STORAGE_KEYS.PENDING_SEND);
+          await storage.session.removeItem(SESSION_STORAGE_KEYS.PENDING_SEND);
         }
       }
-    }
+    };
+    loadPendingSend();
   }, []);
   
   console.log('🏠 [WalletScreen] Component rendering', {
@@ -109,11 +110,9 @@ export default function WalletScreen() {
       const pendingSendData = { recipientAddress, amount, tokenAddress };
       setPendingSend(pendingSendData);
       
-      // Persist to sessionStorage to survive navigation
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        sessionStorage.setItem(SESSION_STORAGE_KEYS.PENDING_SEND, JSON.stringify(pendingSendData));
-        console.log('💾 [WalletScreen] Saved pending send to sessionStorage');
-      }
+      // Persist to storage to survive navigation
+      await storage.session.setItem(SESSION_STORAGE_KEYS.PENDING_SEND, JSON.stringify(pendingSendData));
+      console.log('💾 [WalletScreen] Saved pending send to storage');
       
       setShowSendModal(false); // Close modal while redirecting
       return;
@@ -156,13 +155,11 @@ export default function WalletScreen() {
         .catch((error) => {
           console.error('❌ [WalletScreen] Pending send error:', error);
         })
-        .finally(() => {
+        .finally(async () => {
           setPendingSend(null);
-          // Clear from sessionStorage after completion
-          if (typeof window !== 'undefined' && window.sessionStorage) {
-            sessionStorage.removeItem(SESSION_STORAGE_KEYS.PENDING_SEND);
-            console.log('🧹 [WalletScreen] Cleared pending send from sessionStorage');
-          }
+          // Clear from storage after completion
+          await storage.session.removeItem(SESSION_STORAGE_KEYS.PENDING_SEND);
+          console.log('🧹 [WalletScreen] Cleared pending send from storage');
         });
     }
   }, [gridAccount, pendingSend]);
