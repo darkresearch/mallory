@@ -19,11 +19,8 @@ export function getAppVersion(): string {
   }
   
   // Fallback: Get version from expo-constants or environment variable
-  const semanticVersion = 
-    Constants.expoConfig?.version || 
-    Constants.manifest?.version || 
-    process.env.EXPO_PUBLIC_APP_VERSION || 
-    '0.1.0';
+  const expoVersion = Constants.expoConfig?.version;
+  const semanticVersion = expoVersion || process.env.EXPO_PUBLIC_APP_VERSION || '0.1.0';
   
   // Get commit hash from environment variable or default to 'dev'
   const commitHash = process.env.EXPO_PUBLIC_GIT_COMMIT_HASH || 'dev';
