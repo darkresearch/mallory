@@ -1,6 +1,6 @@
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import * as SecureStore from 'expo-secure-store';
-import { secureStorage, config } from '../../../lib';
+import { config } from '../../../lib';
 import { gridClientService } from '../../grid/services/gridClient';
 
 const SOLANA_RPC_URL = config.solanaRpcUrl || 'https://api.mainnet-beta.solana.com';

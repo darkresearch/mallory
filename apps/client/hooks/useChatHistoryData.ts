@@ -252,12 +252,12 @@ export function useChatHistoryData(userId?: string) {
       const previousCount = prev[conversationId]?.length || 0;
       console.log('💬 [HANDLE MESSAGE INSERT] Previous messages count for conversation:', previousCount);
       
-      const updated = {
+      const updated: AllMessagesCache = {
         ...prev,
         [conversationId]: [...(prev[conversationId] || []), newRecord]
       };
       
-      console.log('💬 [HANDLE MESSAGE INSERT] Updated messages count:', updated[conversationId].length);
+      console.log('💬 [HANDLE MESSAGE INSERT] Updated messages count:', updated[conversationId]?.length || 0);
       cache.allMessages = updated; // Update cache
       console.log('💬 [HANDLE MESSAGE INSERT] Cache updated');
       return updated;
