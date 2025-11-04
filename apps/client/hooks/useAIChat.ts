@@ -3,12 +3,13 @@ import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 import { useWindowDimensions } from 'react-native';
 import { generateAPIUrl } from '../lib';
-import { loadMessagesFromSupabase } from '../features/chat';
-import { secureStorage } from '../lib/storage';
+import { loadMessagesFromSupabase, convertDatabaseMessageToUIMessage } from '../features/chat';
+import { storage } from '../lib/storage';
 import { getDeviceInfo } from '../lib/device';
 import { useEffect, useRef, useState } from 'react';
 import { loadGridContextForX402, buildClientContext } from '@darkresearch/mallory-shared';
 import { gridClientService } from '../features/grid';
+import { getCachedMessagesForConversation } from './useChatHistoryData';
 
 interface UseAIChatProps {
   conversationId: string;
@@ -37,6 +38,7 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
     
     // Don't load if conversationId is invalid
     if (!conversationId || conversationId === 'temp-loading') {
+      console.log('🔍 [useAIChat] Skipping history load - invalid conversationId:', conversationId);
       setIsLoadingHistory(false);
       return;
     }
@@ -45,22 +47,62 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
     
     const loadHistory = async () => {
       setIsLoadingHistory(true);
-      console.log('📖 Loading historical messages for conversation:', conversationId);
+      console.log('📖 [useAIChat] Loading historical messages for conversation:', conversationId);
       
       try {
+        const startTime = Date.now();
+        
+        // Check cache first
+        const cachedMessages = getCachedMessagesForConversation(conversationId);
+        
+        if (cachedMessages !== null) {
+          console.log('📦 [useAIChat] Using cached messages:', cachedMessages.length, 'messages');
+          
+          // Convert using shared utility (cache is already oldest-first, no reversal needed!)
+          const convertedMessages = cachedMessages.map(convertDatabaseMessageToUIMessage);
+          
+          const loadTime = Date.now() - startTime;
+          
+          if (!isCancelled) {
+            console.log('✅ [useAIChat] Loaded cached messages:', {
+              conversationId,
+              count: convertedMessages.length,
+              loadTimeMs: loadTime,
+              messageIds: convertedMessages.map(m => m.id)
+            });
+            setInitialMessages(convertedMessages);
+            setIsLoadingHistory(false);
+          }
+          return;
+        }
+        
+        // Cache miss - load from database (fallback)
+        console.log('🔍 [useAIChat] Cache miss, loading from database');
+        console.log('🔍 [useAIChat] Calling loadMessagesFromSupabase...');
+        
         const historicalMessages = await loadMessagesFromSupabase(conversationId);
+        
+        const loadTime = Date.now() - startTime;
+        console.log('🔍 [useAIChat] loadMessagesFromSupabase returned after', loadTime, 'ms');
         
         // Only update if this effect hasn't been cancelled (conversationId changed)
         if (!isCancelled) {
-          console.log('📖 Loaded historical messages:', {
+          console.log('✅ [useAIChat] Loaded historical messages:', {
+            conversationId,
             count: historicalMessages.length,
+            loadTimeMs: loadTime,
             messageIds: historicalMessages.map(m => m.id)
           });
           setInitialMessages(historicalMessages);
           setIsLoadingHistory(false);
+        } else {
+          console.log('⚠️ [useAIChat] Load cancelled - conversationId changed during load');
         }
       } catch (error) {
-        console.error('📖 Error loading historical messages:', error);
+        console.error('❌ [useAIChat] Error loading historical messages:', error);
+        console.error('❌ [useAIChat] Error type:', error?.constructor?.name);
+        console.error('❌ [useAIChat] Error message:', (error as any)?.message);
+        console.error('❌ [useAIChat] Full error:', error);
         if (!isCancelled) {
           setInitialMessages([]);
           setIsLoadingHistory(false);
@@ -82,7 +124,7 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
       fetch: async (url, options) => {
         // Get auth token and Grid session secrets
         const { SECURE_STORAGE_KEYS } = await import('@/lib/storage/keys');
-        const token = await secureStorage.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
+        const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
         
         // Get Grid context for x402 payments (shared utility)
         const { gridSessionSecrets, gridSession } = await loadGridContextForX402({
@@ -103,7 +145,7 @@ export function useAIChat({ conversationId, userId, walletBalance }: UseAIChatPr
             } : null;
           },
           getSessionSecrets: async () => {
-            return await secureStorage.getItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
+            return await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
           }
         });
         

@@ -1,4 +1,4 @@
-import { secureStorage, SECURE_STORAGE_KEYS } from '../../../lib/storage';
+import { storage, SECURE_STORAGE_KEYS } from '../../../lib/storage';
 import { supabase } from '../../../lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -14,6 +14,9 @@ export interface ConversationData {
 // Create conversation via client-side Supabase (with RLS protection)
 async function createConversationDirectly(conversationId: string, userId?: string): Promise<boolean> {
   try {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🎯 [CREATE CONVERSATION] Starting conversation creation');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('[createConversation] Starting with conversationId:', conversationId);
     
     // First, let's check the current auth state
@@ -78,7 +81,7 @@ async function createConversationDirectly(conversationId: string, userId?: strin
     }
     
     if (!authUser?.id) {
-      console.error('[createConversation] No authenticated user found after all attempts');
+      console.error('❌ [createConversation] No authenticated user found after all attempts');
       return false;
     }
     
@@ -86,13 +89,16 @@ async function createConversationDirectly(conversationId: string, userId?: strin
     console.log('[createConversation] Creating conversation directly (no existence check needed with UUIDs)');
     
     // Create new conversation with explicit user_id
-    console.log('[createConversation] Attempting to insert conversation:', {
+    console.log('[createConversation] Preparing INSERT with data:', {
       id: conversationId,
-      title: 'scout-global',
+      title: 'mallory-global',
       token_ca: GLOBAL_TOKEN_ID,
       user_id: authUser.id,
       authUserObject: authUser
     });
+    
+    console.log('[createConversation] Calling Supabase INSERT...');
+    const insertStartTime = Date.now();
     
     const { data, error } = await supabase
       .from('conversations')
@@ -107,31 +113,44 @@ async function createConversationDirectly(conversationId: string, userId?: strin
       })
       .select(); // Add select to get the inserted data back
     
+    const insertDuration = Date.now() - insertStartTime;
+    console.log(`[createConversation] INSERT completed in ${insertDuration}ms`);
+    
     if (error) {
       // If it's a duplicate key error, that's fine - conversation exists
       if (error.code === '23505') {
-        console.log('[createConversation] Conversation already exists (race condition)');
+        console.log('⚠️ [createConversation] Conversation already exists (race condition - OK)');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         return true;
       }
-      console.error('[createConversation] Failed to create conversation:', {
+      console.error('❌ [createConversation] Failed to create conversation:', {
         error,
         code: error.code,
         message: error.message,
         details: error.details,
         hint: error.hint
       });
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       return false;
     }
     
-    console.log('[createConversation] Successfully created conversation:', {
+    console.log('✅ [createConversation] Successfully created conversation in database!');
+    console.log('[createConversation] Inserted data:', {
       conversationId,
       insertedData: data
     });
     
-    console.log('[createConversation] Successfully created conversation:', conversationId);
+    // NOTE: Broadcast is now handled by database trigger (migration 089)
+    // No need for manual broadcast anymore
+    console.log('📡 [BROADCAST] Database trigger will handle broadcasting this INSERT');
+    console.log('📡 [BROADCAST] Skipping manual broadcast (handled by handle_conversations_changes trigger)');
+    
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
     return true;
   } catch (error) {
-    console.error('Error creating conversation directly:', error);
+    console.error('❌ [createConversation] Error creating conversation directly:', error);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     return false;
   }
 }
@@ -168,6 +187,12 @@ async function createConversationWithMetadata(conversationId: string, userId: st
     }
     
     console.log('[createConversationWithMetadata] Successfully created conversation with metadata');
+    
+    // NOTE: Broadcast is now handled by database trigger (migration 089)
+    // No need for manual broadcast anymore
+    console.log('📡 [BROADCAST] Database trigger will handle broadcasting this INSERT');
+    console.log('📡 [BROADCAST] Skipping manual broadcast (handled by handle_conversations_changes trigger)');
+    
     return true;
   } catch (error) {
     console.error('Error creating conversation with metadata:', error);
@@ -178,41 +203,74 @@ async function createConversationWithMetadata(conversationId: string, userId: st
 // Explicitly create a new conversation (when user clicks "New chat")
 export async function createNewConversation(userId?: string, metadata?: Record<string, any>): Promise<ConversationData> {
   try {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🆕 [NEW CONVERSATION] Starting new conversation creation flow');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
     const newConversationId = uuidv4();
     const now = Date.now();
     
-    // Store in secure storage as the active conversation (persists across sessions)
-    await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, newConversationId);
-    await secureStorage.setItem(LAST_CONVERSATION_KEY, now.toString());
+    console.log('📝 Generated conversation ID:', newConversationId);
     
     // Get userId if not provided
     let authUserId = userId;
     if (!authUserId) {
+      console.log('🔍 Getting userId from Supabase auth...');
       const { data: { user } } = await supabase.auth.getUser();
       authUserId = user?.id;
+      console.log('✅ Got userId:', authUserId);
     }
 
     if (!authUserId) {
       throw new Error('No user ID available for conversation creation');
     }
     
-    // Create conversation record in Supabase
-    console.log('📝 Creating conversation in Supabase:', newConversationId);
+    // Create conversation record in Supabase FIRST before storing locally
+    console.log('📝 Creating conversation in Supabase (with retry logic)...');
     let success;
+    let attempts = 0;
+    const maxAttempts = 3;
     
-    if (metadata) {
-      // Create with custom metadata (e.g., onboarding)
-      success = await createConversationWithMetadata(newConversationId, authUserId, metadata);
-    } else {
-      // Create with default flow
-      success = await createConversationDirectly(newConversationId, authUserId);
+    // Retry logic for conversation creation
+    while (attempts < maxAttempts && !success) {
+      attempts++;
+      console.log(`🔄 Attempt ${attempts}/${maxAttempts} to create conversation in Supabase`);
+      
+      if (metadata) {
+        // Create with custom metadata (e.g., onboarding)
+        console.log('📋 Creating with metadata:', metadata);
+        success = await createConversationWithMetadata(newConversationId, authUserId, metadata);
+      } else {
+        // Create with default flow
+        console.log('📋 Creating with default metadata');
+        success = await createConversationDirectly(newConversationId, authUserId);
+      }
+      
+      if (!success && attempts < maxAttempts) {
+        console.warn(`⚠️ Attempt ${attempts} failed, retrying...`);
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 500 * attempts));
+      }
     }
     
-    if (success) {
-      console.log('✅ Successfully created conversation in Supabase');
-    } else {
-      console.warn('⚠️ Failed to create conversation in Supabase, but continuing with local conversation');
+    if (!success) {
+      console.error('❌ CRITICAL: Failed to create conversation in Supabase after all attempts. Messages will not be saved!');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      throw new Error('Failed to create conversation in database after retries');
     }
+    
+    console.log('✅✅✅ SUCCESS! Conversation created in Supabase database!');
+    console.log('✅ Conversation ID:', newConversationId);
+    
+    // Only store in local storage AFTER successful database creation
+    console.log('💾 Storing conversation ID in local storage...');
+    await storage.persistent.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, newConversationId);
+    await storage.session.setItem(LAST_CONVERSATION_KEY, now.toString());
+    console.log('✅ Stored conversation ID in local storage');
+    
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🎉 CONVERSATION CREATION COMPLETE! Ready to send messages.');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     return {
       conversationId: newConversationId,
@@ -220,14 +278,9 @@ export async function createNewConversation(userId?: string, metadata?: Record<s
       userName: 'Edgar', // TODO: Get from user profile
     };
   } catch (error) {
-    console.error('Error creating new conversation:', error);
-    // Fallback: create new conversation on error
-    const fallbackId = uuidv4();
-    return {
-      conversationId: fallbackId,
-      shouldGreet: true,
-      userName: 'Edgar',
-    };
+    console.error('❌ CRITICAL ERROR creating new conversation:', error);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    throw error; // Don't silently fail - let caller handle
   }
 }
 
@@ -244,11 +297,11 @@ export async function getCurrentOrCreateConversation(
 ): Promise<ConversationData> {
   try {
     // Check if we already have an active conversation stored
-    const currentConversationId = await secureStorage.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
+    const currentConversationId = await storage.persistent.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
     
     if (currentConversationId) {
       console.log('📱 Using stored active conversation:', currentConversationId);
-      await secureStorage.setItem(LAST_CONVERSATION_KEY, Date.now().toString());
+      await storage.session.setItem(LAST_CONVERSATION_KEY, Date.now().toString());
       return {
         conversationId: currentConversationId,
         shouldGreet: false,
@@ -263,8 +316,8 @@ export async function getCurrentOrCreateConversation(
       const mostRecentConversation = existingConversations[0]; // Already sorted by updated_at DESC
       console.log('📱 Found existing conversations (from context), using most recent:', mostRecentConversation.id);
       
-      await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
-      await secureStorage.setItem(LAST_CONVERSATION_KEY, Date.now().toString());
+      await storage.persistent.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
+      await storage.session.setItem(LAST_CONVERSATION_KEY, Date.now().toString());
       
       return {
         conversationId: mostRecentConversation.id,
@@ -309,8 +362,8 @@ export async function getCurrentOrCreateConversation(
       const mostRecentConversation = existingConversationsFromDB[0];
       console.log('📱 Found existing conversations (from DB), using most recent:', mostRecentConversation.id);
       
-      await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
-      await secureStorage.setItem(LAST_CONVERSATION_KEY, Date.now().toString());
+      await storage.persistent.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, mostRecentConversation.id);
+      await storage.session.setItem(LAST_CONVERSATION_KEY, Date.now().toString());
       
       return {
         conversationId: mostRecentConversation.id,

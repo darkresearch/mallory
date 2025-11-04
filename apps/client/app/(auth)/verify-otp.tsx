@@ -8,7 +8,7 @@ import Animated, {
   withDelay,
   Easing 
 } from 'react-native-reanimated';
-import { LAYOUT, secureStorage, SECURE_STORAGE_KEYS } from '@/lib';
+import { LAYOUT, storage, SECURE_STORAGE_KEYS } from '@/lib';
 import { PressableButton } from '@/components/ui/PressableButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGrid } from '@/contexts/GridContext';
@@ -131,7 +131,7 @@ export default function VerifyOtpScreen() {
   useEffect(() => {
     const loadOtpSession = async () => {
       try {
-        const stored = await secureStorage.getItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
+        const stored = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
         
         if (stored) {
           const parsed = JSON.parse(stored);
@@ -236,7 +236,7 @@ export default function VerifyOtpScreen() {
       setOtpSession(newOtpSession);
       
       // Also update secure storage for persistence (e.g., if user refreshes page)
-      await secureStorage.setItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION, JSON.stringify(newOtpSession));
+      await storage.persistent.setItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION, JSON.stringify(newOtpSession));
       
       console.log('✅ [OTP Screen] New OTP sent successfully');
     } catch (err) {
@@ -295,7 +295,7 @@ export default function VerifyOtpScreen() {
   const handleSignOut = async () => {
     try {
       // Clear OTP session from secure storage
-      await secureStorage.removeItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
+      await storage.persistent.removeItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
       await logout();
     } catch (err) {
       console.error('Sign out error:', err);

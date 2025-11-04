@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { getCurrentOrCreateConversation } from '../features/chat';
-import { secureStorage, SECURE_STORAGE_KEYS } from '../lib';
+import { storage, SECURE_STORAGE_KEYS } from '../lib';
 
 interface UseConversationLoaderProps {
   userId?: string;
@@ -34,13 +34,13 @@ export function useConversationLoader({ userId }: UseConversationLoaderProps) {
           hasLoadedFromStorageRef.current = false; // Reset when explicitly navigating
           
           // Update the active conversation in storage (persists across sessions)
-          await secureStorage.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationIdParam);
+          await storage.persistent.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationIdParam);
         } else {
           // FIRST: Try to load active conversation from secure storage immediately
           // This allows instant loading without waiting for context
           // Only check storage once to prevent race conditions
           if (!hasLoadedFromStorageRef.current) {
-            const activeConversationId = await secureStorage.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
+            const activeConversationId = await storage.persistent.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
             
             if (activeConversationId) {
               console.log('📱 Found active conversation in storage:', activeConversationId);

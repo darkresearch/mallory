@@ -61,6 +61,28 @@ function buildChainOfThoughtMetadata(parts: any[]) {
 }
 
 /**
+ * Convert database message format to UIMessage format
+ * Shared utility used by loadMessagesFromSupabase and cache reading
+ */
+export function convertDatabaseMessageToUIMessage(msg: any): UIMessage & { isLiked?: boolean; isDisliked?: boolean } {
+  // Use stored parts if available, otherwise reconstruct from content
+  const parts = msg.metadata?.parts || [
+    { type: 'text' as const, text: msg.content }
+  ];
+  
+  return {
+    id: msg.id,
+    role: msg.role as 'user' | 'assistant',
+    parts,
+    content: msg.content, // Keep for compatibility
+    metadata: msg.metadata,
+    createdAt: new Date(msg.created_at),
+    isLiked: msg.is_liked,
+    isDisliked: msg.is_disliked
+  } as UIMessage & { isLiked?: boolean; isDisliked?: boolean };
+}
+
+/**
  * Save messages to Supabase with complete metadata preservation
  */
 export async function saveMessagesToSupabase(
@@ -200,15 +222,58 @@ export async function loadMessagesFromSupabase(
 ): Promise<UIMessage[]> {
   try {
     console.log('📖 Loading messages from Supabase:', conversationId);
+    const startTime = Date.now();
 
+    // 🔍 DIAGNOSTIC: Check Supabase session state before query
+    console.log('🔍 [Diagnostic] Checking Supabase session state...');
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      console.log('🔍 [Diagnostic] Session check result:', {
+        hasSession: !!sessionData?.session,
+        hasAccessToken: !!sessionData?.session?.access_token,
+        hasUser: !!sessionData?.session?.user,
+        expiresAt: sessionData?.session?.expires_at,
+        expiresIn: sessionData?.session?.expires_at 
+          ? Math.floor((sessionData.session.expires_at * 1000 - Date.now()) / 1000) + ' seconds'
+          : 'N/A',
+        sessionError: sessionError?.message || 'none'
+      });
+      
+      // Check if token is expired or close to expiration
+      if (sessionData?.session?.expires_at) {
+        const expiresInSeconds = Math.floor((sessionData.session.expires_at * 1000 - Date.now()) / 1000);
+        if (expiresInSeconds < 0) {
+          console.warn('⚠️ [Diagnostic] Token is EXPIRED by', Math.abs(expiresInSeconds), 'seconds');
+        } else if (expiresInSeconds < 60) {
+          console.warn('⚠️ [Diagnostic] Token expires SOON in', expiresInSeconds, 'seconds');
+        } else {
+          console.log('✅ [Diagnostic] Token is valid for', expiresInSeconds, 'seconds');
+        }
+      }
+    } catch (sessionCheckError) {
+      console.error('❌ [Diagnostic] Failed to check session:', sessionCheckError);
+    }
+
+    console.log('🔍 [Diagnostic] Starting Supabase query...');
+    const queryStartTime = Date.now();
+    
     const { data: messages, error } = await supabase
       .from('messages')
       .select('id, role, content, metadata, created_at, is_liked, is_disliked')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true }); // oldest first
 
+    const queryDuration = Date.now() - queryStartTime;
+    console.log('🔍 [Diagnostic] Query completed in', queryDuration, 'ms');
+
     if (error) {
       console.error('📖 Error loading messages:', error);
+      console.error('📖 Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
       return [];
     }
 
@@ -218,42 +283,24 @@ export async function loadMessagesFromSupabase(
     }
 
     // Convert Supabase format back to UIMessage format
-    const convertedMessages = messages.map((msg: any) => {
-      // Use stored parts if available, otherwise reconstruct from content
-      const parts = msg.metadata?.parts || [
-        { type: 'text' as const, text: msg.content }
-      ];
-      
-      console.log('📖 Converting message:', {
-        id: msg.id,
-        role: msg.role,
-        partsCount: parts.length,
-        hasMetadata: !!msg.metadata,
-        hasChainOfThought: !!msg.metadata?.chainOfThought
-      });
-
-      return {
-        id: msg.id,
-        role: msg.role as 'user' | 'assistant',
-        parts,
-        content: msg.content, // Keep for compatibility
-        metadata: msg.metadata,
-        createdAt: new Date(msg.created_at),
-        isLiked: msg.is_liked,
-        isDisliked: msg.is_disliked
-      } as UIMessage & { isLiked?: boolean; isDisliked?: boolean };
-    });
+    const convertedMessages = messages.map(convertDatabaseMessageToUIMessage);
     
+    const totalDuration = Date.now() - startTime;
     console.log('✅ Loaded messages:', {
       conversationId,
       messageCount: convertedMessages.length,
-      messageIds: convertedMessages.map(m => m.id)
+      messageIds: convertedMessages.map(m => m.id),
+      totalDuration: totalDuration + 'ms'
     });
     
     return convertedMessages;
     
   } catch (error) {
     console.error('📖 Failed to load messages:', error);
+    console.error('📖 Error type:', error?.constructor?.name);
+    console.error('📖 Error message:', (error as any)?.message);
+    console.error('📖 Error stack:', (error as any)?.stack);
+    console.error('📖 Full error object:', error);
     return [];
   }
 }
