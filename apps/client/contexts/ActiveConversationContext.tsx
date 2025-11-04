@@ -41,6 +41,9 @@ export function ActiveConversationProvider({ children }: ActiveConversationProvi
     if (conversationId) {
       console.log('💾 [ActiveConversationProvider] Saving to storage:', conversationId);
       storage.persistent.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationId);
+    } else {
+      console.log('🗑️ [ActiveConversationProvider] Removing from storage (conversationId is null)');
+      storage.persistent.removeItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
     }
   }, [conversationId]);
   
