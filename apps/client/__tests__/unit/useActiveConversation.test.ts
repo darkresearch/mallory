@@ -35,7 +35,10 @@ mock.module('expo-router', () => ({
 }));
 
 mock.module('@/lib', () => ({
-  secureStorage: mockSecureStorage,
+  storage: {
+    persistent: mockSecureStorage,
+    session: mockSecureStorage,
+  },
   SECURE_STORAGE_KEYS: {
     CURRENT_CONVERSATION_ID: 'mallory_current_conversation_id',
   },
