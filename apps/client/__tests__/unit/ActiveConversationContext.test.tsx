@@ -156,20 +156,34 @@ describe('ActiveConversationProvider Context', () => {
 
   describe('Multiple Consumers', () => {
     test('should provide same value to multiple consumers', async () => {
+      // Create a single wrapper instance
       const wrapper = ({ children }: { children: React.ReactNode }) => (
         <ActiveConversationProvider>{children}</ActiveConversationProvider>
       );
 
-      const { result: result1 } = renderHook(() => useActiveConversationContext(), { wrapper });
-      const { result: result2 } = renderHook(() => useActiveConversationContext(), { wrapper });
+      // Render both hooks within the same provider using a custom setup
+      const { result } = renderHook(() => ({
+        hook1: useActiveConversationContext(),
+        hook2: useActiveConversationContext(),
+      }), { wrapper });
 
-      act(() => {
-        result1.current.setConversationId('shared-conversation-id');
+      // Wait for initial storage load to complete
+      await waitFor(() => {
+        expect(result.current.hook1.conversationId).toBe(null);
+      });
+
+      await act(async () => {
+        result.current.hook1.setConversationId('shared-conversation-id');
+      });
+
+      // Wait for state to update
+      await waitFor(() => {
+        expect(result.current.hook1.conversationId).toBe('shared-conversation-id');
       });
 
       // Both consumers should see the same value
-      expect(result1.current.conversationId).toBe('shared-conversation-id');
-      expect(result2.current.conversationId).toBe('shared-conversation-id');
+      expect(result.current.hook1.conversationId).toBe('shared-conversation-id');
+      expect(result.current.hook2.conversationId).toBe('shared-conversation-id');
       
       console.log('✅ Provides same value to multiple consumers');
     });
@@ -179,23 +193,38 @@ describe('ActiveConversationProvider Context', () => {
         <ActiveConversationProvider>{children}</ActiveConversationProvider>
       );
 
-      const { result: result1 } = renderHook(() => useActiveConversationContext(), { wrapper });
-      const { result: result2 } = renderHook(() => useActiveConversationContext(), { wrapper });
+      const { result } = renderHook(() => ({
+        hook1: useActiveConversationContext(),
+        hook2: useActiveConversationContext(),
+      }), { wrapper });
 
-      act(() => {
-        result1.current.setConversationId('conversation-1');
+      // Wait for initial storage load
+      await waitFor(() => {
+        expect(result.current.hook1.conversationId).toBe(null);
       });
 
-      expect(result1.current.conversationId).toBe('conversation-1');
-      expect(result2.current.conversationId).toBe('conversation-1');
+      await act(async () => {
+        result.current.hook1.setConversationId('conversation-1');
+      });
 
-      act(() => {
-        result2.current.setConversationId('conversation-2');
+      await waitFor(() => {
+        expect(result.current.hook1.conversationId).toBe('conversation-1');
+      });
+
+      expect(result.current.hook1.conversationId).toBe('conversation-1');
+      expect(result.current.hook2.conversationId).toBe('conversation-1');
+
+      await act(async () => {
+        result.current.hook2.setConversationId('conversation-2');
+      });
+
+      await waitFor(() => {
+        expect(result.current.hook2.conversationId).toBe('conversation-2');
       });
 
       // Both should have the new value
-      expect(result1.current.conversationId).toBe('conversation-2');
-      expect(result2.current.conversationId).toBe('conversation-2');
+      expect(result.current.hook1.conversationId).toBe('conversation-2');
+      expect(result.current.hook2.conversationId).toBe('conversation-2');
       
       console.log('✅ Updates all consumers when value changes');
     });

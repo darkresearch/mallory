@@ -6,10 +6,7 @@ interface ActiveConversationContextType {
   setConversationId: (id: string | null) => void;
 }
 
-const ActiveConversationContext = createContext<ActiveConversationContextType>({
-  conversationId: null,
-  setConversationId: () => {},
-});
+const ActiveConversationContext = createContext<ActiveConversationContextType | undefined>(undefined);
 
 export function useActiveConversationContext() {
   const context = useContext(ActiveConversationContext);
