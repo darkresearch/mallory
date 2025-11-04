@@ -56,7 +56,27 @@ export function getChatCache(): ActiveChatCache {
  * Update cache and notify subscribers
  */
 export function updateChatCache(updates: Partial<ActiveChatCache>) {
+  const oldConversationId = activeChatCache.conversationId;
+  const oldMessagesLength = activeChatCache.messages.length;
+  
   Object.assign(activeChatCache, updates);
+  
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('📦 [chat-cache] updateChatCache CALLED');
+  console.log('   Updates:', JSON.stringify({
+    conversationId: updates.conversationId,
+    messagesCount: updates.messages?.length,
+    aiStatus: updates.aiStatus,
+    isLoadingHistory: updates.isLoadingHistory,
+    streamState: updates.streamState
+  }, null, 2));
+  console.log('   Cache state AFTER update:');
+  console.log('   - conversationId:', activeChatCache.conversationId);
+  console.log('   - messages.length:', activeChatCache.messages.length);
+  console.log('   - aiStatus:', activeChatCache.aiStatus);
+  console.log('   - isLoadingHistory:', activeChatCache.isLoadingHistory);
+  console.log('   Notifying', subscribers.size, 'subscribers');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   
   // Notify all subscribers
   subscribers.forEach(subscriber => {
@@ -80,6 +100,12 @@ export function subscribeToChatCache(subscriber: CacheSubscriber): () => void {
  * Clear cache for conversation switch
  */
 export function clearChatCache() {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🧹 [chat-cache] clearChatCache CALLED');
+  console.log('   Old cache state:');
+  console.log('   - conversationId:', activeChatCache.conversationId);
+  console.log('   - messages.length:', activeChatCache.messages.length);
+  
   activeChatCache.conversationId = null;
   activeChatCache.messages = [];
   activeChatCache.streamState = { status: 'idle' };
@@ -87,6 +113,10 @@ export function clearChatCache() {
   activeChatCache.aiStatus = 'ready';
   activeChatCache.aiError = null;
   activeChatCache.isLoadingHistory = false;
+  
+  console.log('   New cache state: ALL CLEARED');
+  console.log('   Notifying', subscribers.size, 'subscribers');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   
   // Notify subscribers
   subscribers.forEach(subscriber => {

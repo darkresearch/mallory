@@ -9,6 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider } from '../contexts/AuthContext';
 import { GridProvider } from '../contexts/GridContext';
 import { WalletProvider } from '../contexts/WalletContext';
+import { ActiveConversationProvider } from '../contexts/ActiveConversationContext';
 import { initializeComponentRegistry } from '../components/registry';
 import { DataPreloader } from '../components/DataPreloader';
 import { ChatManager } from '../components/chat/ChatManager';
@@ -63,23 +64,25 @@ export default function RootLayout() {
         <AuthProvider>
           <GridProvider>
             <WalletProvider>
-              <DataPreloader />
-              <ChatManager />
-              <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any }}>
-                <Stack
-                  screenOptions={{
-                    headerShown: false,
-                    contentStyle: { backgroundColor: '#FFEFE3' },
-                    animation: 'fade',
-                  }}
-                />
-                {Platform.OS === 'web' && (
-                  <>
-                    <Analytics />
-                    <SpeedInsights />
-                  </>
-                )}
-              </View>
+              <ActiveConversationProvider>
+                <DataPreloader />
+                <ChatManager />
+                <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any }}>
+                  <Stack
+                    screenOptions={{
+                      headerShown: false,
+                      contentStyle: { backgroundColor: '#FFEFE3' },
+                      animation: 'fade',
+                    }}
+                  />
+                  {Platform.OS === 'web' && (
+                    <>
+                      <Analytics />
+                      <SpeedInsights />
+                    </>
+                  )}
+                </View>
+              </ActiveConversationProvider>
             </WalletProvider>
           </GridProvider>
         </AuthProvider>
