@@ -54,13 +54,23 @@ export function useChatState({ currentConversationId, isLoadingConversation = fa
     const unsubscribe = subscribeToChatCache((newCache) => {
       // Only update if cache is for current conversation
       if (isCacheForConversation(currentConversationId)) {
-        console.log('📦 [useChatState] Cache updated for conversation:', currentConversationId);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('📦 [useChatState] CACHE UPDATE RECEIVED');
+        console.log('   currentConversationId:', currentConversationId);
+        console.log('   newCache.conversationId:', newCache.conversationId);
+        console.log('   newCache.messages.length:', newCache.messages.length);
+        console.log('   Updating local state with new cache data');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         setStreamState(newCache.streamState);
         setLiveReasoningText(newCache.liveReasoningText);
         setAiMessages(newCache.messages);
         setAiStatus(newCache.aiStatus);
         setAiError(newCache.aiError);
         setIsLoadingHistory(newCache.isLoadingHistory);
+      } else {
+        console.log('⏭️  [useChatState] Cache update ignored - not for current conversation');
+        console.log('   currentConversationId:', currentConversationId);
+        console.log('   newCache.conversationId:', newCache.conversationId);
       }
     });
     
@@ -72,8 +82,16 @@ export function useChatState({ currentConversationId, isLoadingConversation = fa
     const cache = getChatCache();
     const isCacheRelevant = isCacheForConversation(currentConversationId);
     
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔄 [useChatState] CONVERSATION CHANGE - SYNCING WITH CACHE');
+    console.log('   currentConversationId:', currentConversationId);
+    console.log('   cache.conversationId:', cache.conversationId);
+    console.log('   isCacheRelevant:', isCacheRelevant);
+    console.log('   cache.messages.length:', cache.messages.length);
+    
     if (isCacheRelevant) {
-      console.log('🔄 [useChatState] Syncing with cache for conversation:', currentConversationId);
+      console.log('✅ [useChatState] Cache is relevant, syncing state');
+      console.log('   Setting aiMessages to', cache.messages.length, 'messages');
       setStreamState(cache.streamState);
       setLiveReasoningText(cache.liveReasoningText);
       setAiMessages(cache.messages);
@@ -81,7 +99,7 @@ export function useChatState({ currentConversationId, isLoadingConversation = fa
       setAiError(cache.aiError);
       setIsLoadingHistory(cache.isLoadingHistory);
     } else {
-      console.log('🔄 [useChatState] Cache not relevant, resetting to empty state');
+      console.log('🧹 [useChatState] Cache not relevant, resetting to empty state');
       setStreamState({ status: 'idle' });
       setLiveReasoningText('');
       setAiMessages([]);
@@ -89,6 +107,7 @@ export function useChatState({ currentConversationId, isLoadingConversation = fa
       setAiError(null);
       setIsLoadingHistory(isLoadingConversation);
     }
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }, [currentConversationId, isLoadingConversation]);
 
   // Handle sending messages - delegate to storage for ChatManager to pick up

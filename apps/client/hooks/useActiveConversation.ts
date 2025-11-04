@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { storage, SECURE_STORAGE_KEYS } from '../lib';
 import { getCurrentOrCreateConversation } from '../features/chat';
+import { useActiveConversationContext } from '../contexts/ActiveConversationContext';
 
 interface UseActiveConversationProps {
   userId?: string;
@@ -9,18 +10,29 @@ interface UseActiveConversationProps {
 
 /**
  * Simplified hook for chat screen - loads active conversation ID
- * Simple approach: re-loads whenever userId or conversationId param changes
+ * Uses context to propagate changes to ChatManager
  */
 export function useActiveConversation({ userId }: UseActiveConversationProps) {
   const params = useLocalSearchParams();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Get context setter to propagate changes globally
+  const { setConversationId: setGlobalConversationId } = useActiveConversationContext();
 
   useEffect(() => {
     const loadActiveConversation = async () => {
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('🔍 [useActiveConversation] EFFECT TRIGGERED');
+      console.log('   userId:', userId);
+      console.log('   params.conversationId:', params.conversationId);
+      console.log('   Current conversationId state:', conversationId);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      
       if (!userId) {
         console.log('🔍 [useActiveConversation] No userId, clearing conversation state');
         setConversationId(null);
+        setGlobalConversationId(null);
         setIsLoading(false);
         return;
       }
@@ -33,8 +45,13 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
         const conversationIdParam = params.conversationId as string;
         
         if (conversationIdParam) {
-          console.log('📱 [useActiveConversation] Opening conversation from URL:', conversationIdParam);
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('📱 [useActiveConversation] Opening conversation from URL param');
+          console.log('   New conversationId:', conversationIdParam);
+          console.log('   Calling setConversationId() AND setGlobalConversationId()');
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           setConversationId(conversationIdParam);
+          setGlobalConversationId(conversationIdParam); // Propagate to ChatManager instantly!
           
           // Update active conversation in storage
           await storage.persistent.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationIdParam);
@@ -56,6 +73,7 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
         if (activeConversationId) {
           console.log('✅ [useActiveConversation] Using conversation from storage:', activeConversationId);
           setConversationId(activeConversationId);
+          setGlobalConversationId(activeConversationId); // Propagate to ChatManager
           setIsLoading(false);
           return;
         }
@@ -66,11 +84,13 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
         console.log('✅ [useActiveConversation] Created/loaded conversation:', conversationData.conversationId);
         
         setConversationId(conversationData.conversationId);
+        setGlobalConversationId(conversationData.conversationId); // Propagate to ChatManager
         setIsLoading(false);
         
       } catch (error) {
         console.error('❌ [useActiveConversation] Error loading active conversation:', error);
         setConversationId(null);
+        setGlobalConversationId(null); // Clear global state too
         setIsLoading(false);
       }
     };

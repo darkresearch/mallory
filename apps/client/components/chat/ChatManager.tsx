@@ -19,6 +19,7 @@ import { getCachedMessagesForConversation } from '../../hooks/useChatHistoryData
 import { updateChatCache, clearChatCache, isCacheForConversation } from '../../lib/chat-cache';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWallet } from '../../contexts/WalletContext';
+import { useActiveConversationContext } from '../../contexts/ActiveConversationContext';
 
 /**
  * ChatManager props
@@ -35,10 +36,14 @@ export function ChatManager({}: ChatManagerProps) {
   const { walletData } = useWallet();
   const { width: viewportWidth } = useWindowDimensions();
   
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  // Get conversationId from context instead of internal state
+  const { conversationId: currentConversationId } = useActiveConversationContext();
+  
   const [initialMessages, setInitialMessages] = useState<any[]>([]);
+  const [initialMessagesConversationId, setInitialMessagesConversationId] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const previousStatusRef = useRef<string>('ready');
+  const conversationMessagesSetRef = useRef<string | null>(null);
   
   // Extract wallet balance
   const walletBalance = React.useMemo(() => {
@@ -105,45 +110,49 @@ export function ChatManager({}: ChatManagerProps) {
     experimental_throttle: 100,
   });
 
-  // Watch for active conversation ID changes from storage
+  // Track previous conversationId to detect changes
+  const previousConversationIdRef = useRef<string | null>(null);
+  
+  // Stop stream and clear cache when conversation changes
   useEffect(() => {
-    const checkActiveConversation = async () => {
-      try {
-        const activeId = await storage.persistent.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
-        if (activeId !== currentConversationId) {
-          console.log('🔄 [ChatManager] Active conversation changed:', { from: currentConversationId, to: activeId });
-          
-          // If switching conversations, stop previous stream and clear cache
-          if (currentConversationId && currentConversationId !== activeId) {
-            console.log('🛑 [ChatManager] Stopping previous conversation stream');
-            stop();
-            clearChatCache();
-          }
-          
-          setCurrentConversationId(activeId);
-        }
-      } catch (error) {
-        console.error('❌ [ChatManager] Error checking active conversation:', error);
-      }
-    };
-
-    // Check immediately
-    checkActiveConversation();
+    const previousId = previousConversationIdRef.current;
     
-    // Poll for changes (simple approach, could use storage events)
-    const interval = setInterval(checkActiveConversation, 500);
+    if (previousId && previousId !== currentConversationId) {
+      console.log('🔄 [ChatManager] Conversation changed:', { from: previousId, to: currentConversationId });
+      console.log('🛑 [ChatManager] Stopping previous conversation stream');
+      stop();
+      clearChatCache();
+    }
     
-    return () => clearInterval(interval);
+    previousConversationIdRef.current = currentConversationId;
   }, [currentConversationId, stop]);
 
   // Load historical messages when conversation ID changes
   useEffect(() => {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔄 [ChatManager] CONVERSATION CHANGE EFFECT TRIGGERED');
+    console.log('   New conversationId:', currentConversationId);
+    console.log('   Current messages.length:', messages.length);
+    console.log('   Current initialMessages.length:', initialMessages.length);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
     if (!currentConversationId || currentConversationId === 'temp-loading') {
       console.log('🔍 [ChatManager] Skipping history load - invalid conversationId:', currentConversationId);
       setIsLoadingHistory(false);
       updateChatCache({ isLoadingHistory: false });
       return;
     }
+    
+    // Clear messages immediately when conversation changes to prevent showing old messages
+    console.log('🧹 [ChatManager] Clearing messages for conversation switch to:', currentConversationId);
+    console.log('   Before clear - messages.length:', messages.length);
+    console.log('   Before clear - initialMessages.length:', initialMessages.length);
+    setMessages([]);
+    setInitialMessages([]);
+    setInitialMessagesConversationId(null); // Track what conversation initialMessages belong to
+    conversationMessagesSetRef.current = null; // Reset ref so new messages can be set
+    console.log('✅ [ChatManager] Messages cleared (setMessages([]) and setInitialMessages([]) called)');
+    console.log('✅ [ChatManager] Ref and conversationId tracker reset');
     
     let isCancelled = false;
     
@@ -171,7 +180,9 @@ export function ChatManager({}: ChatManagerProps) {
               count: convertedMessages.length,
               loadTimeMs: loadTime,
             });
+            console.log('📝 [ChatManager] Setting initialMessages to', convertedMessages.length, 'cached messages');
             setInitialMessages(convertedMessages);
+            setInitialMessagesConversationId(currentConversationId); // Track which conversation these messages belong to
             setIsLoadingHistory(false);
             updateChatCache({ isLoadingHistory: false });
           }
@@ -189,7 +200,9 @@ export function ChatManager({}: ChatManagerProps) {
             count: historicalMessages.length,
             loadTimeMs: loadTime,
           });
+          console.log('📝 [ChatManager] Setting initialMessages to', historicalMessages.length, 'DB messages');
           setInitialMessages(historicalMessages);
+          setInitialMessagesConversationId(currentConversationId); // Track which conversation these messages belong to
           setIsLoadingHistory(false);
           updateChatCache({ isLoadingHistory: false });
         }
@@ -212,14 +225,43 @@ export function ChatManager({}: ChatManagerProps) {
 
   // Set initial messages after loading from database
   useEffect(() => {
-    if (!isLoadingHistory && initialMessages.length > 0 && messages.length === 0) {
-      console.log('📖 [ChatManager] Setting initial messages in useChat:', {
-        initialCount: initialMessages.length,
-        currentCount: messages.length
-      });
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📖 [ChatManager] SET INITIAL MESSAGES EFFECT');
+    console.log('   isLoadingHistory:', isLoadingHistory);
+    console.log('   initialMessages.length:', initialMessages.length);
+    console.log('   initialMessagesConversationId:', initialMessagesConversationId);
+    console.log('   messages.length:', messages.length);
+    console.log('   conversationId:', currentConversationId);
+    console.log('   conversationMessagesSetRef.current:', conversationMessagesSetRef.current);
+    
+    // Only set messages if:
+    // 1. History loading is complete
+    // 2. We have initialMessages to set
+    // 3. InitialMessages are for the CURRENT conversation (prevents React batching bug!)
+    // 4. We haven't already set messages for this conversation
+    if (!isLoadingHistory && 
+        initialMessages.length > 0 &&
+        initialMessagesConversationId === currentConversationId &&
+        conversationMessagesSetRef.current !== currentConversationId) {
+      console.log('✅ [ChatManager] CALLING setMessages() with', initialMessages.length, 'messages');
+      console.log('   First message ID:', initialMessages[0]?.id);
+      console.log('   Last message ID:', initialMessages[initialMessages.length - 1]?.id);
       setMessages(initialMessages);
+      conversationMessagesSetRef.current = currentConversationId;
+      console.log('✅ [ChatManager] setMessages() called successfully and ref updated');
+    } else {
+      console.log('⏭️  [ChatManager] Skipping setMessages - condition not met');
+      if (conversationMessagesSetRef.current === currentConversationId) {
+        console.log('   Reason: Already set messages for this conversation');
+      }
+      if (initialMessagesConversationId !== currentConversationId) {
+        console.log('   Reason: initialMessages are for wrong conversation');
+        console.log('   initialMessages conversation:', initialMessagesConversationId);
+        console.log('   current conversation:', currentConversationId);
+      }
     }
-  }, [isLoadingHistory, initialMessages.length, messages.length, setMessages]);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  }, [isLoadingHistory, initialMessages.length, initialMessagesConversationId, currentConversationId, setMessages]);
 
   // Update cache whenever messages or status changes
   useEffect(() => {
@@ -228,11 +270,16 @@ export function ChatManager({}: ChatManagerProps) {
     // Filter out system messages for display
     const displayMessages = messages.filter(msg => msg.role !== 'system');
     
-    console.log('📝 [ChatManager] Updating cache with messages:', {
-      conversationId: currentConversationId,
-      messageCount: displayMessages.length,
-      status,
-    });
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📦 [ChatManager] UPDATING CACHE WITH MESSAGES');
+    console.log('   conversationId:', currentConversationId);
+    console.log('   messageCount:', displayMessages.length);
+    console.log('   status:', status);
+    if (displayMessages.length > 0) {
+      console.log('   First message:', displayMessages[0]?.id, '-', displayMessages[0]?.role);
+      console.log('   Last message:', displayMessages[displayMessages.length - 1]?.id, '-', displayMessages[displayMessages.length - 1]?.role);
+    }
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     updateChatCache({
       conversationId: currentConversationId,

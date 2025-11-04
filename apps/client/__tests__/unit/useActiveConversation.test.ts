@@ -25,6 +25,9 @@ const mockGetCurrentOrCreateConversation = mock(async (userId: string) => ({
   shouldGreet: true,
 }));
 
+// Mock ActiveConversationContext
+const mockSetGlobalConversationId = mock((id: string | null) => {});
+
 // Mock expo-router
 const mockParams = {
   conversationId: undefined as string | undefined,
@@ -48,6 +51,13 @@ mock.module('@/features/chat', () => ({
   getCurrentOrCreateConversation: mockGetCurrentOrCreateConversation,
 }));
 
+mock.module('@/contexts/ActiveConversationContext', () => ({
+  useActiveConversationContext: () => ({
+    conversationId: null,
+    setConversationId: mockSetGlobalConversationId,
+  }),
+}));
+
 // Import after mocking
 const { useActiveConversation } = await import('@/hooks/useActiveConversation');
 
@@ -57,11 +67,13 @@ describe('useActiveConversation Hook', () => {
     mockSecureStorage.getItem.mockReset();
     mockSecureStorage.setItem.mockReset();
     mockGetCurrentOrCreateConversation.mockReset();
+    mockSetGlobalConversationId.mockReset();
     mockParams.conversationId = undefined;
     
     // Default mock implementations
     mockSecureStorage.getItem.mockImplementation(async () => null);
     mockSecureStorage.setItem.mockImplementation(async () => {});
+    mockSetGlobalConversationId.mockImplementation(() => {});
     mockGetCurrentOrCreateConversation.mockImplementation(async (userId: string) => ({
       conversationId: 'created-conversation-id',
       shouldGreet: true,
@@ -90,6 +102,9 @@ describe('useActiveConversation Hook', () => {
         'mallory_current_conversation_id',
         'url-conversation-id'
       );
+      
+      // Should propagate to global context
+      expect(mockSetGlobalConversationId).toHaveBeenCalledWith('url-conversation-id');
       
       // Should NOT create new conversation
       expect(mockGetCurrentOrCreateConversation).not.toHaveBeenCalled();
@@ -147,6 +162,9 @@ describe('useActiveConversation Hook', () => {
 
       expect(result.current.conversationId).toBe('stored-conversation-id');
       
+      // Should propagate to global context
+      expect(mockSetGlobalConversationId).toHaveBeenCalledWith('stored-conversation-id');
+      
       // Should NOT create new conversation
       expect(mockGetCurrentOrCreateConversation).not.toHaveBeenCalled();
     });
@@ -186,6 +204,9 @@ describe('useActiveConversation Hook', () => {
 
       expect(result.current.conversationId).toBe('newly-created-id');
       expect(mockGetCurrentOrCreateConversation).toHaveBeenCalledWith('test-user-id');
+      
+      // Should propagate to global context
+      expect(mockSetGlobalConversationId).toHaveBeenCalledWith('newly-created-id');
     });
   });
 
@@ -228,6 +249,9 @@ describe('useActiveConversation Hook', () => {
         expect(result.current.conversationId).toBeNull();
         expect(result.current.isLoading).toBe(false);
       });
+      
+      // Should clear global context too
+      expect(mockSetGlobalConversationId).toHaveBeenCalledWith(null);
     });
   });
 
