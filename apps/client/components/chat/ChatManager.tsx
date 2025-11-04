@@ -54,6 +54,57 @@ export function ChatManager({}: ChatManagerProps) {
     };
   }, [walletData]);
 
+  // Initialize useChat for active conversation
+  // IMPORTANT: This must be declared BEFORE any useEffects that call stop()
+  const { messages, error, sendMessage, regenerate, status, setMessages, stop } = useChat({
+    transport: new DefaultChatTransport({
+      fetch: async (url, options) => {
+        const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
+        
+        const { gridSessionSecrets, gridSession } = await loadGridContextForX402({
+          getGridAccount: async () => {
+            const account = await gridClientService.getAccount();
+            return account ? {
+              authentication: account.authentication || account,
+              address: account.address
+            } : null;
+          },
+          getSessionSecrets: async () => {
+            return await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
+          }
+        });
+        
+        const existingBody = JSON.parse(options?.body as string || '{}');
+        const enhancedBody = {
+          ...existingBody,
+          ...(gridSessionSecrets && gridSession ? { gridSessionSecrets, gridSession } : {})
+        };
+        
+        const fetchOptions: any = {
+          ...options,
+          body: JSON.stringify(enhancedBody),
+          headers: {
+            ...options?.headers,
+            'Authorization': `Bearer ${token}`,
+          }
+        };
+        return expoFetch(url.toString(), fetchOptions) as unknown as Promise<Response>;
+      },
+      api: generateAPIUrl('/api/chat'),
+      body: {
+        conversationId: currentConversationId || 'temp-loading',
+        clientContext: buildClientContext({
+          viewportWidth: viewportWidth || undefined,
+          getDeviceInfo: () => getDeviceInfo(viewportWidth),
+          walletBalance: walletBalance
+        })
+      },
+    }),
+    id: currentConversationId || 'temp-loading',
+    onError: error => console.error(error, 'AI Chat Error'),
+    experimental_throttle: 100,
+  });
+
   // Watch for active conversation ID changes from storage
   useEffect(() => {
     const checkActiveConversation = async () => {
@@ -83,7 +134,7 @@ export function ChatManager({}: ChatManagerProps) {
     const interval = setInterval(checkActiveConversation, 500);
     
     return () => clearInterval(interval);
-  }, [currentConversationId]);
+  }, [currentConversationId, stop]);
 
   // Load historical messages when conversation ID changes
   useEffect(() => {
@@ -158,56 +209,6 @@ export function ChatManager({}: ChatManagerProps) {
       isCancelled = true;
     };
   }, [currentConversationId]);
-  
-  // Initialize useChat for active conversation
-  const { messages, error, sendMessage, regenerate, status, setMessages, stop } = useChat({
-    transport: new DefaultChatTransport({
-      fetch: async (url, options) => {
-        const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
-        
-        const { gridSessionSecrets, gridSession } = await loadGridContextForX402({
-          getGridAccount: async () => {
-            const account = await gridClientService.getAccount();
-            return account ? {
-              authentication: account.authentication || account,
-              address: account.address
-            } : null;
-          },
-          getSessionSecrets: async () => {
-            return await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
-          }
-        });
-        
-        const existingBody = JSON.parse(options?.body as string || '{}');
-        const enhancedBody = {
-          ...existingBody,
-          ...(gridSessionSecrets && gridSession ? { gridSessionSecrets, gridSession } : {})
-        };
-        
-        const fetchOptions: any = {
-          ...options,
-          body: JSON.stringify(enhancedBody),
-          headers: {
-            ...options?.headers,
-            'Authorization': `Bearer ${token}`,
-          }
-        };
-        return expoFetch(url.toString(), fetchOptions) as unknown as Promise<Response>;
-      },
-      api: generateAPIUrl('/api/chat'),
-      body: {
-        conversationId: currentConversationId || 'temp-loading',
-        clientContext: buildClientContext({
-          viewportWidth: viewportWidth || undefined,
-          getDeviceInfo: () => getDeviceInfo(viewportWidth),
-          walletBalance: walletBalance
-        })
-      },
-    }),
-    id: currentConversationId || 'temp-loading',
-    onError: error => console.error(error, 'AI Chat Error'),
-    experimental_throttle: 100,
-  });
 
   // Set initial messages after loading from database
   useEffect(() => {
