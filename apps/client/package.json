@@ -13,6 +13,7 @@
     "prebuild": "bun run generate-version && expo prebuild",
     "build:android": "bun run generate-version && eas build --platform android",
     "build:ios": "bun run generate-version && eas build --platform ios",
+    "postinstall": "bun run generate-version",
     "type-check": "tsc --noEmit",
     "test": "bun test",
     "test:unit": "bun test __tests__/unit/",

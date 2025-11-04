@@ -11,8 +11,18 @@ const version = packageJson.version;
 // Get git commit hash
 let commitHash = 'dev';
 try {
-  commitHash = execSync('git rev-parse HEAD').toString().trim();
-  console.log('✅ Generated version file with commit:', commitHash.substring(0, 7));
+  // Try from environment variable first (for CI/CD)
+  if (process.env.VERCEL_GIT_COMMIT_SHA) {
+    commitHash = process.env.VERCEL_GIT_COMMIT_SHA;
+    console.log('✅ Using Vercel commit hash:', commitHash.substring(0, 7));
+  } else if (process.env.GITHUB_SHA) {
+    commitHash = process.env.GITHUB_SHA;
+    console.log('✅ Using GitHub commit hash:', commitHash.substring(0, 7));
+  } else {
+    // Fall back to git command
+    commitHash = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+    console.log('✅ Generated version file with commit:', commitHash.substring(0, 7));
+  }
 } catch (error) {
   console.warn('⚠️  Could not get git commit hash, using "dev"');
 }
