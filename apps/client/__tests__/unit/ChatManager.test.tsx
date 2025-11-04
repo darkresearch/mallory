@@ -52,10 +52,11 @@ describe('ChatManager Component', () => {
       const filePath = path.join(__dirname, '../../components/chat/ChatManager.tsx');
       const fileContent = fs.readFileSync(filePath, 'utf-8');
       
-      expect(fileContent).toContain('storage');
-      expect(fileContent).toContain('CURRENT_CONVERSATION_ID');
+      // ChatManager now uses ActiveConversationContext instead of direct storage access
+      expect(fileContent).toContain('useActiveConversationContext');
+      expect(fileContent).toContain('conversationId');
       
-      console.log('✅ Manages conversation state from storage');
+      console.log('✅ Manages conversation state from context');
     });
   });
 
