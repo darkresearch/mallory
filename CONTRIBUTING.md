@@ -1,179 +1,92 @@
 # Contributing to Mallory
 
-Thank you for your interest in contributing to Mallory! This guide will help you get started.
+Thank you for your interest in contributing to Mallory! This document provides guidelines for contributing.
 
-## 🏗️ Monorepo Structure
+## Getting Started
 
-Mallory is organized as a Bun workspace monorepo:
+1. Fork the repository
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/mallory.git`
+3. Install dependencies: `bun install`
+4. Create a branch: `git checkout -b feature/your-feature-name`
 
-```
-mallory/
-├── apps/
-│   ├── client/          # React Native app
-│   └── server/          # Backend API
-├── packages/
-│   └── shared/          # Shared TypeScript types
-└── package.json         # Workspace config
-```
+## Development Workflow
 
-## 🚀 Development Setup
+### Running the App
 
-### Prerequisites
-- Node.js 18+ or Bun
-- Git
-- For native development: Xcode (iOS) or Android Studio (Android)
-
-### Installation
-
-1. **Fork and clone:**
 ```bash
-git clone https://github.com/your-username/mallory.git
-cd mallory
-```
-
-2. **Install dependencies:**
-```bash
-bun install
-```
-
-3. **Set up environment variables:**
-```bash
-# Client
-cp apps/client/.env.example apps/client/.env
-# Edit apps/client/.env with your credentials
-
-# Server
-cp apps/server/.env.example apps/server/.env
-# Edit apps/server/.env with your API keys
-```
-
-4. **Start development servers:**
-```bash
-# Both client and server
-bun run dev
-
-# Or separately
-bun run client  # Client web dev server
-bun run server  # Backend API server
-```
-
-## 📝 Making Changes
-
-### Code Style
-- Use TypeScript for all new code
-- Follow existing code conventions
-- Run type checking before committing: `bun run type-check`
-
-### Commit Messages
-Follow conventional commits:
-```
-feat: Add new feature
-fix: Fix bug
-docs: Update documentation
-refactor: Refactor code
-test: Add tests
-chore: Update dependencies
-```
-
-### Branch Strategy
-- `main` - Production-ready code
-- `develop` - Development branch
-- `feature/*` - New features
-- `fix/*` - Bug fixes
-
-## 🔍 Pull Request Process
-
-1. **Create a feature branch:**
-```bash
-git checkout -b feature/your-feature-name
-```
-
-2. **Make your changes:**
-- Write clear, concise code
-- Add comments for complex logic
-- Update documentation if needed
-
-3. **Test your changes:**
-```bash
-# Type check
-cd apps/client && bun run type-check
-cd apps/server && bun run type-check
-
-# Test client (web)
+# Start client (web)
 cd apps/client && bun run web
 
-# Test server
+# Start server
 cd apps/server && bun run dev
+
+# Run both (from root)
+bun run dev
 ```
 
-4. **Commit and push:**
+### Making Changes
+
+1. Make your changes in a feature branch
+2. Test your changes thoroughly
+3. Commit with clear, descriptive messages
+4. Push to your fork
+5. Open a Pull Request
+
+## Pull Request Guidelines
+
+### PR Title Format
+
+Use conventional commit format:
+- `feat: add new feature`
+- `fix: resolve bug`
+- `docs: update documentation`
+- `chore: update dependencies`
+
+### Version Releases
+
+To trigger a version bump and release, add `[release: vX.Y.Z]` to your PR title:
+
+```
+feat: add wallet history [release: v0.2.0]
+```
+
+When merged to `main`:
+- ✅ All packages bump to the new version
+- ✅ Git tag created automatically
+- ✅ GitHub release generated with changelog
+
+Follow [Semantic Versioning](https://semver.org/):
+- **MAJOR** (1.0.0): Breaking changes
+- **MINOR** (0.1.0): New features, backwards compatible
+- **PATCH** (0.0.1): Bug fixes, backwards compatible
+
+## Code Style
+
+- Use TypeScript for type safety
+- Follow existing code formatting
+- Add comments for complex logic
+- Write descriptive variable names
+
+## Testing
+
 ```bash
-git add .
-git commit -m "feat: your feature description"
-git push origin feature/your-feature-name
+# Run unit tests
+cd apps/client && bun test:unit
+
+# Run integration tests
+cd apps/client && bun test:integration
+
+# Run E2E tests
+bun test:e2e:web
 ```
 
-5. **Open pull request:**
-- Clear description of changes
-- Reference any related issues
-- Include screenshots for UI changes
+## Version Management
 
-## 🧩 Working with Packages
+All packages in the monorepo maintain synchronized versions. See [VERSION.md](../VERSION.md) for details.
 
-### Client (apps/client/)
-React Native app using Expo.
+## Questions?
 
-**Key directories:**
-- `app/` - Expo Router screens
-- `components/` - Reusable components
-- `features/` - Feature modules (chat, wallet, grid)
-- `contexts/` - React contexts
-- `hooks/` - Custom hooks
-- `lib/` - Utilities and configuration
+- Open an issue for bugs or feature requests
+- Reach out to hello@darkresearch.ai for questions
 
-### Server (apps/server/)
-Express.js backend API.
-
-**Key directories:**
-- `src/routes/` - API endpoint handlers
-- `src/middleware/` - Express middleware
-- `src/lib/` - Utilities and services
-
-### Shared (packages/shared/)
-Shared TypeScript types.
-
-**Key files:**
-- `src/types/api.ts` - API request/response types
-- `src/types/wallet.ts` - Wallet-related types
-
-## 🐛 Reporting Issues
-
-Before creating an issue:
-1. Check if the issue already exists
-2. Provide clear reproduction steps
-3. Include environment details (OS, Node version, etc.)
-4. Add relevant error messages/logs
-
-## 💡 Feature Requests
-
-We welcome feature requests! Please:
-1. Check existing discussions first
-2. Clearly describe the use case
-3. Explain why it benefits the community
-4. Consider contributing the implementation
-
-## 🔐 Security
-
-Found a security issue? Please email hello@darkresearch.ai instead of creating a public issue.
-
-## 📄 License
-
-By contributing, you agree that your contributions will be licensed under the Apache License 2.0.
-
-## 🙏 Questions?
-
-- GitHub Discussions: https://github.com/darkresearch/mallory/discussions
-- Email: hello@darkresearch.ai
-
-Thank you for contributing to Mallory! 🚀
-
+Thank you for contributing! 🙏

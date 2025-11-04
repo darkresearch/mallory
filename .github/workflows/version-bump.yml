@@ -1,0 +1,86 @@
+name: Auto Version Bump on Release PR
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    # Only run if PR was merged and title contains [release: v*.*.*]
+    if: |
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.title, '[release: v')
+    
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      
+      - name: Extract version from PR title
+        id: extract_version
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          echo "PR Title: $PR_TITLE"
+          
+          # Extract version from [release: vX.Y.Z] format
+          VERSION=$(echo "$PR_TITLE" | grep -oP '(?<=\[release: v)[0-9]+\.[0-9]+\.[0-9]+(?=\])')
+          
+          if [ -z "$VERSION" ]; then
+            echo "❌ No valid version found in PR title"
+            echo "Expected format: [release: vX.Y.Z]"
+            exit 1
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "✅ Extracted version: $VERSION"
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Bump version in all packages
+        run: |
+          echo "📦 Syncing all packages to version ${{ steps.extract_version.outputs.version }}"
+          bun scripts/sync-version.js ${{ steps.extract_version.outputs.version }}
+          
+          echo "✅ Version bump complete"
+      
+      - name: Commit version changes
+        run: |
+          git add package.json apps/*/package.json packages/*/package.json
+          git commit -m "chore: bump version to ${{ steps.extract_version.outputs.version }} [skip ci]"
+      
+      - name: Create and push tag
+        run: |
+          git tag ${{ steps.extract_version.outputs.tag }}
+          git push origin main
+          git push origin ${{ steps.extract_version.outputs.tag }}
+          
+          echo "✅ Pushed commit and tag ${{ steps.extract_version.outputs.tag }}"
+          echo "🚀 GitHub release will be created automatically"
+      
+      - name: Output summary
+        run: |
+          echo "## 🎉 Version Bump Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ steps.extract_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag**: ${{ steps.extract_version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The release workflow will now create a GitHub release automatically." >> $GITHUB_STEP_SUMMARY
+
