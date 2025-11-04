@@ -9,7 +9,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import '../setup/test-env';
 
-// Mock storage
+// Mock storage BEFORE any imports
 const mockStorage = {
   getItem: mock(async (key: string) => null),
   setItem: mock(async (key: string, value: string) => {}),
@@ -26,8 +26,9 @@ mock.module('@/lib/storage', () => ({
   },
 }));
 
-// Import after mocking
-const { ActiveConversationProvider, useActiveConversationContext } = await import('@/contexts/ActiveConversationContext');
+// Import after mocking - use require for better compatibility
+const ActiveConversationModule = require('@/contexts/ActiveConversationContext');
+const { ActiveConversationProvider, useActiveConversationContext } = ActiveConversationModule;
 
 describe('ActiveConversationProvider Context', () => {
   beforeEach(() => {
