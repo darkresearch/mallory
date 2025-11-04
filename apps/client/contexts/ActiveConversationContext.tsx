@@ -29,7 +29,8 @@ export function ActiveConversationProvider({ children }: ActiveConversationProvi
     storage.persistent.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID)
       .then((id) => {
         console.log('✅ [ActiveConversationProvider] Loaded from storage:', id);
-        setConversationId(id);
+        // Only set if we don't already have a value (prevents race condition with useActiveConversation)
+        setConversationId((prevId) => prevId || id);
       })
       .catch((error) => {
         console.error('❌ [ActiveConversationProvider] Error loading from storage:', error);
