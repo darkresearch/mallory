@@ -67,7 +67,7 @@ export default function RootLayout() {
               <ActiveConversationProvider>
                 <DataPreloader />
                 <ChatManager />
-                <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any }}>
+                <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any, overflow: 'hidden' }}>
                   <Stack
                     screenOptions={{
                       headerShown: false,
