@@ -79,12 +79,6 @@ jobs:
             REASON="Manual workflow trigger"
           fi
           
-          # Always run on main branch (post-merge validation)
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            SHOULD_RUN="true"
-            REASON="Automatic run on main branch"
-          fi
-          
           echo "should-run=$SHOULD_RUN" >> $GITHUB_OUTPUT
           echo "reason=$REASON" >> $GITHUB_OUTPUT
           
