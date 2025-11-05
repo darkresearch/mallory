@@ -8,7 +8,7 @@
  */
 
 // @ts-nocheck - Suppress monorepo React version mismatch errors
-import React, { createContext, useContext, useState, useCallback, ComponentProps } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, ComponentProps } from 'react';
 import { 
   View, 
   Text, 
@@ -21,6 +21,8 @@ import {
   Dimensions,
   Platform
 } from 'react-native';
+import { createPortal } from 'react-dom';
+import { useFloating, autoUpdate, offset, flip, shift } from '@floating-ui/react-dom';
 import { Ionicons } from '@expo/vector-icons';
 
 // ============================================================================
@@ -90,6 +92,11 @@ interface CitationCardContextValue {
   isVisible: boolean;
   showCard: () => void;
   hideCard: () => void;
+  refs?: any;
+  floatingStyles?: any;
+  hideTimeoutRef?: React.MutableRefObject<NodeJS.Timeout | null>;
+  scheduleHide: () => void;
+  cancelHide: () => void;
 }
 
 const CitationCardContext = createContext<CitationCardContextValue | undefined>(undefined);
@@ -151,12 +158,74 @@ export const InlineCitationText = ({ children, style, ...props }: InlineCitation
  */
 export const InlineCitationCard = ({ children }: InlineCitationCardProps) => {
   const [isVisible, setIsVisible] = useState(false);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const showCard = useCallback(() => setIsVisible(true), []);
-  const hideCard = useCallback(() => setIsVisible(false), []);
+  const showCard = useCallback(() => {
+    // Cancel any pending hide when showing
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+    setIsVisible(true);
+  }, []);
+
+  const hideCard = useCallback(() => {
+    setIsVisible(false);
+  }, []);
+
+  // Schedule hide with delay
+  const scheduleHide = useCallback(() => {
+    // Clear any existing timeout
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+    }
+    // Set new timeout
+    hideTimeoutRef.current = setTimeout(() => {
+      setIsVisible(false);
+      hideTimeoutRef.current = null;
+    }, 150); // 150ms delay
+  }, []);
+
+  // Cancel scheduled hide
+  const cancelHide = useCallback(() => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Floating UI setup for smart positioning
+  const { refs, floatingStyles } = useFloating({
+    placement: 'bottom-start',
+    middleware: [
+      offset(8),
+      flip(),
+      shift({ padding: 8 })
+    ],
+    whileElementsMounted: autoUpdate,
+    open: isVisible,
+  });
 
   return (
-    <CitationCardContext.Provider value={{ isVisible, showCard, hideCard }}>
+    <CitationCardContext.Provider value={{ 
+      isVisible, 
+      showCard, 
+      hideCard, 
+      refs, 
+      floatingStyles,
+      hideTimeoutRef,
+      scheduleHide,
+      cancelHide
+    }}>
       <View style={styles.citationCardContainer}>
         {children}
       </View>
@@ -170,7 +239,7 @@ export const InlineCitationCard = ({ children }: InlineCitationCardProps) => {
  * On hover (web) or long press (mobile): Shows citation details
  */
 export const InlineCitationCardTrigger = ({ sources }: InlineCitationCardTriggerProps) => {
-  const { showCard, hideCard } = useCitationCard();
+  const { showCard, refs, scheduleHide, cancelHide } = useCitationCard();
   
   const getHostname = (url: string) => {
     try {
@@ -194,6 +263,16 @@ export const InlineCitationCardTrigger = ({ sources }: InlineCitationCardTrigger
     showCard();
   }, [showCard]);
 
+  // Hover handlers with delay
+  const handleHoverIn = useCallback(() => {
+    cancelHide(); // Cancel any pending hide
+    showCard();
+  }, [showCard, cancelHide]);
+
+  const handleHoverOut = useCallback(() => {
+    scheduleHide(); // Start delayed hide
+  }, [scheduleHide]);
+
   const hostname = sources.length > 0 ? getHostname(sources[0]) : 'unknown';
   const additionalCount = sources.length > 1 ? ` +${sources.length - 1}` : '';
 
@@ -201,11 +280,12 @@ export const InlineCitationCardTrigger = ({ sources }: InlineCitationCardTrigger
   if (Platform.OS === 'web') {
     return (
       <Pressable 
+        ref={refs?.setReference}
         style={styles.badge}
         onPress={handlePress}
         // @ts-ignore - onHoverIn/onHoverOut are web-only
-        onHoverIn={showCard}
-        onHoverOut={hideCard}
+        onHoverIn={handleHoverIn}
+        onHoverOut={handleHoverOut}
       >
         <Text style={styles.badgeText}>
           {hostname}{additionalCount}
@@ -231,25 +311,37 @@ export const InlineCitationCardTrigger = ({ sources }: InlineCitationCardTrigger
 
 /**
  * InlineCitationCardBody - The modal/popover content
- * On web: Shows as a popover below the badge on hover
+ * On web: Shows as a popover with Floating UI positioning and React Portal
  * On mobile: Shows as a modal on long press
  */
 export const InlineCitationCardBody = ({ children }: InlineCitationCardBodyProps) => {
-  const { isVisible, hideCard } = useCitationCard();
+  const { isVisible, hideCard, refs, floatingStyles, scheduleHide, cancelHide } = useCitationCard();
 
   if (!isVisible) {
     return null;
   }
 
-  // On web, show as an absolute-positioned popover
-  if (Platform.OS === 'web') {
-    return (
-      <View style={styles.webPopover}>
-        <View style={styles.cardBody}>
-          {children}
+  // On web, show as a portal-rendered popover with Floating UI positioning
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    const popoverContent = (
+      <div
+        ref={refs?.setFloating}
+        style={{
+          ...floatingStyles,
+          zIndex: 1000,
+        }}
+        onMouseEnter={cancelHide}
+        onMouseLeave={scheduleHide}
+      >
+        <View style={styles.webPopover}>
+          <View style={styles.cardBody}>
+            {children}
+          </View>
         </View>
-      </View>
+      </div>
     );
+
+    return createPortal(popoverContent, document.body);
   }
 
   // On mobile, show as a full-screen modal
@@ -516,11 +608,8 @@ const styles = StyleSheet.create({
     // letterSpacing: 0.50,
   },
   
-  // Web popover styles
+  // Web popover styles (positioning handled by Floating UI)
   webPopover: {
-    position: 'absolute',
-    top: 30, // Position below the badge
-    left: 0,
     width: 320,
     maxWidth: Dimensions.get('window').width * 0.9, // 90% of viewport width
     backgroundColor: '#151820',
@@ -531,7 +620,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    zIndex: 1000,
   },
 
   // Modal styles (mobile)
