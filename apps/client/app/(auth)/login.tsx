@@ -15,7 +15,7 @@ import { LAYOUT, config } from '@/lib';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, isSigningIn } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { width } = useWindowDimensions();
@@ -34,8 +34,20 @@ export default function LoginScreen() {
   const termsOpacity = useSharedValue(0);
   const termsTranslateY = useSharedValue(20);
 
-  // Trigger entrance animations on mount
+  // Trigger entrance animations on mount (but skip if signing in to prevent replay)
   useEffect(() => {
+    // If user is in the middle of OAuth flow, skip animations to prevent replay
+    if (isSigningIn) {
+      console.log('🎬 Skipping login animations (OAuth in progress)');
+      textOpacity.value = 1;
+      textTranslateY.value = 0;
+      buttonsOpacity.value = 1;
+      buttonsTranslateY.value = 0;
+      termsOpacity.value = 1;
+      termsTranslateY.value = 0;
+      return;
+    }
+
     const fadeInConfig = {
       duration: 1200,
       easing: Easing.out(Easing.cubic),
@@ -52,7 +64,7 @@ export default function LoginScreen() {
     // Fade in terms (300ms after text starts)
     termsOpacity.value = withDelay(300, withTiming(1, fadeInConfig));
     termsTranslateY.value = withDelay(300, withTiming(0, fadeInConfig));
-  }, []);
+  }, [isSigningIn]);
 
   // Fix background color for mobile Safari (and other web browsers)
   useEffect(() => {
