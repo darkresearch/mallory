@@ -34,7 +34,6 @@ export function ChatInput({
   const [text, setText] = useState('');
   const [height, setHeight] = useState(44); // Starting height as specified
   const textInputRef = useRef<TextInput>(null);
-  const draftSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Load draft message when conversation changes
   useEffect(() => {
@@ -65,15 +64,6 @@ export function ChatInput({
       onPendingMessageCleared?.();
     }
   }, [pendingMessage, onPendingMessageCleared]);
-  
-  // Cleanup draft save timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (draftSaveTimeoutRef.current) {
-        clearTimeout(draftSaveTimeoutRef.current);
-      }
-    };
-  }, []);
 
   const handleSend = async () => {
     const messageText = text.trim();
@@ -123,18 +113,10 @@ export function ChatInput({
       return;
     }
 
-    // Debounce draft message saving
+    // Save draft immediately (no debounce)
     if (conversationId) {
-      // Clear existing timeout
-      if (draftSaveTimeoutRef.current) {
-        clearTimeout(draftSaveTimeoutRef.current);
-      }
-      
-      // Save draft after 500ms of no typing
-      draftSaveTimeoutRef.current = setTimeout(() => {
-        console.log('💾 [ChatInput] Saving draft message');
-        saveDraftMessage(conversationId, newText);
-      }, 500);
+      console.log('💾 [ChatInput] Saving draft message');
+      saveDraftMessage(conversationId, newText);
     }
 
     // Let onContentSizeChange handle all height adjustments based on native measurement
