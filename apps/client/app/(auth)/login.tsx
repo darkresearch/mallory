@@ -48,6 +48,15 @@ export default function LoginScreen() {
       return;
     }
 
+    // Reset to initial values before animating to ensure animations are visible
+    // This handles the case where isSigningIn changes from true->false (OAuth failure/return)
+    textOpacity.value = 0;
+    textTranslateY.value = 20;
+    buttonsOpacity.value = 0;
+    buttonsTranslateY.value = 20;
+    termsOpacity.value = 0;
+    termsTranslateY.value = 20;
+
     const fadeInConfig = {
       duration: 1200,
       easing: Easing.out(Easing.cubic),
