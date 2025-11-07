@@ -40,6 +40,39 @@ interface ReasoningPart {
 type MessagePart = ToolCallPart | ToolResultPart | TextPart | ReasoningPart | any;
 
 /**
+ * Convert reasoning parts to thinking parts for Anthropic API compatibility
+ * The AI SDK uses 'reasoning' internally, but Anthropic's extended thinking API expects 'thinking'
+ */
+export function convertReasoningToThinking(messages: UIMessage[]): UIMessage[] {
+  return messages.map(message => {
+    if (!message.parts || !Array.isArray(message.parts)) {
+      return message;
+    }
+
+    const convertedParts = message.parts.map(part => {
+      // Convert reasoning parts to thinking parts
+      if (part.type === 'reasoning' || part.type === 'reasoning-delta') {
+        return {
+          ...part,
+          type: 'thinking'
+        };
+      }
+      return part;
+    });
+
+    // Only create a new message object if we actually changed something
+    if (convertedParts.some((p, i) => p !== message.parts![i])) {
+      return {
+        ...message,
+        parts: convertedParts
+      };
+    }
+
+    return message;
+  });
+}
+
+/**
  * Check if a message has tool-call parts that need tool-result responses
  */
 function hasUnmatchedToolCalls(message: UIMessage): boolean {
@@ -70,6 +103,13 @@ function hasUnmatchedToolCalls(message: UIMessage): boolean {
 }
 
 /**
+ * Check if a message part is a thinking/reasoning block
+ */
+function isThinkingPart(part: MessagePart): boolean {
+  return part.type === 'reasoning' || part.type === 'thinking' || part.type === 'redacted_thinking';
+}
+
+/**
  * Extract tool calls from a message's parts
  */
 function extractToolCalls(parts: MessagePart[]): ToolCallPart[] {
@@ -88,6 +128,74 @@ function extractToolResults(parts: MessagePart[]): ToolResultPart[] {
  */
 function removeToolParts(parts: MessagePart[]): MessagePart[] {
   return parts.filter(p => p.type !== 'tool-call' && p.type !== 'tool-result');
+}
+
+/**
+ * Ensure assistant messages comply with thinking block requirements
+ * When extended thinking is enabled, assistant messages with tool calls must start with a thinking block
+ * before any tool_use blocks.
+ * 
+ * Per Anthropic's extended thinking API requirements:
+ * "When `thinking` is enabled, a final `assistant` message must start with a thinking block
+ * (preceeding the lastmost set of `tool_use` and `tool_result` blocks)."
+ * 
+ * This function ensures all assistant messages with tool calls have thinking blocks properly positioned.
+ */
+function ensureThinkingBlockCompliance(messages: UIMessage[]): UIMessage[] {
+  if (messages.length === 0) return messages;
+
+  const result: UIMessage[] = [];
+  
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i];
+    
+    // Only process assistant messages
+    if (message.role !== 'assistant' || !message.parts || !Array.isArray(message.parts)) {
+      result.push(message);
+      continue;
+    }
+
+    // Check if this message has tool calls
+    const hasToolCalls = message.parts.some(p => p.type === 'tool-call');
+    
+    if (!hasToolCalls) {
+      // No tool calls, no special handling needed
+      result.push(message);
+      continue;
+    }
+    
+    // Message has tool calls - ensure thinking block is first
+    const hasThinkingAtStart = message.parts.length > 0 && isThinkingPart(message.parts[0]);
+    
+    if (hasThinkingAtStart) {
+      // Already compliant
+      result.push(message);
+      continue;
+    }
+    
+    // Need to fix: either reorder or add a placeholder thinking block
+    const thinkingBlocks = message.parts.filter(isThinkingPart);
+    const nonThinkingParts = message.parts.filter(p => !isThinkingPart(p));
+    
+    if (thinkingBlocks.length > 0) {
+      // Reorder: thinking blocks first, then everything else
+      console.log(`🔧 [Message ${i}] Reordering thinking blocks to start of message for extended thinking compliance`);
+      const reorderedMessage = {
+        ...message,
+        parts: [...thinkingBlocks, ...nonThinkingParts]
+      };
+      result.push(reorderedMessage);
+    } else {
+      // No thinking blocks found, but tool calls present
+      // This is the problematic case that causes the error
+      console.warn(`⚠️ [Message ${i}] Assistant message has tool calls but no thinking block - this may cause API errors with extended thinking enabled`);
+      // For now, just push as-is and let the API error be caught
+      // In a future enhancement, we could add a synthetic thinking block here
+      result.push(message);
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -239,7 +347,9 @@ export function ensureToolMessageStructure(messages: UIMessage[]): UIMessage[] {
     result.push(message);
   }
 
-  return result;
+  // After fixing tool structure, ensure thinking blocks are properly ordered
+  // for extended thinking compliance
+  return ensureThinkingBlockCompliance(result);
 }
 
 /**

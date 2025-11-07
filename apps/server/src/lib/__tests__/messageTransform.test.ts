@@ -8,6 +8,7 @@ import { UIMessage } from 'ai';
 import { 
   ensureToolMessageStructure, 
   validateToolMessageStructure,
+  convertReasoningToThinking,
 } from '../messageTransform';
 
 describe('messageTransform', () => {
@@ -568,6 +569,271 @@ describe('messageTransform', () => {
         m.parts?.some(p => p.type === 'tool-result')
       );
       expect(userWithResult).toBeDefined();
+    });
+  });
+
+  describe('convertReasoningToThinking', () => {
+    test('converts reasoning parts to thinking parts', () => {
+      const messages: UIMessage[] = [
+        {
+          id: '1',
+          role: 'assistant',
+          parts: [
+            { type: 'reasoning', text: 'Let me think about this...' },
+            { type: 'text', text: 'Here is my response' }
+          ],
+          content: 'Here is my response'
+        } as UIMessage,
+      ];
+
+      const result = convertReasoningToThinking(messages);
+      
+      expect(result[0].parts?.[0].type).toBe('thinking');
+      expect((result[0].parts?.[0] as any).text).toBe('Let me think about this...');
+      expect(result[0].parts?.[1].type).toBe('text');
+    });
+
+    test('converts reasoning-delta parts to thinking parts', () => {
+      const messages: UIMessage[] = [
+        {
+          id: '1',
+          role: 'assistant',
+          parts: [
+            { type: 'reasoning-delta', text: 'Partial thinking...' },
+            { type: 'text', text: 'Response' }
+          ],
+          content: 'Response'
+        } as UIMessage,
+      ];
+
+      const result = convertReasoningToThinking(messages);
+      
+      expect(result[0].parts?.[0].type).toBe('thinking');
+      expect((result[0].parts?.[0] as any).text).toBe('Partial thinking...');
+    });
+
+    test('preserves messages without reasoning parts', () => {
+      const messages: UIMessage[] = [
+        {
+          id: '1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Hello' }],
+          content: 'Hello'
+        } as UIMessage,
+        {
+          id: '2',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Hi!' }],
+          content: 'Hi!'
+        } as UIMessage,
+      ];
+
+      const result = convertReasoningToThinking(messages);
+      
+      // Should be identical since no reasoning parts
+      expect(result).toEqual(messages);
+    });
+
+    test('handles mixed message types with reasoning', () => {
+      const messages: UIMessage[] = [
+        {
+          id: '1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Question?' }],
+          content: 'Question?'
+        } as UIMessage,
+        {
+          id: '2',
+          role: 'assistant',
+          parts: [
+            { type: 'reasoning', text: 'Analyzing...' },
+            { type: 'text', text: 'Let me search' },
+            { 
+              type: 'tool-call', 
+              toolCallId: 'call-1',
+              toolName: 'searchWeb',
+              args: {}
+            }
+          ],
+          content: 'Let me search'
+        } as UIMessage,
+        {
+          id: '3',
+          role: 'user',
+          parts: [
+            { 
+              type: 'tool-result', 
+              toolCallId: 'call-1',
+              toolName: 'searchWeb',
+              result: { data: 'results' }
+            }
+          ],
+          content: ''
+        } as UIMessage,
+        {
+          id: '4',
+          role: 'assistant',
+          parts: [
+            { type: 'reasoning', text: 'Now I can answer...' },
+            { type: 'text', text: 'Based on the results...' }
+          ],
+          content: 'Based on the results...'
+        } as UIMessage,
+      ];
+
+      const result = convertReasoningToThinking(messages);
+      
+      // User messages should be unchanged
+      expect(result[0]).toEqual(messages[0]);
+      expect(result[2]).toEqual(messages[2]);
+      
+      // Assistant messages should have reasoning converted to thinking
+      expect(result[1].parts?.[0].type).toBe('thinking');
+      expect((result[1].parts?.[0] as any).text).toBe('Analyzing...');
+      expect(result[1].parts?.[1].type).toBe('text');
+      expect(result[1].parts?.[2].type).toBe('tool-call');
+      
+      expect(result[3].parts?.[0].type).toBe('thinking');
+      expect((result[3].parts?.[0] as any).text).toBe('Now I can answer...');
+    });
+  });
+
+  describe('extended thinking API compliance', () => {
+    test('ensures assistant messages with tool calls have thinking blocks first', () => {
+      const messages: UIMessage[] = [
+        {
+          id: '1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Search for something' }],
+          content: 'Search for something'
+        } as UIMessage,
+        {
+          id: '2',
+          role: 'assistant',
+          parts: [
+            { type: 'text', text: 'Let me search' },
+            { type: 'reasoning', text: 'I should use searchWeb tool' },
+            { 
+              type: 'tool-call', 
+              toolCallId: 'call-1',
+              toolName: 'searchWeb',
+              args: { query: 'test' }
+            }
+          ],
+          content: 'Let me search'
+        } as UIMessage,
+      ];
+
+      // First convert reasoning to thinking
+      const withThinking = convertReasoningToThinking(messages);
+      // Then ensure proper structure
+      const result = ensureToolMessageStructure(withThinking);
+      
+      // Find the assistant message with tool call
+      const assistantMsg = result.find(m => 
+        m.role === 'assistant' && 
+        m.parts?.some(p => p.type === 'tool-call')
+      );
+      
+      expect(assistantMsg).toBeDefined();
+      // First part should be thinking block (was reasoning, now thinking)
+      expect(assistantMsg!.parts![0].type).toBe('thinking');
+    });
+
+    test('handles case where assistant message has tool call but no reasoning', () => {
+      const messages: UIMessage[] = [
+        {
+          id: '1',
+          role: 'assistant',
+          parts: [
+            { type: 'text', text: 'Searching...' },
+            { 
+              type: 'tool-call', 
+              toolCallId: 'call-1',
+              toolName: 'searchWeb',
+              args: {}
+            }
+          ],
+          content: 'Searching...'
+        } as UIMessage,
+      ];
+
+      const result = ensureToolMessageStructure(messages);
+      
+      // This case is problematic for extended thinking but should not crash
+      // The message should be preserved as-is with a warning
+      expect(result.length).toBe(1);
+      expect(result[0].parts?.some(p => p.type === 'tool-call')).toBe(true);
+    });
+
+    test('complete flow: reasoning conversion + structure fixing for extended thinking', () => {
+      // This simulates a real conversation where messages come from database
+      // with reasoning parts that need to be converted to thinking
+      const messages: UIMessage[] = [
+        {
+          id: '1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Analyze MOTHER token' }],
+          content: 'Analyze MOTHER token'
+        } as UIMessage,
+        {
+          id: '2',
+          role: 'assistant',
+          parts: [
+            { type: 'reasoning', text: 'I need to fetch flow intelligence data' },
+            { type: 'text', text: 'Let me fetch that data' },
+            { 
+              type: 'tool-call', 
+              toolCallId: 'call-1',
+              toolName: 'nansenFlowIntelligence',
+              args: { token_address: '0x123' }
+            },
+            { 
+              type: 'tool-result', 
+              toolCallId: 'call-1',
+              toolName: 'nansenFlowIntelligence',
+              result: { data: 'flow data' }
+            },
+            { type: 'reasoning', text: 'Now I can analyze the data' },
+            { type: 'text', text: 'Based on the flow intelligence...' }
+          ],
+          content: 'text'
+        } as UIMessage,
+      ];
+
+      // Step 1: Convert reasoning to thinking (for Anthropic API compatibility)
+      const withThinking = convertReasoningToThinking(messages);
+      
+      // Step 2: Fix tool structure (split interleaved tool calls and results)
+      const result = ensureToolMessageStructure(withThinking);
+      
+      // Should have more messages now (assistant with call, user with result, assistant with response)
+      expect(result.length).toBeGreaterThan(messages.length);
+      
+      // Find assistant message with tool call
+      const assistantWithCall = result.find(m => 
+        m.role === 'assistant' && 
+        m.parts?.some(p => p.type === 'tool-call')
+      );
+      expect(assistantWithCall).toBeDefined();
+      
+      // CRITICAL: First part should be thinking block (converted from reasoning)
+      expect(assistantWithCall!.parts![0].type).toBe('thinking');
+      expect((assistantWithCall!.parts![0] as any).text).toBe('I need to fetch flow intelligence data');
+      
+      // Tool result should be in a separate user message
+      const userWithResult = result.find(m => 
+        m.role === 'user' && 
+        m.parts?.some(p => p.type === 'tool-result')
+      );
+      expect(userWithResult).toBeDefined();
+      
+      // Final assistant response should have thinking block too
+      const finalAssistant = result[result.length - 1];
+      expect(finalAssistant.role).toBe('assistant');
+      const thinkingParts = finalAssistant.parts?.filter(p => p.type === 'thinking');
+      expect(thinkingParts).toBeDefined();
+      expect(thinkingParts!.length).toBeGreaterThan(0);
     });
   });
 });

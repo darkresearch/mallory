@@ -12,7 +12,7 @@ import { MALLORY_BASE_PROMPT, buildContextSection, buildVerbosityGuidelines, ONB
 import { buildComponentsGuidelines } from '../../../prompts/components.js';
 import { supabase } from '../../lib/supabase.js';
 import { saveUserMessage } from './persistence.js';
-import { ensureToolMessageStructure, validateToolMessageStructure, logMessageStructure } from '../../lib/messageTransform.js';
+import { ensureToolMessageStructure, validateToolMessageStructure, logMessageStructure, convertReasoningToThinking } from '../../lib/messageTransform.js';
 
 const router: Router = express.Router();
 
@@ -113,6 +113,11 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     } else {
       console.log('✅ Tool message structure is valid');
     }
+
+    // CRITICAL: Convert reasoning parts to thinking parts for extended thinking API compatibility
+    // The AI SDK uses 'reasoning' internally, but Anthropic's extended thinking API expects 'thinking'
+    console.log('🧠 Converting reasoning parts to thinking parts for Anthropic API compatibility...');
+    conversationMessages = convertReasoningToThinking(conversationMessages);
 
     // Save user messages immediately (before streaming starts)
     // This ensures messages persist even if the stream fails or client disconnects
