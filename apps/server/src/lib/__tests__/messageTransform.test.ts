@@ -9,6 +9,7 @@ import {
   ensureToolMessageStructure, 
   validateToolMessageStructure,
   convertReasoningToThinking,
+  ensureThinkingBlockCompliance,
 } from '../messageTransform';
 
 describe('messageTransform', () => {
@@ -728,9 +729,11 @@ describe('messageTransform', () => {
       const withThinking = convertReasoningToThinking(messages);
       // Then ensure proper structure
       const result = ensureToolMessageStructure(withThinking);
+      // Finally, ensure thinking block compliance (must be called separately)
+      const compliant = ensureThinkingBlockCompliance(result);
       
       // Find the assistant message with tool call
-      const assistantMsg = result.find(m => 
+      const assistantMsg = compliant.find(m => 
         m.role === 'assistant' && 
         m.parts?.some(p => p.type === 'tool-call')
       );
@@ -807,11 +810,14 @@ describe('messageTransform', () => {
       // Step 2: Fix tool structure (split interleaved tool calls and results)
       const result = ensureToolMessageStructure(withThinking);
       
+      // Step 3: Ensure thinking block compliance (must be called separately)
+      const compliant = ensureThinkingBlockCompliance(result);
+      
       // Should have more messages now (assistant with call, user with result, assistant with response)
-      expect(result.length).toBeGreaterThan(messages.length);
+      expect(compliant.length).toBeGreaterThan(messages.length);
       
       // Find assistant message with tool call
-      const assistantWithCall = result.find(m => 
+      const assistantWithCall = compliant.find(m => 
         m.role === 'assistant' && 
         m.parts?.some(p => p.type === 'tool-call')
       );
@@ -822,16 +828,16 @@ describe('messageTransform', () => {
       expect((assistantWithCall!.parts![0] as any).text).toBe('I need to fetch flow intelligence data');
       
       // Tool result should be in a separate user message
-      const userWithResult = result.find(m => 
+      const userWithResult = compliant.find(m => 
         m.role === 'user' && 
         m.parts?.some(p => p.type === 'tool-result')
       );
       expect(userWithResult).toBeDefined();
       
       // Final assistant response should have thinking block too
-      const finalAssistant = result[result.length - 1];
+      const finalAssistant = compliant[compliant.length - 1];
       expect(finalAssistant.role).toBe('assistant');
-      const thinkingParts = finalAssistant.parts?.filter(p => p.type === 'thinking');
+      const thinkingParts = finalAssistant.parts?.filter(p => (p as any).type === 'thinking');
       expect(thinkingParts).toBeDefined();
       expect(thinkingParts!.length).toBeGreaterThan(0);
     });
