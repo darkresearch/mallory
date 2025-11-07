@@ -107,9 +107,6 @@ CREATE POLICY "Users can delete messages in their conversations" ON messages
 CREATE INDEX IF NOT EXISTS idx_conversations_user_updated ON conversations(user_id, updated_at DESC);
 -- Compound index for loading messages in chronological order
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at);
--- Partial indexes for like/dislike queries (only index rows where true)
-CREATE INDEX IF NOT EXISTS idx_messages_liked ON messages(conversation_id, is_liked) WHERE is_liked = true;
-CREATE INDEX IF NOT EXISTS idx_messages_disliked ON messages(conversation_id, is_disliked) WHERE is_disliked = true;
 
 -- Insert a trigger to automatically update updated_at timestamps
 -- Function to update the updated_at timestamp
