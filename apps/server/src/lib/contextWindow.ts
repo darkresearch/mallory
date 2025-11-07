@@ -118,12 +118,17 @@ export function windowMessages(
 }
 
 /**
- * Truncate a tool result to fit within a token budget
+ * Truncate a tool result to fit within a token budget.
+ * 
+ * NOTE: This is a low-level utility. The main intelligent prioritization logic
+ * in enforceTokenBudget() dynamically calculates token limits based on priority
+ * and available budget, rather than using fixed cutoffs.
+ * 
  * @param result - The tool result to truncate
- * @param maxTokens - Maximum tokens for the result (default: 4000)
+ * @param maxTokens - Maximum tokens for the result (determined dynamically by caller)
  * @returns Truncated result with metadata
  */
-export function truncateToolResult(result: any, maxTokens: number = 4000): any {
+export function truncateToolResult(result: any, maxTokens: number): any {
   if (!result) return result;
   
   // If it's a simple value, return as-is
@@ -195,14 +200,18 @@ export function truncateToolResult(result: any, maxTokens: number = 4000): any {
 }
 
 /**
- * Truncate tool results in messages to fit within token budget
+ * Truncate tool results in messages to fit within token budget.
+ * 
+ * NOTE: This is a low-level utility for batch processing. The main intelligent
+ * prioritization logic in enforceTokenBudget() calculates limits dynamically.
+ * 
  * @param messages - Messages to process
- * @param maxTokensPerResult - Max tokens per tool result (default: 4000)
+ * @param maxTokensPerResult - Max tokens per tool result (determined by caller)
  * @returns Messages with truncated tool results
  */
 export function truncateToolResultsInMessages(
   messages: UIMessage[], 
-  maxTokensPerResult: number = 4000
+  maxTokensPerResult: number
 ): UIMessage[] {
   return messages.map(message => {
     if (!message.parts || !Array.isArray(message.parts)) {
@@ -356,9 +365,9 @@ export function enforceTokenBudget(
   
   console.log(`   Recent messages: ${recentTokens} tokens (${KEEP_RECENT_COUNT} messages)`);
   
-  // Strategy 1: Progressive truncation of older messages
-  // Sort older messages by priority (lowest priority first = truncate/remove first)
-  const sortedOlderMessages = [...olderMessages].sort((a, b) => a.score - b.score);
+  // Strategy 1: Fit as many high-priority older messages as possible
+  // Sort older messages by priority (highest priority first = keep first)
+  const sortedOlderMessages = [...olderMessages].sort((a, b) => b.score - a.score);
   
   const remainingBudget = maxTokens - recentTokens;
   console.log(`   Remaining budget for older messages: ${remainingBudget} tokens`);
@@ -366,90 +375,77 @@ export function enforceTokenBudget(
   const processedOlderMessages: UIMessage[] = [];
   let olderTokensAccumulated = 0;
   
+  // First pass: fit complete messages without truncation (highest priority first)
   for (const scoredMsg of sortedOlderMessages) {
     const { message, tokens, score } = scoredMsg;
     
-    // Check if we have room for this message
     if (olderTokensAccumulated + tokens <= remainingBudget) {
       // Fits completely - keep as-is
       processedOlderMessages.push(message);
       olderTokensAccumulated += tokens;
     } else {
-      // Doesn't fit - try progressive truncation
-      const hasToolResults = message.parts?.some(p => p.type === 'tool-result');
-      
-      if (hasToolResults) {
-        // Try truncating tool results progressively
-        const remainingSpace = remainingBudget - olderTokensAccumulated;
-        
-        if (remainingSpace > 500) {
-          // We have some space - truncate tool results to fit
-          const targetTokens = Math.min(remainingSpace - 100, 2000); // Max 2k for old tool results
-          const truncatedMessage = truncateToolResultsInMessage(message, targetTokens);
-          const truncatedTokens = estimateMessageTokens(truncatedMessage);
-          
-          if (truncatedTokens <= remainingSpace) {
-            processedOlderMessages.push(truncatedMessage);
-            olderTokensAccumulated += truncatedTokens;
-            truncatedToolResults = true;
-            console.log(`   Truncated old tool result: ${tokens} → ${truncatedTokens} tokens (score: ${Math.round(score)})`);
-          } else {
-            // Even truncated doesn't fit - skip this message
-            windowedMessages = true;
-            console.log(`   Dropped message: ${tokens} tokens (score: ${Math.round(score)}) - no space`);
-          }
-        } else {
-          // No space left - drop this message
-          windowedMessages = true;
-          console.log(`   Dropped message: ${tokens} tokens (score: ${Math.round(score)}) - budget exhausted`);
-        }
-      } else {
-        // Not a tool result message - check if we can fit it
-        if (olderTokensAccumulated + tokens <= remainingBudget) {
-          processedOlderMessages.push(message);
-          olderTokensAccumulated += tokens;
-        } else {
-          // Drop this message
-          windowedMessages = true;
-          console.log(`   Dropped message: ${tokens} tokens (score: ${Math.round(score)}) - no space`);
-        }
-      }
+      // Doesn't fit - we'll drop it (windowing)
+      windowedMessages = true;
+      console.log(`   Dropped message: ${tokens} tokens (score: ${Math.round(score)}) - doesn't fit`);
     }
   }
   
-  // Strategy 2: If still over budget, apply minimal truncation to recent messages
+  // Strategy 2: If still over budget, we need to drop recent messages or truncate
   currentTokens = olderTokensAccumulated + recentTokens;
   
   if (currentTokens > maxTokens) {
-    console.log(`⚠️  Still over budget (${currentTokens} tokens) - applying minimal truncation to recent messages`);
+    console.log(`⚠️  Still over budget (${currentTokens} tokens) - need to reduce recent context`);
     
-    // Find recent messages with tool results and truncate them slightly
-    const processedRecentMessages: UIMessage[] = recentMessages.map(({ message, tokens }) => {
-      const hasToolResults = message.parts?.some(p => p.type === 'tool-result');
-      
-      if (hasToolResults && currentTokens > maxTokens) {
-        // Apply light truncation (keep more data than old messages)
-        const truncated = truncateToolResultsInMessage(message, 4000);
-        const newTokens = estimateMessageTokens(truncated);
-        const saved = tokens - newTokens;
-        currentTokens -= saved;
-        truncatedToolResults = true;
-        console.log(`   Lightly truncated recent tool result: ${tokens} → ${newTokens} tokens`);
-        return truncated;
-      }
-      
-      return message;
-    });
+    const overage = currentTokens - maxTokens;
+    console.log(`   Need to save: ${overage} tokens`);
     
-    // Combine older and recent messages in correct order
-    processedMessages = [
-      ...processedOlderMessages.sort((a, b) => {
-        const aIdx = messages.findIndex(m => m.id === a.id);
-        const bIdx = messages.findIndex(m => m.id === b.id);
-        return aIdx - bIdx;
-      }),
-      ...processedRecentMessages
-    ];
+    // Calculate how much we need to truncate from recent tool results
+    const recentMessagesWithToolResults = recentMessages.filter(sm => 
+      sm.message.parts?.some(p => p.type === 'tool-result')
+    );
+    
+    if (recentMessagesWithToolResults.length > 0) {
+      // We have tool results to truncate - distribute the truncation across them
+      const tokensToSavePerResult = Math.ceil(overage / recentMessagesWithToolResults.length);
+      
+      const processedRecentMessages: UIMessage[] = recentMessages.map(({ message, tokens }) => {
+        const hasToolResults = message.parts?.some(p => p.type === 'tool-result');
+        
+        if (hasToolResults && currentTokens > maxTokens) {
+          // Calculate target: current size minus what we need to save
+          const targetTokens = Math.max(500, tokens - tokensToSavePerResult);
+          const truncated = truncateToolResultsInMessage(message, targetTokens);
+          const newTokens = estimateMessageTokens(truncated);
+          const saved = tokens - newTokens;
+          currentTokens -= saved;
+          truncatedToolResults = true;
+          console.log(`   Truncated recent tool result: ${tokens} → ${newTokens} tokens (saved ${saved})`);
+          return truncated;
+        }
+        
+        return message;
+      });
+      
+      // Combine older and recent messages in correct order
+      processedMessages = [
+        ...processedOlderMessages.sort((a, b) => {
+          const aIdx = messages.findIndex(m => m.id === a.id);
+          const bIdx = messages.findIndex(m => m.id === b.id);
+          return aIdx - bIdx;
+        }),
+        ...processedRecentMessages
+      ];
+    } else {
+      // No tool results to truncate in recent messages - will need emergency windowing
+      processedMessages = [
+        ...processedOlderMessages.sort((a, b) => {
+          const aIdx = messages.findIndex(m => m.id === a.id);
+          const bIdx = messages.findIndex(m => m.id === b.id);
+          return aIdx - bIdx;
+        }),
+        ...recentMessages.map(sm => sm.message)
+      ];
+    }
   } else {
     // Under budget - combine messages
     processedMessages = [
