@@ -29,6 +29,7 @@ export function buildStreamConfig(options: StreamConfigOptions) {
     messages: convertToModelMessages(processedMessages),
     system: systemPrompt,
     temperature: 0.7,
+    maxTokens: 4096, // Explicit output limit to prevent exceeding context window
     
     tools,
     

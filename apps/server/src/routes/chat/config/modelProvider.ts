@@ -11,7 +11,6 @@
 
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { UIMessage } from 'ai';
-import { withSupermemory } from '@supermemory/tools/ai-sdk';
 import { estimateTotalTokens } from '../../../lib/contextWindow';
 
 interface ModelProviderResult {
@@ -61,7 +60,8 @@ export function setupModelProvider(
   // - Short conversations: pass through efficiently
   // - Long conversations: compress via RAG/summarization
   // - Massive tool results: semantic extraction
-  console.log('🧠 Using Supermemory Memory Router (drop-in replacement, zero config)');
+  // User scoping via x-sm-user-id header enables user-specific memory access
+  console.log('🧠 Using Supermemory Infinite Chat Router');
   
   const infiniteChatProvider = createAnthropic({
     baseURL: 'https://api.supermemory.ai/v3/https://api.anthropic.com/v1',
@@ -73,12 +73,7 @@ export function setupModelProvider(
     },
   });
   
-  let model = infiniteChatProvider(claudeModel);
-  
-  // Wrap model with Supermemory User Profiles
-  // Adds user profile + query-based memory search
-  console.log('🧠 Wrapping model with Supermemory User Profiles (mode: full)');
-  model = withSupermemory(model, userId, { mode: 'full' });
+  const model = infiniteChatProvider(claudeModel);
   
   console.log('📤 Sending FULL conversation to Supermemory:', {
     messageCount: messages.length,
