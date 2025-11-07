@@ -78,7 +78,8 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    // Save original messages (before synthetic message) for client response
+    // Save original messages (before synthetic message AND before transformations)
+    // IMPORTANT: originalMessages preserves the display order for the client
     const originalMessages = messages.filter((msg: UIMessage) => msg.role !== 'system');
     
     // Filter out system messages (they're triggers, not conversation history)
@@ -91,6 +92,20 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       isOnboardingConversation
     });
 
+    // Save user messages immediately (before streaming starts)
+    // IMPORTANT: Save BEFORE transformations to preserve original display order
+    // This ensures messages persist even if the stream fails or client disconnects
+    const userMessages = conversationMessages.filter((msg: UIMessage) => msg.role === 'user');
+    const lastUserMessage = userMessages[userMessages.length - 1];
+    
+    if (lastUserMessage) {
+      console.log('💾 Saving user message immediately (with original part order):', lastUserMessage.id);
+      await saveUserMessage(conversationId, lastUserMessage);
+    }
+
+    // NOW apply transformations for Claude API (these only affect what we send TO Claude)
+    // The transformations below do NOT affect what the user sees or what gets saved to the database
+    
     // CRITICAL: Ensure tool_use and tool_result blocks are properly structured
     // Anthropic API requires tool_use in assistant messages followed by tool_result in user messages
     console.log('🔧 Checking tool message structure...');
@@ -118,16 +133,6 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     // The AI SDK uses 'reasoning' internally, but Anthropic's extended thinking API expects 'thinking'
     console.log('🧠 Converting reasoning parts to thinking parts for Anthropic API compatibility...');
     conversationMessages = convertReasoningToThinking(conversationMessages);
-
-    // Save user messages immediately (before streaming starts)
-    // This ensures messages persist even if the stream fails or client disconnects
-    const userMessages = conversationMessages.filter((msg: UIMessage) => msg.role === 'user');
-    const lastUserMessage = userMessages[userMessages.length - 1];
-    
-    if (lastUserMessage) {
-      console.log('💾 Saving user message immediately:', lastUserMessage.id);
-      await saveUserMessage(conversationId, lastUserMessage);
-    }
 
     // If system-initiated (proactive) and no messages, add synthetic user prompt
     // AI SDK requires at least one message - can't have just system prompt
