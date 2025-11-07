@@ -7,7 +7,7 @@ import Supermemory from 'supermemory';
  * Allows the agent to store and retrieve persistent information about users across conversations
  * 
  * Note: User profiles are automatically maintained from memories stored via addMemory.
- * Profiles are auto-injected into conversations via the withSupermemory middleware.
+ * User scoping is handled via x-sm-user-id header in the Supermemory Infinite Chat proxy.
  */
 
 interface AddMemoryResponse {
