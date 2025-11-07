@@ -256,6 +256,27 @@ CREATE TRIGGER create_user_profile_trigger
 ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
 ALTER PUBLICATION supabase_realtime ADD TABLE messages;
 
+-- Security: Restrict realtime broadcast subscriptions to user-specific channels only
+-- This prevents users from hijacking other users' broadcast channels
+-- Drop existing permissive policy if it exists
+DROP POLICY IF EXISTS "Authenticated users can receive broadcasts" ON realtime.messages;
+
+-- Create restrictive policy that enforces channel-level authorization
+CREATE POLICY "Users can only receive their own broadcasts" 
+ON realtime.messages
+FOR SELECT 
+TO authenticated
+USING (
+  -- Allow if channel name (topic) contains the authenticated user's ID
+  -- Format: conversations:user:{userId} or messages:user:{userId}
+  topic LIKE '%:user:' || (auth.uid())::text || '%'
+  OR
+  -- Allow public/shared channels that don't contain :user: pattern
+  topic NOT LIKE '%:user:%'
+);
+
+COMMENT ON POLICY "Users can only receive their own broadcasts" ON realtime.messages IS 'Prevents users from subscribing to other users'' private broadcast channels';
+
 -- Create a function to get conversation history with user info
 CREATE OR REPLACE FUNCTION get_conversation_with_messages(conv_id UUID)
 RETURNS TABLE(
