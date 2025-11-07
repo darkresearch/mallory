@@ -4,24 +4,23 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create users table for authentication
+-- Note: email, display_name, profile_picture come from auth.users metadata, not stored here
 CREATE TABLE IF NOT EXISTS users (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-    email TEXT,
-    display_name TEXT,
-    profile_picture TEXT,
-    instant_buy_amount DECIMAL DEFAULT 0,
-    instayield_enabled BOOLEAN DEFAULT false,
+    instant_buy_amount NUMERIC(10,4) DEFAULT 1.0 NOT NULL,
+    instayield_enabled BOOLEAN DEFAULT true,
     has_completed_onboarding BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT users_instant_buy_amount_check CHECK ((instant_buy_amount >= 0.01 AND instant_buy_amount <= 1000))
 );
 
 -- Create conversations table
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES auth.users NOT NULL,
-    title TEXT NOT NULL DEFAULT 'mallory-global',
-    token_ca TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+    user_id UUID REFERENCES auth.users ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    token_ca TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     metadata JSONB DEFAULT '{}'
@@ -31,55 +30,89 @@ CREATE TABLE IF NOT EXISTS conversations (
 CREATE TABLE IF NOT EXISTS messages (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     conversation_id UUID REFERENCES conversations ON DELETE CASCADE NOT NULL,
-    role TEXT NOT NULL, -- 'user', 'assistant', 'system', 'tool_use', 'tool_result'
-    content TEXT,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    metadata JSONB DEFAULT '{}'
+    is_liked BOOLEAN DEFAULT false,
+    is_disliked BOOLEAN DEFAULT false,
+    CONSTRAINT messages_role_check CHECK (role = ANY (ARRAY['user', 'assistant']))
 );
+
+COMMENT ON COLUMN messages.is_liked IS 'User indicated this was a good response';
+COMMENT ON COLUMN messages.is_disliked IS 'User indicated this was a poor response';
 
 -- Enable Row Level Security (RLS) for tables
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
--- Create policies for secure access
+-- Create policies for secure access (with idempotency via DROP IF EXISTS)
+DROP POLICY IF EXISTS "Users can view their own conversations" ON conversations;
 CREATE POLICY "Users can view their own conversations" ON conversations
     FOR SELECT TO authenticated
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own conversations" ON conversations;
 CREATE POLICY "Users can insert their own conversations" ON conversations
     FOR INSERT TO authenticated
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own conversations" ON conversations;
 CREATE POLICY "Users can update their own conversations" ON conversations
     FOR UPDATE TO authenticated
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own conversations" ON conversations;
 CREATE POLICY "Users can delete their own conversations" ON conversations
     FOR DELETE TO authenticated
     USING (auth.uid() = user_id);
 
+-- Use EXISTS for better performance than IN subquery
+DROP POLICY IF EXISTS "Users can view messages in their conversations" ON messages;
 CREATE POLICY "Users can view messages in their conversations" ON messages
     FOR SELECT TO authenticated
-    USING (conversation_id IN (SELECT id FROM conversations WHERE user_id = auth.uid()));
+    USING (EXISTS (
+        SELECT 1 FROM conversations 
+        WHERE conversations.id = messages.conversation_id 
+        AND conversations.user_id = auth.uid()
+    ));
 
+DROP POLICY IF EXISTS "Users can insert messages in their conversations" ON messages;
 CREATE POLICY "Users can insert messages in their conversations" ON messages
     FOR INSERT TO authenticated
-    WITH CHECK (conversation_id IN (SELECT id FROM conversations WHERE user_id = auth.uid()));
+    WITH CHECK (EXISTS (
+        SELECT 1 FROM conversations 
+        WHERE conversations.id = messages.conversation_id 
+        AND conversations.user_id = auth.uid()
+    ));
 
+DROP POLICY IF EXISTS "Users can update messages in their conversations" ON messages;
 CREATE POLICY "Users can update messages in their conversations" ON messages
     FOR UPDATE TO authenticated
-    USING (conversation_id IN (SELECT id FROM conversations WHERE user_id = auth.uid()));
+    USING (EXISTS (
+        SELECT 1 FROM conversations 
+        WHERE conversations.id = messages.conversation_id 
+        AND conversations.user_id = auth.uid()
+    ));
 
+DROP POLICY IF EXISTS "Users can delete messages in their conversations" ON messages;
 CREATE POLICY "Users can delete messages in their conversations" ON messages
     FOR DELETE TO authenticated
-    USING (conversation_id IN (SELECT id FROM conversations WHERE user_id = auth.uid()));
+    USING (EXISTS (
+        SELECT 1 FROM conversations 
+        WHERE conversations.id = messages.conversation_id 
+        AND conversations.user_id = auth.uid()
+    ));
 
 -- Create indexes for better performance
+-- Compound indexes optimize common query patterns
 CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
-CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conversations_user_updated ON conversations(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at);
+-- Partial indexes for like/dislike queries
+CREATE INDEX IF NOT EXISTS idx_messages_liked ON messages(conversation_id, is_liked) WHERE is_liked = true;
+CREATE INDEX IF NOT EXISTS idx_messages_disliked ON messages(conversation_id, is_disliked) WHERE is_disliked = true;
 
 -- Insert a trigger to automatically update updated_at timestamps
 -- Function to update the updated_at timestamp
@@ -104,74 +137,140 @@ CREATE TRIGGER update_messages_updated_at
     BEFORE UPDATE ON messages
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Insert trigger to notify about conversation changes (for real-time updates)
-CREATE OR REPLACE FUNCTION handle_conversations_changes()
+-- Trigger to update conversation timestamp when messages change
+CREATE OR REPLACE FUNCTION update_conversation_on_message_change()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Notify about conversation changes
-  IF (TG_OP = 'INSERT') THEN
-    -- Send notification when conversation is inserted
-    PERFORM pg_notify('conversations_changes', json_build_object(
-      'type', 'insert',
-      'conversation_id', NEW.id,
-      'user_id', NEW.user_id
-    )::text);
-    RETURN NEW;
-  ELSIF (TG_OP = 'UPDATE') THEN
-    -- Send notification when conversation is updated
-    PERFORM pg_notify('conversations_changes', json_build_object(
-      'type', 'update',
-      'conversation_id', NEW.id,
-      'user_id', NEW.user_id,
-      'updated_at', NEW.updated_at
-    )::text);
-    RETURN NEW;
-  ELSIF (TG_OP = 'DELETE') THEN
-    -- Send notification when conversation is deleted
-    PERFORM pg_notify('conversations_changes', json_build_object(
-      'type', 'delete',
-      'conversation_id', OLD.id,
-      'user_id', OLD.user_id
-    )::text);
-    RETURN OLD;
-  END IF;
-  RETURN NULL; -- Result is ignored since this is an AFTER trigger
+    UPDATE conversations 
+    SET updated_at = NOW() 
+    WHERE id = COALESCE(NEW.conversation_id, OLD.conversation_id);
+    
+    RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION update_conversation_on_message_change() IS 'Updates conversation timestamp when messages are added/updated/deleted';
+
+CREATE TRIGGER update_conversation_on_message_change
+    AFTER INSERT OR UPDATE OR DELETE ON messages
+    FOR EACH ROW EXECUTE FUNCTION update_conversation_on_message_change();
+
+-- Function to broadcast conversation changes for real-time updates
+CREATE OR REPLACE FUNCTION conversations_changes()
+RETURNS TRIGGER
+SECURITY DEFINER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  -- Broadcast to user-specific channel for real-time updates
+  PERFORM realtime.broadcast_changes(
+    'conversations:user:' || COALESCE(NEW.user_id, OLD.user_id),
+    TG_OP,                -- event (INSERT, UPDATE, DELETE)
+    TG_OP,                -- operation 
+    TG_TABLE_NAME,        -- table name
+    TG_TABLE_SCHEMA,      -- schema name
+    NEW,                  -- new record (null for DELETE)
+    OLD                   -- old record (null for INSERT)
+  );
+  
+  -- Log for debugging
+  RAISE LOG 'Conversations broadcast sent: % for user % conversation %', 
+    TG_OP, 
+    COALESCE(NEW.user_id, OLD.user_id),
+    COALESCE(NEW.id, OLD.id);
+  
+  RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+COMMENT ON FUNCTION conversations_changes() IS 'Broadcasts conversation changes to user-specific channels for real-time chat history updates';
 
 -- Create trigger for conversations changes
-DROP TRIGGER IF EXISTS on_conversations_changes on conversations;
-CREATE TRIGGER on_conversations_changes
+DROP TRIGGER IF EXISTS handle_conversations_changes ON conversations;
+CREATE TRIGGER handle_conversations_changes
     AFTER INSERT OR UPDATE OR DELETE ON conversations
-    FOR EACH ROW EXECUTE FUNCTION handle_conversations_changes();
+    FOR EACH ROW EXECUTE FUNCTION conversations_changes();
+
+COMMENT ON TRIGGER handle_conversations_changes ON conversations IS 'Triggers real-time broadcasts for conversation changes to keep chat history in sync';
+
+-- Function to broadcast message changes for real-time updates
+CREATE OR REPLACE FUNCTION messages_changes()
+RETURNS TRIGGER
+SECURITY DEFINER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  conversation_user_id UUID;
+BEGIN
+  -- Get the user_id from the conversation for targeted broadcasting
+  SELECT user_id INTO conversation_user_id
+  FROM conversations 
+  WHERE id = COALESCE(NEW.conversation_id, OLD.conversation_id);
+  
+  -- Broadcast to user-specific channel
+  PERFORM realtime.broadcast_changes(
+    'messages:user:' || conversation_user_id,
+    TG_OP,                -- event (INSERT, UPDATE, DELETE)
+    TG_OP,                -- operation 
+    TG_TABLE_NAME,        -- table name
+    TG_TABLE_SCHEMA,      -- schema name
+    NEW,                  -- new record (null for DELETE)
+    OLD                   -- old record (null for INSERT)
+  );
+  
+  -- Log for debugging
+  RAISE LOG 'Messages broadcast sent: % for conversation % user %', 
+    TG_OP, 
+    COALESCE(NEW.conversation_id, OLD.conversation_id),
+    conversation_user_id;
+  
+  RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+COMMENT ON FUNCTION messages_changes() IS 'Broadcasts message changes to user-specific channels for real-time chat updates';
+
+-- Create trigger for message changes
+DROP TRIGGER IF EXISTS handle_messages_changes ON messages;
+CREATE TRIGGER handle_messages_changes
+    AFTER INSERT OR UPDATE OR DELETE ON messages
+    FOR EACH ROW EXECUTE FUNCTION messages_changes();
+
+COMMENT ON TRIGGER handle_messages_changes ON messages IS 'Triggers real-time broadcasts for message changes to keep chat in sync';
 
 -- Create a function to automatically create a user record when a new auth user is created
-CREATE OR REPLACE FUNCTION handle_new_user()
+CREATE OR REPLACE FUNCTION create_user_profile()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.users (id, email, display_name, profile_picture)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    NEW.raw_user_meta_data->>'name',
-    NEW.raw_user_meta_data->>'avatar_url'
-  );
-  RETURN NEW;
+    INSERT INTO public.users (
+        id, 
+        instant_buy_amount,
+        instayield_enabled,
+        has_completed_onboarding
+    )
+    VALUES (
+        NEW.id, 
+        1.0,
+        true,
+        false
+    )
+    ON CONFLICT (id) DO NOTHING;
+    RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+COMMENT ON FUNCTION create_user_profile() IS 'Auto-creates user profile when auth.users record is created';
 
 -- Create trigger for new users
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
+DROP TRIGGER IF EXISTS create_user_profile_trigger ON auth.users;
+CREATE TRIGGER create_user_profile_trigger
     AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+    FOR EACH ROW EXECUTE FUNCTION create_user_profile();
 
 -- Enable the Realtime subscription for the tables
--- Note: With Supabase 2.0+, this is handled automatically when RLS is enabled
--- But explicitly granting access for authenticated users to listen
-GRANT USAGE ON SCHEMA realtime TO authenticated;
-GRANT SELECT ON TABLE conversations TO authenticated;
-GRANT SELECT ON TABLE messages TO authenticated;
+-- Add tables to realtime publication for websocket subscriptions
+ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
+ALTER PUBLICATION supabase_realtime ADD TABLE messages;
 
 -- Create a function to get conversation history with user info
 CREATE OR REPLACE FUNCTION get_conversation_with_messages(conv_id UUID)
@@ -260,11 +359,18 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE messages TO authenticated;
 -- Enable Row Level Security on users table too (if not already enabled by auth)
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
--- Policy for users table (users can only see their own data)
+-- Policy for users table (users can only see their own data) with idempotency
+DROP POLICY IF EXISTS "Users can view own profile" ON users;
 CREATE POLICY "Users can view own profile" ON users
     FOR SELECT TO authenticated
     USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can create own profile" ON users;
+CREATE POLICY "Users can create own profile" ON users
+    FOR INSERT TO authenticated
+    WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON users;
 CREATE POLICY "Users can update own profile" ON users
     FOR UPDATE TO authenticated
     USING (auth.uid() = id);
