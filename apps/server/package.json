@@ -6,13 +6,16 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/server.ts",
-    "build": "bun build src/server.ts --outdir dist --target node --format esm --sourcemap --external @solana/web3.js --external @solana/spl-token --external @sqds/grid --external @supabase/supabase-js --external express --external cors --external dotenv --external zod --external ai --external @ai-sdk/anthropic --external exa-js --external supermemory --external @supermemory/tools --external uuid",
+    "build": "bun build src/server.ts --outdir dist --target node --format esm --sourcemap --external @solana/web3.js --external @solana/spl-token --external @sqds/grid --external @supabase/supabase-js --external express --external cors --external dotenv --external zod --external ai --external @ai-sdk/anthropic --external @anthropic-ai/sdk --external exa-js --external supermemory --external @supermemory/tools --external uuid",
     "build:tsc": "tsc",
     "start": "node dist/server.js",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "bun test",
+    "test:unit": "bun test src/lib/__tests__/"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.16",
+    "@anthropic-ai/sdk": "^0.32.1",
     "@darkresearch/mallory-shared": "workspace:*",
     "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.95.8",
