@@ -163,7 +163,7 @@ jobs:
       - name: Install client dependencies
         run: cd apps/client && bun install
         
-      - name: Run unit tests
+      - name: Run client unit tests
         run: cd apps/client && bun run test:unit
         env:
           # Minimal env vars for unit tests (just checking they exist)
@@ -175,6 +175,14 @@ jobs:
           TEST_BACKEND_URL: http://localhost:3001
           # NOTE: EXPO_PUBLIC_GRID_API_KEY is intentionally NOT set
           # Unit tests verify it's not exposed to client code
+      
+      - name: Install server dependencies
+        run: cd apps/server && bun install
+        
+      - name: Run server unit tests
+        run: cd apps/server && bun run test:unit
+        env:
+          NODE_ENV: test
       
       - name: Run chat draft messages unit test
         run: cd apps/client && bun test __tests__/unit/draftMessages.test.ts
@@ -192,7 +200,9 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: unit-test-results
-          path: apps/client/__tests__/results/
+          path: |
+            apps/client/__tests__/results/
+            apps/server/__tests__/results/
           if-no-files-found: ignore
 
   # Job 4: Integration tests (Supabase + Grid, requires backend for Grid setup)
