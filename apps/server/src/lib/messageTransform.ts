@@ -466,9 +466,9 @@ export function logMessageStructure(messages: UIMessage[], label: string = 'Mess
       const partType = partAny.type;
       
       if (partType === 'tool-call') {
-        console.log(`    - 🔧 tool-call: ${partAny.toolName || 'unknown'} (id: ${part.toolCallId})`);
+        console.log(`    - 🔧 tool-call: ${partAny.toolName || 'unknown'} (id: ${partAny.toolCallId})`);
       } else if (partType === 'tool-result') {
-        console.log(`    - ✅ tool-result: ${partAny.toolName || 'unknown'} (id: ${part.toolCallId})`);
+        console.log(`    - ✅ tool-result: ${partAny.toolName || 'unknown'} (id: ${partAny.toolCallId})`);
       } else if (partType === 'text') {
         const preview = partAny.text?.substring(0, 50) || '';
         console.log(`    - 💬 text: "${preview}${preview.length >= 50 ? '...' : ''}"`);
