@@ -103,11 +103,11 @@ CREATE POLICY "Users can delete messages in their conversations" ON messages
     ));
 
 -- Create indexes for better performance
--- Compound indexes optimize common query patterns
-CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
+-- Compound index covers both user_id lookups and user_id + updated_at ordering
 CREATE INDEX IF NOT EXISTS idx_conversations_user_updated ON conversations(user_id, updated_at DESC);
+-- Compound index for loading messages in chronological order
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at);
--- Partial indexes for like/dislike queries
+-- Partial indexes for like/dislike queries (only index rows where true)
 CREATE INDEX IF NOT EXISTS idx_messages_liked ON messages(conversation_id, is_liked) WHERE is_liked = true;
 CREATE INDEX IF NOT EXISTS idx_messages_disliked ON messages(conversation_id, is_disliked) WHERE is_disliked = true;
 
