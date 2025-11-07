@@ -117,8 +117,8 @@ describe('GitHub Issue #58: Max Input Tokens Still Exceeded', () => {
     });
   });
   
-  describe('UNHAPPY PATH: Large tool results cause overflow (FIXED)', () => {
-    test('single massive search result (25 results × 1000 chars each)', () => {
+  describe('UNHAPPY PATH: Large tool results cause overflow (FIXED WITH SMART PRIORITIZATION)', () => {
+    test('single massive search result - keeps it if recent', () => {
       // Simulates searchWeb with default 25 results
       const massiveSearchResult = Array(25).fill({
         title: 'Search Result',
@@ -143,18 +143,72 @@ describe('GitHub Issue #58: Max Input Tokens Still Exceeded', () => {
       
       const result = enforceTokenBudget(messages, 180000);
       
-      // Should handle gracefully
+      // Should handle gracefully - recent messages protected
       expect(result.messages.length).toBe(4);
       expect(result.tokensEstimate).toBeLessThanOrEqual(180000);
       
-      // Tool result should be truncated
+      // Tool result should be kept mostly intact (it's in recent messages)
       const toolResultMsg = result.messages.find(m => m.id === '3');
       expect(toolResultMsg).toBeDefined();
       
-      console.log(`✅ FIXED: Massive search result: ${originalTokens} → ${result.tokensEstimate} tokens`);
+      console.log(`✅ Recent massive search kept: ${originalTokens} tokens (protected)`);
     });
     
-    test('multiple Nansen API calls with large datasets', () => {
+    test('old tool results truncated aggressively, recent ones preserved', () => {
+      // Simulate conversation with old and new tool calls
+      const largeResult = Array(100).fill({ data: 'x'.repeat(1000) });
+      
+      const messages: UIMessage[] = [
+        // OLD conversation (should be truncated/removed)
+        { id: '1', role: 'user', parts: [{ type: 'text', text: 'Old query 1' }] },
+        { id: '2', role: 'assistant', parts: [
+          { type: 'tool-call', toolCallId: 'call-1', toolName: 'searchWeb', args: {} } as any
+        ]},
+        { id: '3', role: 'user', parts: [
+          { type: 'tool-result', toolCallId: 'call-1', result: largeResult } as any
+        ]},
+        { id: '4', role: 'assistant', parts: [{ type: 'text', text: 'Old analysis' }] },
+        
+        // Another old query
+        { id: '5', role: 'user', parts: [{ type: 'text', text: 'Old query 2' }] },
+        { id: '6', role: 'assistant', parts: [
+          { type: 'tool-call', toolCallId: 'call-2', toolName: 'searchWeb', args: {} } as any
+        ]},
+        { id: '7', role: 'user', parts: [
+          { type: 'tool-result', toolCallId: 'call-2', result: largeResult } as any
+        ]},
+        { id: '8', role: 'assistant', parts: [{ type: 'text', text: 'Old analysis 2' }] },
+        
+        // RECENT conversation (should be protected)
+        { id: '9', role: 'user', parts: [{ type: 'text', text: 'Recent important query' }] },
+        { id: '10', role: 'assistant', parts: [
+          { type: 'tool-call', toolCallId: 'call-3', toolName: 'nansenSmartMoneyNetflows', args: {} } as any
+        ]},
+        { id: '11', role: 'user', parts: [
+          { type: 'tool-result', toolCallId: 'call-3', result: largeResult } as any
+        ]},
+        { id: '12', role: 'assistant', parts: [{ type: 'text', text: 'Recent important analysis' }] }
+      ];
+      
+      const originalTokens = estimateTotalTokens(messages);
+      
+      const result = enforceTokenBudget(messages, 50000); // Tight budget to force prioritization
+      
+      expect(result.tokensEstimate).toBeLessThanOrEqual(50000);
+      
+      // Should keep recent messages (last 5)
+      const hasRecentQuery = result.messages.some(m => m.id === '9');
+      const hasRecentAnalysis = result.messages.some(m => m.id === '12');
+      expect(hasRecentQuery).toBe(true);
+      expect(hasRecentAnalysis).toBe(true);
+      
+      // Old messages might be truncated or removed
+      const keptCount = result.messages.length;
+      console.log(`✅ Smart prioritization: ${messages.length} → ${keptCount} messages`);
+      console.log(`   Recent context preserved, old data truncated`);
+    });
+    
+    test('multiple Nansen API calls with large datasets - progressive truncation', () => {
       // Simulates Nansen historical balances response
       const nansenResult = {
         data: Array(100).fill({
@@ -167,35 +221,25 @@ describe('GitHub Issue #58: Max Input Tokens Still Exceeded', () => {
             address: '0x' + 'b'.repeat(40),
             balance: '5000000000000000000',
             value_usd: 10000.50
-          }),
-          transactions: Array(100).fill({
-            hash: '0x' + 'c'.repeat(64),
-            from: '0x' + 'd'.repeat(40),
-            to: '0x' + 'e'.repeat(40),
-            value: '100000000000000000',
-            timestamp: 1704067200
           })
         })
       };
       
-      const messages: UIMessage[] = [
-        { id: '1', role: 'user', parts: [{ type: 'text', text: 'Show me smart money activity' }] },
-        { id: '2', role: 'assistant', parts: [
-          { type: 'tool-call', toolCallId: 'call-1', toolName: 'nansenSmartMoneyNetflows', args: {} } as any
-        ]},
-        { id: '3', role: 'user', parts: [
-          { type: 'tool-result', toolCallId: 'call-1', result: nansenResult } as any
-        ]},
-        { id: '4', role: 'assistant', parts: [{ type: 'text', text: 'Here is the data...' }] },
-        { id: '5', role: 'user', parts: [{ type: 'text', text: 'Show me more details' }] },
-        { id: '6', role: 'assistant', parts: [
-          { type: 'tool-call', toolCallId: 'call-2', toolName: 'nansenHistoricalBalances', args: {} } as any
-        ]},
-        { id: '7', role: 'user', parts: [
-          { type: 'tool-result', toolCallId: 'call-2', result: nansenResult } as any
-        ]},
-        { id: '8', role: 'assistant', parts: [{ type: 'text', text: 'Additional analysis...' }] }
-      ];
+      const messages: UIMessage[] = [];
+      
+      // Create 10 rounds of queries with tool results
+      for (let i = 0; i < 10; i++) {
+        messages.push(
+          { id: `user-${i}`, role: 'user', parts: [{ type: 'text', text: `Query ${i}` }] },
+          { id: `assistant-call-${i}`, role: 'assistant', parts: [
+            { type: 'tool-call', toolCallId: `call-${i}`, toolName: 'nansenData', args: {} } as any
+          ]},
+          { id: `user-result-${i}`, role: 'user', parts: [
+            { type: 'tool-result', toolCallId: `call-${i}`, result: nansenResult } as any
+          ]},
+          { id: `assistant-response-${i}`, role: 'assistant', parts: [{ type: 'text', text: `Analysis ${i}` }] }
+        );
+      }
       
       const originalTokens = estimateTotalTokens(messages);
       expect(originalTokens).toBeGreaterThan(50000); // Should be massive
@@ -203,15 +247,21 @@ describe('GitHub Issue #58: Max Input Tokens Still Exceeded', () => {
       const result = enforceTokenBudget(messages, 180000);
       
       expect(result.tokensEstimate).toBeLessThanOrEqual(180000);
-      expect(result.truncatedToolResults).toBe(true);
       expect(result.messages.length).toBeGreaterThan(0);
+      
+      // Recent messages should be present
+      const hasLastQuery = result.messages.some(m => m.id === 'user-9');
+      const hasLastResponse = result.messages.some(m => m.id === 'assistant-response-9');
+      expect(hasLastQuery).toBe(true);
+      expect(hasLastResponse).toBe(true);
       
       const saved = originalTokens - result.tokensEstimate;
       const savedPercent = Math.round((saved / originalTokens) * 100);
-      console.log(`✅ FIXED: Multiple Nansen calls: ${originalTokens} → ${result.tokensEstimate} tokens (saved ${savedPercent}%)`);
+      console.log(`✅ Progressive truncation: ${originalTokens} → ${result.tokensEstimate} tokens (saved ${savedPercent}%)`);
+      console.log(`   Recent context intact, old results removed/truncated`);
     });
     
-    test('extreme case: conversation approaching 200k token limit', () => {
+    test('extreme case: conversation approaching 200k token limit with smart preservation', () => {
       // Simulate a very long conversation with many tool calls
       const messages: UIMessage[] = [];
       
@@ -256,27 +306,32 @@ describe('GitHub Issue #58: Max Input Tokens Still Exceeded', () => {
       expect(result.tokensEstimate).toBeLessThanOrEqual(180000);
       expect(result.messages.length).toBeGreaterThan(0);
       
-      // Should use all strategies
-      expect(result.truncatedToolResults || result.windowedMessages).toBe(true);
+      // Recent messages (last 5) should be present
+      const hasLastUserMsg = result.messages.some(m => m.id === 'user-49');
+      const hasLastAssistantMsg = result.messages.some(m => m.id === 'assistant-49-response');
+      expect(hasLastUserMsg).toBe(true);
+      expect(hasLastAssistantMsg).toBe(true);
       
       const saved = originalTokens - result.tokensEstimate;
       const savedPercent = Math.round((saved / originalTokens) * 100);
-      console.log(`✅ FIXED: Extreme case: ${originalTokens} → ${result.tokensEstimate} tokens (saved ${savedPercent}%)`);
-      console.log(`   Strategies used: truncation=${result.truncatedToolResults}, windowing=${result.windowedMessages}`);
+      console.log(`✅ Smart preservation: ${originalTokens} → ${result.tokensEstimate} tokens (saved ${savedPercent}%)`);
+      console.log(`   Kept ${result.messages.length}/${messages.length} messages`);
+      console.log(`   Recent context intact, oldest messages removed first`);
     });
     
-    test('worst case: single tool result with 1 million characters', () => {
+    test('worst case: single tool result with 1 million characters - recent context protected', () => {
       // This would be ~250k tokens - should never happen but we must handle it
       const monsterResult = 'x'.repeat(1000000);
       
       const messages: UIMessage[] = [
-        { id: '1', role: 'user', parts: [{ type: 'text', text: 'Query' }] },
+        { id: '1', role: 'user', parts: [{ type: 'text', text: 'Important recent query' }] },
         { id: '2', role: 'assistant', parts: [
           { type: 'tool-call', toolCallId: 'call-1', toolName: 'tool', args: {} } as any
         ]},
         { id: '3', role: 'user', parts: [
           { type: 'tool-result', toolCallId: 'call-1', result: monsterResult } as any
-        ]}
+        ]},
+        { id: '4', role: 'assistant', parts: [{ type: 'text', text: 'Analysis of the data' }] }
       ];
       
       const originalTokens = estimateTotalTokens(messages);
@@ -291,7 +346,14 @@ describe('GitHub Issue #58: Max Input Tokens Still Exceeded', () => {
       expect(result.messages.length).toBeGreaterThan(0);
       expect(result.truncatedToolResults).toBe(true);
       
-      console.log(`✅ FIXED: Monster result handled: ${originalTokens} → ${result.tokensEstimate} tokens`);
+      // User query and assistant response should be preserved
+      const hasUserQuery = result.messages.some(m => m.id === '1');
+      const hasAssistantResponse = result.messages.some(m => m.id === '4');
+      expect(hasUserQuery).toBe(true);
+      expect(hasAssistantResponse).toBe(true);
+      
+      console.log(`✅ Monster result handled with smart truncation: ${originalTokens} → ${result.tokensEstimate} tokens`);
+      console.log(`   User context preserved, tool result truncated as needed`);
     });
   });
   

@@ -234,14 +234,72 @@ export function truncateToolResultsInMessages(
 }
 
 /**
- * Intelligently reduce message context to fit within token budget
- * Applies multiple strategies:
- * 1. Truncate tool results (most common cause of overflow)
- * 2. Window messages if still over budget
- * 3. Further reduce tool result size if needed
+ * Score a message for prioritization during budget enforcement
+ * Higher scores = more important to keep
+ * 
+ * @param message - Message to score
+ * @param index - Position in messages array
+ * @param totalMessages - Total number of messages
+ * @returns Priority score (higher = more important)
+ */
+function scoreMessagePriority(message: UIMessage, index: number, totalMessages: number): number {
+  let score = 0;
+  
+  // 1. Recency is king - messages closer to end are more important
+  // Last message: +1000, gradually decreases
+  const recencyScore = ((index + 1) / totalMessages) * 1000;
+  score += recencyScore;
+  
+  // 2. User messages are critical (they're the questions/context)
+  if (message.role === 'user') {
+    score += 500;
+    
+    // Recent user messages are extra important (the conversation thread)
+    if (index >= totalMessages - 5) {
+      score += 300;
+    }
+  }
+  
+  // 3. Assistant messages with text (actual responses) are important
+  if (message.role === 'assistant') {
+    const hasText = message.parts?.some(p => p.type === 'text' && (p as any).text);
+    if (hasText) {
+      score += 200;
+    }
+    
+    // Recent assistant responses are more valuable
+    if (index >= totalMessages - 5) {
+      score += 200;
+    }
+  }
+  
+  // 4. Penalize messages with only tool results (they're useful but can be truncated)
+  const hasOnlyToolResults = message.parts?.every(p => p.type === 'tool-result');
+  if (hasOnlyToolResults) {
+    score -= 100;
+  }
+  
+  // 5. Tool calls (lightweight) should be preserved
+  const hasToolCall = message.parts?.some(p => p.type === 'tool-call');
+  if (hasToolCall) {
+    score += 100;
+  }
+  
+  return score;
+}
+
+/**
+ * Intelligently reduce message context using prioritization
+ * Applies progressive truncation from oldest to newest
+ * 
+ * Strategy:
+ * 1. Score all messages by importance (recency, role, type)
+ * 2. Keep recent conversation intact
+ * 3. Truncate/remove old tool results first
+ * 4. Only touch recent messages as last resort
  * 
  * @param messages - Full conversation history
- * @param maxTokens - Maximum tokens to include (default: 180000 for Claude's 200k limit with buffer)
+ * @param maxTokens - Maximum tokens to include
  * @returns Processed messages that fit within budget
  */
 export function enforceTokenBudget(
@@ -270,50 +328,198 @@ export function enforceTokenBudget(
     };
   }
   
-  // Strategy 1: Truncate tool results (most effective for tool-heavy conversations)
-  console.log('📉 Step 1: Truncating tool results...');
-  let processedMessages = truncateToolResultsInMessages(messages, 4000);
-  let currentTokens = estimateTotalTokens(processedMessages);
-  console.log(`   After tool truncation: ${currentTokens} tokens`);
+  console.log('📉 Over budget - applying intelligent prioritization...');
   
+  // Score all messages for prioritization
+  const scoredMessages = messages.map((msg, idx) => ({
+    message: msg,
+    index: idx,
+    score: scoreMessagePriority(msg, idx, messages.length),
+    tokens: estimateMessageTokens(msg)
+  }));
+  
+  // Always keep the most recent messages (critical conversation context)
+  const KEEP_RECENT_COUNT = Math.min(5, messages.length);
+  const recentMessages = scoredMessages.slice(-KEEP_RECENT_COUNT);
+  const olderMessages = scoredMessages.slice(0, -KEEP_RECENT_COUNT);
+  
+  console.log(`📌 Protecting last ${KEEP_RECENT_COUNT} messages from aggressive truncation`);
+  
+  let processedMessages: UIMessage[] = [];
+  let currentTokens = 0;
+  let truncatedToolResults = false;
   let windowedMessages = false;
   
-  // Strategy 2: If still over budget, apply message windowing
+  // Calculate tokens for recent messages (always include these)
+  const recentTokens = recentMessages.reduce((sum, sm) => sum + sm.tokens, 0);
+  currentTokens = recentTokens;
+  
+  console.log(`   Recent messages: ${recentTokens} tokens (${KEEP_RECENT_COUNT} messages)`);
+  
+  // Strategy 1: Progressive truncation of older messages
+  // Sort older messages by priority (lowest priority first = truncate/remove first)
+  const sortedOlderMessages = [...olderMessages].sort((a, b) => a.score - b.score);
+  
+  const remainingBudget = maxTokens - recentTokens;
+  console.log(`   Remaining budget for older messages: ${remainingBudget} tokens`);
+  
+  const processedOlderMessages: UIMessage[] = [];
+  let olderTokensAccumulated = 0;
+  
+  for (const scoredMsg of sortedOlderMessages) {
+    const { message, tokens, score } = scoredMsg;
+    
+    // Check if we have room for this message
+    if (olderTokensAccumulated + tokens <= remainingBudget) {
+      // Fits completely - keep as-is
+      processedOlderMessages.push(message);
+      olderTokensAccumulated += tokens;
+    } else {
+      // Doesn't fit - try progressive truncation
+      const hasToolResults = message.parts?.some(p => p.type === 'tool-result');
+      
+      if (hasToolResults) {
+        // Try truncating tool results progressively
+        const remainingSpace = remainingBudget - olderTokensAccumulated;
+        
+        if (remainingSpace > 500) {
+          // We have some space - truncate tool results to fit
+          const targetTokens = Math.min(remainingSpace - 100, 2000); // Max 2k for old tool results
+          const truncatedMessage = truncateToolResultsInMessage(message, targetTokens);
+          const truncatedTokens = estimateMessageTokens(truncatedMessage);
+          
+          if (truncatedTokens <= remainingSpace) {
+            processedOlderMessages.push(truncatedMessage);
+            olderTokensAccumulated += truncatedTokens;
+            truncatedToolResults = true;
+            console.log(`   Truncated old tool result: ${tokens} → ${truncatedTokens} tokens (score: ${Math.round(score)})`);
+          } else {
+            // Even truncated doesn't fit - skip this message
+            windowedMessages = true;
+            console.log(`   Dropped message: ${tokens} tokens (score: ${Math.round(score)}) - no space`);
+          }
+        } else {
+          // No space left - drop this message
+          windowedMessages = true;
+          console.log(`   Dropped message: ${tokens} tokens (score: ${Math.round(score)}) - budget exhausted`);
+        }
+      } else {
+        // Not a tool result message - check if we can fit it
+        if (olderTokensAccumulated + tokens <= remainingBudget) {
+          processedOlderMessages.push(message);
+          olderTokensAccumulated += tokens;
+        } else {
+          // Drop this message
+          windowedMessages = true;
+          console.log(`   Dropped message: ${tokens} tokens (score: ${Math.round(score)}) - no space`);
+        }
+      }
+    }
+  }
+  
+  // Strategy 2: If still over budget, apply minimal truncation to recent messages
+  currentTokens = olderTokensAccumulated + recentTokens;
+  
   if (currentTokens > maxTokens) {
-    console.log('📉 Step 2: Applying message windowing...');
-    const windowed = windowMessages(processedMessages, maxTokens);
+    console.log(`⚠️  Still over budget (${currentTokens} tokens) - applying minimal truncation to recent messages`);
+    
+    // Find recent messages with tool results and truncate them slightly
+    const processedRecentMessages = recentMessages.map(({ message, tokens }) => {
+      const hasToolResults = message.parts?.some(p => p.type === 'tool-result');
+      
+      if (hasToolResults && currentTokens > maxTokens) {
+        // Apply light truncation (keep more data than old messages)
+        const truncated = truncateToolResultsInMessage(message, 4000);
+        const newTokens = estimateMessageTokens(truncated);
+        const saved = tokens - newTokens;
+        currentTokens -= saved;
+        truncatedToolResults = true;
+        console.log(`   Lightly truncated recent tool result: ${tokens} → ${newTokens} tokens`);
+        return truncated;
+      }
+      
+      return message;
+    });
+    
+    // Combine older and recent messages in correct order
+    processedMessages = [
+      ...processedOlderMessages.sort((a, b) => {
+        const aIdx = messages.findIndex(m => m.id === a.id);
+        const bIdx = messages.findIndex(m => m.id === b.id);
+        return aIdx - bIdx;
+      }),
+      ...processedRecentMessages.map(sm => sm.message)
+    ];
+  } else {
+    // Under budget - combine messages
+    processedMessages = [
+      ...processedOlderMessages.sort((a, b) => {
+        const aIdx = messages.findIndex(m => m.id === a.id);
+        const bIdx = messages.findIndex(m => m.id === b.id);
+        return aIdx - bIdx;
+      }),
+      ...recentMessages.map(sm => sm.message)
+    ];
+  }
+  
+  // Final check - if still over, do emergency windowing (keep most recent only)
+  currentTokens = estimateTotalTokens(processedMessages);
+  
+  if (currentTokens > maxTokens) {
+    console.warn('⚠️  Emergency windowing - keeping only most recent messages');
+    const windowed = windowMessages(processedMessages, maxTokens * 0.9);
     processedMessages = windowed.messages;
     currentTokens = windowed.estimatedTokens;
-    windowedMessages = true;
-    console.log(`   After windowing: ${currentTokens} tokens (kept ${windowed.windowedCount}/${windowed.originalCount} messages)`);
-  }
-  
-  // Strategy 3: If STILL over budget, be more aggressive with tool results
-  if (currentTokens > maxTokens) {
-    console.log('📉 Step 3: Aggressive tool result truncation...');
-    processedMessages = truncateToolResultsInMessages(processedMessages, 1000); // Much more aggressive
-    currentTokens = estimateTotalTokens(processedMessages);
-    console.log(`   After aggressive truncation: ${currentTokens} tokens`);
-  }
-  
-  // Final safety check - if still over, do emergency windowing
-  if (currentTokens > maxTokens) {
-    console.warn('⚠️  Emergency windowing - still over budget after all strategies');
-    const emergencyWindowed = windowMessages(processedMessages, maxTokens * 0.8); // 80% of limit for safety
-    processedMessages = emergencyWindowed.messages;
-    currentTokens = emergencyWindowed.estimatedTokens;
     windowedMessages = true;
   }
   
   const saved = originalTokens - currentTokens;
-  console.log(`✅ Token budget enforced: ${originalTokens} → ${currentTokens} tokens (saved ${saved} tokens, ${Math.round(saved/originalTokens*100)}%)`);
+  const savedPercent = Math.round((saved / originalTokens) * 100);
+  
+  console.log(`✅ Token budget enforced: ${originalTokens} → ${currentTokens} tokens`);
+  console.log(`   Saved: ${saved} tokens (${savedPercent}%)`);
+  console.log(`   Kept: ${processedMessages.length}/${messages.length} messages`);
+  console.log(`   Strategies: truncation=${truncatedToolResults}, windowing=${windowedMessages}`);
   
   return {
     messages: processedMessages,
     tokensEstimate: currentTokens,
-    truncatedToolResults: true,
+    truncatedToolResults,
     windowedMessages,
     originalTokens
+  };
+}
+
+/**
+ * Truncate tool results within a single message
+ * @param message - Message to process
+ * @param maxTokensPerResult - Max tokens per tool result
+ * @returns Message with truncated tool results
+ */
+function truncateToolResultsInMessage(
+  message: UIMessage,
+  maxTokensPerResult: number
+): UIMessage {
+  if (!message.parts || !Array.isArray(message.parts)) {
+    return message;
+  }
+  
+  const updatedParts = message.parts.map(part => {
+    if (part.type === 'tool-result') {
+      const toolResultPart = part as any;
+      const truncatedResult = truncateToolResult(toolResultPart.result, maxTokensPerResult);
+      
+      return {
+        ...part,
+        result: truncatedResult
+      };
+    }
+    return part;
+  });
+  
+  return {
+    ...message,
+    parts: updatedParts
   };
 }
 
