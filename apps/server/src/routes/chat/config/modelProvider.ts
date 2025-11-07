@@ -35,50 +35,33 @@ export function setupModelProvider(
   claudeModel: string
 ): ModelProviderResult {
   const supermemoryApiKey = process.env.SUPERMEMORY_API_KEY;
-  
-  // First, enforce token budget to prevent "max input tokens exceeded" errors
-  // This is critical - tool results can cause massive token overflow
-  const budgetResult = enforceTokenBudget(messages);
-  const { messages: budgetedMessages, tokensEstimate, truncatedToolResults, windowedMessages: wasWindowed, originalTokens } = budgetResult;
-  
-  if (truncatedToolResults || wasWindowed) {
-    console.log('🛡️  Token budget protection applied:', {
-      originalTokens,
-      finalTokens: tokensEstimate,
-      saved: originalTokens - tokensEstimate,
-      truncatedToolResults,
-      windowedMessages: wasWindowed
-    });
-  }
-  
-  // Intelligent strategy decision (uses the budgeted messages for accurate token count)
-  const strategy = decideContextStrategy(budgetedMessages);
+  const estimatedTokens = estimateTotalTokens(messages);
   
   // Log conversation size metrics
   console.log('📊 Conversation Metrics:', {
     totalMessages: messages.length,
-    budgetedMessages: budgetedMessages.length,
-    estimatedTokens: tokensEstimate,
+    estimatedTokens,
     conversationId,
     userId
   });
   
-  console.log('🎯 Context Strategy Decision:', {
-    useExtendedThinking: strategy.useExtendedThinking,
-    useSupermemoryProxy: strategy.useSupermemoryProxy,
-    estimatedTokens: strategy.estimatedTokens,
-    reason: strategy.reason,
-    messageCount: budgetedMessages.length
-  });
-  
-  // Setup model and process messages based on strategy
+  // Setup model and process messages based on whether Supermemory is available
   let model;
-  let processedMessages = budgetedMessages; // Use the budgeted messages
+  let processedMessages = messages;
+  let strategy: {
+    useExtendedThinking: boolean;
+    useSupermemoryProxy: boolean;
+    estimatedTokens: number;
+    reason: string;
+  };
   
-  if (supermemoryApiKey && strategy.useSupermemoryProxy) {
-    // Long conversation: Use Supermemory Infinite Chat Router
-    // Extended thinking works through the router - no windowing needed
-    console.log('🧠 Using Supermemory Infinite Chat Router (extended thinking enabled)');
+  if (supermemoryApiKey) {
+    // ALWAYS use Supermemory Infinite Chat Router when available
+    // It intelligently handles context optimization:
+    // - Short convos: passes through efficiently
+    // - Long convos: compresses/optimizes via RAG
+    // - No need for arbitrary thresholds!
+    console.log('🧠 Using Supermemory Infinite Chat Router (always-on, context-aware)');
     const infiniteChatProvider = createAnthropic({
       baseURL: 'https://api.supermemory.ai/v3/https://api.anthropic.com/v1',
       apiKey: process.env.ANTHROPIC_API_KEY,
@@ -89,55 +72,63 @@ export function setupModelProvider(
       },
     });
     model = infiniteChatProvider(claudeModel);
-    // Send all budgeted messages - Router handles context optimization via RAG
-  } else if (supermemoryApiKey) {
-    // Normal conversation: Direct to Anthropic with extended thinking
-    console.log('💭 Direct to Anthropic (extended thinking enabled)');
-    model = anthropic(claudeModel);
-    // Messages already budgeted, no further windowing needed
-  } else {
-    // Fallback: No Supermemory available, must window manually
-    console.log('⚠️  SUPERMEMORY_API_KEY not set, using windowing fallback');
-    model = anthropic(claudeModel);
-    // If we haven't already windowed, do it now
-    if (!wasWindowed && tokensEstimate > 80000) {
-      const windowed = windowMessages(processedMessages, 80000);
-      processedMessages = windowed.messages;
-      console.log('✂️  Windowed conversation:', windowed);
-    }
-  }
-  
-  // Wrap model with Supermemory User Profiles (full mode = profile + query-based search)
-  if (supermemoryApiKey) {
+    
+    // Wrap model with Supermemory User Profiles (full mode = profile + query-based search)
     console.log('🧠 Wrapping model with Supermemory User Profiles (mode: full)');
     model = withSupermemory(model, userId, { mode: 'full' });
+    
+    strategy = {
+      useExtendedThinking: true,
+      useSupermemoryProxy: true,
+      estimatedTokens,
+      reason: 'Using Supermemory Infinite Chat Router for intelligent context optimization'
+    };
+    
+    // Send ALL messages - let Supermemory handle compression intelligently
+    processedMessages = messages;
+  } else {
+    // Fallback: No Supermemory available - use our intelligent truncation
+    console.log('⚠️  SUPERMEMORY_API_KEY not set - using fallback token budget enforcement');
+    
+    const budgetResult = enforceTokenBudget(messages);
+    processedMessages = budgetResult.messages;
+    
+    if (budgetResult.truncatedToolResults || budgetResult.windowedMessages) {
+      console.log('🛡️  Token budget protection applied:', {
+        originalTokens: budgetResult.originalTokens,
+        finalTokens: budgetResult.tokensEstimate,
+        saved: budgetResult.originalTokens - budgetResult.tokensEstimate,
+        truncatedToolResults: budgetResult.truncatedToolResults,
+        windowedMessages: budgetResult.windowedMessages
+      });
+    }
+    
+    model = anthropic(claudeModel);
+    
+    strategy = {
+      useExtendedThinking: true,
+      useSupermemoryProxy: false,
+      estimatedTokens: budgetResult.tokensEstimate,
+      reason: 'No Supermemory - using local token budget enforcement'
+    };
   }
   
-  // Log what's actually being sent to the LLM
-  const finalTokenEstimate = estimateTotalTokens(processedMessages);
-  console.log('📤 Context Being Sent to LLM:', {
-    messageCount: processedMessages.length,
-    estimatedTokens: finalTokenEstimate,
-    isWindowed: processedMessages.length < messages.length,
-    droppedMessages: messages.length - processedMessages.length,
-    usingProxy: strategy.useSupermemoryProxy,
-    usingProfiles: !!supermemoryApiKey
+  console.log('🎯 Context Strategy:', {
+    useExtendedThinking: strategy.useExtendedThinking,
+    useSupermemoryProxy: strategy.useSupermemoryProxy,
+    estimatedTokens: strategy.estimatedTokens,
+    reason: strategy.reason,
+    messageCount: processedMessages.length
   });
   
-  // Warning if context is very large (should be rare after budget enforcement)
-  if (finalTokenEstimate > 200000) {
-    console.warn('⚠️  WARNING: Context size exceeds 200K tokens even after budget enforcement!', {
-      estimatedTokens: finalTokenEstimate,
-      messageCount: processedMessages.length,
-      strategy: strategy.reason
-    });
-  } else if (finalTokenEstimate > 180000) {
-    console.warn('⚠️  WARNING: Context size is approaching 200K token limit', {
-      estimatedTokens: finalTokenEstimate,
-      messageCount: processedMessages.length,
-      headroom: 200000 - finalTokenEstimate
-    });
-  }
+  // Log what's actually being sent
+  const finalTokenEstimate = estimateTotalTokens(processedMessages);
+  console.log('📤 Context Being Sent:', {
+    messageCount: processedMessages.length,
+    estimatedTokens: finalTokenEstimate,
+    droppedMessages: messages.length - processedMessages.length,
+    usingSupermemory: !!supermemoryApiKey
+  });
   
   return {
     model,
