@@ -6,7 +6,7 @@
 import { anthropic, createAnthropic } from '@ai-sdk/anthropic';
 import { UIMessage } from 'ai';
 import { withSupermemory } from '@supermemory/tools/ai-sdk';
-import { decideContextStrategy, windowMessages, estimateTotalTokens } from '../../../lib/contextWindow';
+import { decideContextStrategy, windowMessages, estimateTotalTokens, enforceTokenBudget } from '../../../lib/contextWindow';
 
 interface ModelProviderResult {
   model: any;
@@ -36,13 +36,29 @@ export function setupModelProvider(
 ): ModelProviderResult {
   const supermemoryApiKey = process.env.SUPERMEMORY_API_KEY;
   
-  // Intelligent strategy decision
-  const strategy = decideContextStrategy(messages);
+  // First, enforce token budget to prevent "max input tokens exceeded" errors
+  // This is critical - tool results can cause massive token overflow
+  const budgetResult = enforceTokenBudget(messages);
+  const { messages: budgetedMessages, tokensEstimate, truncatedToolResults, windowedMessages: wasWindowed, originalTokens } = budgetResult;
+  
+  if (truncatedToolResults || wasWindowed) {
+    console.log('🛡️  Token budget protection applied:', {
+      originalTokens,
+      finalTokens: tokensEstimate,
+      saved: originalTokens - tokensEstimate,
+      truncatedToolResults,
+      windowedMessages: wasWindowed
+    });
+  }
+  
+  // Intelligent strategy decision (uses the budgeted messages for accurate token count)
+  const strategy = decideContextStrategy(budgetedMessages);
   
   // Log conversation size metrics
   console.log('📊 Conversation Metrics:', {
     totalMessages: messages.length,
-    estimatedTokens: strategy.estimatedTokens,
+    budgetedMessages: budgetedMessages.length,
+    estimatedTokens: tokensEstimate,
     conversationId,
     userId
   });
@@ -52,12 +68,12 @@ export function setupModelProvider(
     useSupermemoryProxy: strategy.useSupermemoryProxy,
     estimatedTokens: strategy.estimatedTokens,
     reason: strategy.reason,
-    messageCount: messages.length
+    messageCount: budgetedMessages.length
   });
   
   // Setup model and process messages based on strategy
   let model;
-  let processedMessages = messages;
+  let processedMessages = budgetedMessages; // Use the budgeted messages
   
   if (supermemoryApiKey && strategy.useSupermemoryProxy) {
     // Long conversation: Use Supermemory Infinite Chat Router
@@ -73,19 +89,22 @@ export function setupModelProvider(
       },
     });
     model = infiniteChatProvider(claudeModel);
-    // Send all messages - Router handles context optimization via RAG
+    // Send all budgeted messages - Router handles context optimization via RAG
   } else if (supermemoryApiKey) {
     // Normal conversation: Direct to Anthropic with extended thinking
     console.log('💭 Direct to Anthropic (extended thinking enabled)');
     model = anthropic(claudeModel);
-    // No windowing - Claude has 200K context window
+    // Messages already budgeted, no further windowing needed
   } else {
     // Fallback: No Supermemory available, must window manually
     console.log('⚠️  SUPERMEMORY_API_KEY not set, using windowing fallback');
     model = anthropic(claudeModel);
-    const windowed = windowMessages(messages, 80000);
-    processedMessages = windowed.messages;
-    console.log('✂️  Windowed conversation:', windowed);
+    // If we haven't already windowed, do it now
+    if (!wasWindowed && tokensEstimate > 80000) {
+      const windowed = windowMessages(processedMessages, 80000);
+      processedMessages = windowed.messages;
+      console.log('✂️  Windowed conversation:', windowed);
+    }
   }
   
   // Wrap model with Supermemory User Profiles (full mode = profile + query-based search)
@@ -105,12 +124,18 @@ export function setupModelProvider(
     usingProfiles: !!supermemoryApiKey
   });
   
-  // Warning if context is very large
+  // Warning if context is very large (should be rare after budget enforcement)
   if (finalTokenEstimate > 200000) {
-    console.warn('⚠️  WARNING: Context size exceeds 200K tokens!', {
+    console.warn('⚠️  WARNING: Context size exceeds 200K tokens even after budget enforcement!', {
       estimatedTokens: finalTokenEstimate,
       messageCount: processedMessages.length,
       strategy: strategy.reason
+    });
+  } else if (finalTokenEstimate > 180000) {
+    console.warn('⚠️  WARNING: Context size is approaching 200K token limit', {
+      estimatedTokens: finalTokenEstimate,
+      messageCount: processedMessages.length,
+      headroom: 200000 - finalTokenEstimate
     });
   }
   
