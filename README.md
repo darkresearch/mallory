@@ -53,7 +53,18 @@ cd mallory
 bun install
 ```
 
-### 2. Environment Setup
+### 2. Database Setup
+
+Before running the app, you need to set up your Supabase database:
+
+1. Create a new Supabase project at https://supabase.com/dashboard
+2. Go to the SQL Editor in your Supabase dashboard
+3. Copy the contents of `supabase/migrations/20250101000000_initial_schema.sql`
+4. Paste it into the SQL Editor and click "Run"
+
+For detailed instructions and alternative setup methods, see [supabase/README.md](./supabase/README.md).
+
+### 3. Environment Setup
 
 #### Client Environment (`.env` in `apps/client/`)
 ```bash
@@ -85,7 +96,7 @@ EXA_API_KEY=your-exa-key
 SUPERMEMORY_API_KEY=your-supermemory-key
 ```
 
-### 3. Run Development Servers
+### 4. Run Development Servers
 
 #### Option A: Run Both (Client + Server)
 ```bash
