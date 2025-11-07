@@ -151,8 +151,11 @@ function removeToolParts(parts: MessagePart[]): MessagePart[] {
  * (preceeding the lastmost set of `tool_use` and `tool_result` blocks)."
  * 
  * This function ensures all assistant messages with tool calls have thinking blocks properly positioned.
+ * 
+ * NOTE: This should be called SEPARATELY from ensureToolMessageStructure() to ensure it always runs,
+ * even when tool structure validation passes.
  */
-function ensureThinkingBlockCompliance(messages: UIMessage[]): UIMessage[] {
+export function ensureThinkingBlockCompliance(messages: UIMessage[]): UIMessage[] {
   if (messages.length === 0) return messages;
 
   const result: UIMessage[] = [];
@@ -358,9 +361,9 @@ export function ensureToolMessageStructure(messages: UIMessage[]): UIMessage[] {
     result.push(message);
   }
 
-  // After fixing tool structure, ensure thinking blocks are properly ordered
-  // for extended thinking compliance
-  return ensureThinkingBlockCompliance(result);
+  // Note: ensureThinkingBlockCompliance() should be called separately after this function
+  // to ensure it runs even when validation passes
+  return result;
 }
 
 /**

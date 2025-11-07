@@ -12,7 +12,7 @@ import { MALLORY_BASE_PROMPT, buildContextSection, buildVerbosityGuidelines, ONB
 import { buildComponentsGuidelines } from '../../../prompts/components.js';
 import { supabase } from '../../lib/supabase.js';
 import { saveUserMessage } from './persistence.js';
-import { ensureToolMessageStructure, validateToolMessageStructure, logMessageStructure, convertReasoningToThinking } from '../../lib/messageTransform.js';
+import { ensureToolMessageStructure, validateToolMessageStructure, logMessageStructure, convertReasoningToThinking, ensureThinkingBlockCompliance } from '../../lib/messageTransform.js';
 
 const router: Router = express.Router();
 
@@ -133,6 +133,12 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     // The AI SDK uses 'reasoning' internally, but Anthropic's extended thinking API expects 'thinking'
     console.log('🧠 Converting reasoning parts to thinking parts for Anthropic API compatibility...');
     conversationMessages = convertReasoningToThinking(conversationMessages);
+
+    // CRITICAL: Always ensure thinking block compliance for extended thinking API
+    // This must be called regardless of whether tool structure validation passes or fails
+    // Per Anthropic's requirements: assistant messages with tool calls MUST start with thinking blocks
+    console.log('🧠 Ensuring thinking block compliance for extended thinking API...');
+    conversationMessages = ensureThinkingBlockCompliance(conversationMessages);
 
     // If system-initiated (proactive) and no messages, add synthetic user prompt
     // AI SDK requires at least one message - can't have just system prompt
