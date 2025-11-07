@@ -73,13 +73,14 @@ export function buildStreamResponse(
       }
       
       // Log the actual content for reasoning and text parts
-      if (part.type === 'reasoning-delta' && (part as any).text) {
+      const partType = (part as any).type;
+      if (partType === 'reasoning-delta' && (part as any).text) {
         console.log('🧠 REASONING DELTA:', (part as any).text);
-      } else if (part.type === 'reasoning-start') {
+      } else if (partType === 'reasoning-start') {
         console.log('🧠 REASONING START');
-      } else if (part.type === 'reasoning-end') {
+      } else if (partType === 'reasoning-end') {
         console.log('🧠 REASONING END');
-      } else if (part.type === 'text-delta' && (part as any).text) {
+      } else if (partType === 'text-delta' && (part as any).text) {
         console.log('💬 TEXT DELTA:', (part as any).text);
       } else if (part.type === 'text-start') {
         console.log('💬 TEXT START');

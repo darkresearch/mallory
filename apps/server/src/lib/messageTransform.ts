@@ -8,6 +8,11 @@
  * 
  * However, the AI SDK's UIMessage format stores all parts in a single message.
  * This module ensures messages are properly structured before being sent to the API.
+ * 
+ * NOTE ON TYPE SAFETY:
+ * The AI SDK's type definitions don't include all runtime part types (e.g., 'reasoning', 'thinking').
+ * These types exist at runtime during streaming but aren't in the official type definitions.
+ * We use `as any` type assertions where necessary to handle these runtime types safely.
  */
 
 import { UIMessage } from 'ai';
@@ -50,22 +55,26 @@ export function convertReasoningToThinking(messages: UIMessage[]): UIMessage[] {
     }
 
     const convertedParts = message.parts.map(part => {
+      const partType = (part as any).type;
+      
       // Convert reasoning parts to thinking parts
-      if (part.type === 'reasoning' || part.type === 'reasoning-delta') {
+      // Note: 'reasoning' and 'reasoning-delta' are runtime types from streaming,
+      // not part of the official AI SDK types, so we use 'as any' for type safety
+      if (partType === 'reasoning' || partType === 'reasoning-delta') {
         return {
           ...part,
           type: 'thinking'
-        };
+        } as any;
       }
       return part;
     });
 
     // Only create a new message object if we actually changed something
-    if (convertedParts.some((p, i) => p !== message.parts![i])) {
+    if (convertedParts.some((p, i) => (p as any).type !== (message.parts![i] as any).type)) {
       return {
         ...message,
         parts: convertedParts
-      };
+      } as UIMessage;
     }
 
     return message;
@@ -104,9 +113,11 @@ function hasUnmatchedToolCalls(message: UIMessage): boolean {
 
 /**
  * Check if a message part is a thinking/reasoning block
+ * Note: 'thinking' and 'reasoning' are runtime types that may not be in the AI SDK type definitions
  */
 function isThinkingPart(part: MessagePart): boolean {
-  return part.type === 'reasoning' || part.type === 'thinking' || part.type === 'redacted_thinking';
+  const partType = (part as any).type;
+  return partType === 'reasoning' || partType === 'thinking' || partType === 'redacted_thinking';
 }
 
 /**
@@ -452,18 +463,20 @@ export function logMessageStructure(messages: UIMessage[], label: string = 'Mess
     
     for (const part of parts) {
       const partAny = part as any; // Type assertion for accessing runtime properties
-      if (part.type === 'tool-call') {
+      const partType = partAny.type;
+      
+      if (partType === 'tool-call') {
         console.log(`    - 🔧 tool-call: ${partAny.toolName || 'unknown'} (id: ${part.toolCallId})`);
-      } else if (part.type === 'tool-result') {
+      } else if (partType === 'tool-result') {
         console.log(`    - ✅ tool-result: ${partAny.toolName || 'unknown'} (id: ${part.toolCallId})`);
-      } else if (part.type === 'text') {
+      } else if (partType === 'text') {
         const preview = partAny.text?.substring(0, 50) || '';
         console.log(`    - 💬 text: "${preview}${preview.length >= 50 ? '...' : ''}"`);
-      } else if (part.type === 'reasoning') {
+      } else if (partType === 'reasoning') {
         const preview = partAny.text?.substring(0, 50) || '';
         console.log(`    - 🧠 reasoning: "${preview}${preview.length >= 50 ? '...' : ''}"`);
       } else {
-        console.log(`    - ${part.type}`);
+        console.log(`    - ${partType}`);
       }
     }
   }
