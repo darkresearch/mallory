@@ -7,12 +7,9 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Note: email, display_name, profile_picture come from auth.users metadata, not stored here
 CREATE TABLE IF NOT EXISTS users (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-    instant_buy_amount NUMERIC(10,4) DEFAULT 1.0 NOT NULL,
-    instayield_enabled BOOLEAN DEFAULT true,
     has_completed_onboarding BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    CONSTRAINT users_instant_buy_amount_check CHECK ((instant_buy_amount >= 0.01 AND instant_buy_amount <= 1000))
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create conversations table
@@ -242,18 +239,8 @@ COMMENT ON TRIGGER handle_messages_changes ON messages IS 'Triggers real-time br
 CREATE OR REPLACE FUNCTION create_user_profile()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO public.users (
-        id, 
-        instant_buy_amount,
-        instayield_enabled,
-        has_completed_onboarding
-    )
-    VALUES (
-        NEW.id, 
-        1.0,
-        true,
-        false
-    )
+    INSERT INTO public.users (id, has_completed_onboarding)
+    VALUES (NEW.id, false)
     ON CONFLICT (id) DO NOTHING;
     RETURN NEW;
 END;
@@ -336,11 +323,9 @@ AS $$
 $$;
 
 -- Add comments to describe the tables
-COMMENT ON TABLE users IS 'User profiles and preferences';
+COMMENT ON TABLE users IS 'User profiles - minimal table for Mallory-specific data';
 COMMENT ON COLUMN users.id IS 'Primary key - matches the auth.users.id';
-COMMENT ON COLUMN users.instant_buy_amount IS 'Amount for instant buy orders';
-COMMENT ON COLUMN users.instayield_enabled IS 'Whether yield generation is enabled';
-COMMENT ON COLUMN users.has_completed_onboarding IS 'Whether user has completed onboarding';
+COMMENT ON COLUMN users.has_completed_onboarding IS 'Whether user has completed onboarding flow';
 
 COMMENT ON TABLE conversations IS 'Chat conversations between users and AI';
 COMMENT ON COLUMN conversations.token_ca IS 'Token contract address (default is all zeros for global conversations)';
