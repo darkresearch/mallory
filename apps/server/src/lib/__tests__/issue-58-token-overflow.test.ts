@@ -249,16 +249,21 @@ describe('GitHub Issue #58: Max Input Tokens Still Exceeded', () => {
       expect(result.tokensEstimate).toBeLessThanOrEqual(180000);
       expect(result.messages.length).toBeGreaterThan(0);
       
-      // Recent messages should be present
+      // Recent messages should be present (most important check)
       const hasLastQuery = result.messages.some(m => m.id === 'user-9');
       const hasLastResponse = result.messages.some(m => m.id === 'assistant-response-9');
       expect(hasLastQuery).toBe(true);
       expect(hasLastResponse).toBe(true);
       
+      // With smart prioritization, we should keep recent context
+      // The exact number of messages kept depends on the data, but recent ones are protected
+      const keptMessages = result.messages.length;
+      expect(keptMessages).toBeGreaterThan(5); // At least the last 5 messages protected
+      
       const saved = originalTokens - result.tokensEstimate;
       const savedPercent = Math.round((saved / originalTokens) * 100);
       console.log(`✅ Progressive truncation: ${originalTokens} → ${result.tokensEstimate} tokens (saved ${savedPercent}%)`);
-      console.log(`   Recent context intact, old results removed/truncated`);
+      console.log(`   Kept: ${keptMessages}/${messages.length} messages, recent context intact`);
     });
     
     test('extreme case: conversation approaching 200k token limit with smart preservation', () => {
