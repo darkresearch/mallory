@@ -46,13 +46,16 @@ function buildChainOfThoughtMetadata(parts: any[]) {
     };
   }
 
-  const reasoningParts = parts.filter(p => p.type === 'reasoning' || p.type === 'reasoning-delta');
-  const toolCallParts = parts.filter(p => p.type?.startsWith('tool-'));
+  const reasoningParts = parts.filter(p => {
+    const partType = (p as any).type;
+    return partType === 'reasoning' || partType === 'reasoning-delta';
+  });
+  const toolCallParts = parts.filter(p => (p as any).type?.startsWith('tool-'));
 
   return {
     hasReasoning: reasoningParts.length > 0,
     reasoningSteps: reasoningParts.length,
-    toolCalls: toolCallParts.map(p => p.toolName || p.type).filter(Boolean),
+    toolCalls: toolCallParts.map(p => (p as any).toolName || (p as any).type).filter(Boolean),
     totalDuration: undefined
   };
 }

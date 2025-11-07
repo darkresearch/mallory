@@ -8,6 +8,11 @@
  * 
  * However, the AI SDK's UIMessage format stores all parts in a single message.
  * This module ensures messages are properly structured before being sent to the API.
+ * 
+ * NOTE ON TYPE SAFETY:
+ * The AI SDK's type definitions don't include all runtime part types (e.g., 'reasoning', 'thinking').
+ * These types exist at runtime during streaming but aren't in the official type definitions.
+ * We use `as any` type assertions where necessary to handle these runtime types safely.
  */
 
 import { UIMessage } from 'ai';
@@ -40,6 +45,43 @@ interface ReasoningPart {
 type MessagePart = ToolCallPart | ToolResultPart | TextPart | ReasoningPart | any;
 
 /**
+ * Convert reasoning parts to thinking parts for Anthropic API compatibility
+ * The AI SDK uses 'reasoning' internally, but Anthropic's extended thinking API expects 'thinking'
+ */
+export function convertReasoningToThinking(messages: UIMessage[]): UIMessage[] {
+  return messages.map(message => {
+    if (!message.parts || !Array.isArray(message.parts)) {
+      return message;
+    }
+
+    const convertedParts = message.parts.map(part => {
+      const partType = (part as any).type;
+      
+      // Convert reasoning parts to thinking parts
+      // Note: 'reasoning' and 'reasoning-delta' are runtime types from streaming,
+      // not part of the official AI SDK types, so we use 'as any' for type safety
+      if (partType === 'reasoning' || partType === 'reasoning-delta') {
+        return {
+          ...part,
+          type: 'thinking'
+        } as any;
+      }
+      return part;
+    });
+
+    // Only create a new message object if we actually changed something
+    if (convertedParts.some((p, i) => (p as any).type !== (message.parts![i] as any).type)) {
+      return {
+        ...message,
+        parts: convertedParts
+      } as UIMessage;
+    }
+
+    return message;
+  });
+}
+
+/**
  * Check if a message has tool-call parts that need tool-result responses
  */
 function hasUnmatchedToolCalls(message: UIMessage): boolean {
@@ -70,6 +112,15 @@ function hasUnmatchedToolCalls(message: UIMessage): boolean {
 }
 
 /**
+ * Check if a message part is a thinking/reasoning block
+ * Note: 'thinking' and 'reasoning' are runtime types that may not be in the AI SDK type definitions
+ */
+function isThinkingPart(part: MessagePart): boolean {
+  const partType = (part as any).type;
+  return partType === 'reasoning' || partType === 'thinking' || partType === 'redacted_thinking';
+}
+
+/**
  * Extract tool calls from a message's parts
  */
 function extractToolCalls(parts: MessagePart[]): ToolCallPart[] {
@@ -88,6 +139,77 @@ function extractToolResults(parts: MessagePart[]): ToolResultPart[] {
  */
 function removeToolParts(parts: MessagePart[]): MessagePart[] {
   return parts.filter(p => p.type !== 'tool-call' && p.type !== 'tool-result');
+}
+
+/**
+ * Ensure assistant messages comply with thinking block requirements
+ * When extended thinking is enabled, assistant messages with tool calls must start with a thinking block
+ * before any tool_use blocks.
+ * 
+ * Per Anthropic's extended thinking API requirements:
+ * "When `thinking` is enabled, a final `assistant` message must start with a thinking block
+ * (preceeding the lastmost set of `tool_use` and `tool_result` blocks)."
+ * 
+ * This function ensures all assistant messages with tool calls have thinking blocks properly positioned.
+ * 
+ * NOTE: This should be called SEPARATELY from ensureToolMessageStructure() to ensure it always runs,
+ * even when tool structure validation passes.
+ */
+export function ensureThinkingBlockCompliance(messages: UIMessage[]): UIMessage[] {
+  if (messages.length === 0) return messages;
+
+  const result: UIMessage[] = [];
+  
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i];
+    
+    // Only process assistant messages
+    if (message.role !== 'assistant' || !message.parts || !Array.isArray(message.parts)) {
+      result.push(message);
+      continue;
+    }
+
+    // Check if this message has tool calls
+    const hasToolCalls = message.parts.some(p => p.type === 'tool-call');
+    
+    if (!hasToolCalls) {
+      // No tool calls, no special handling needed
+      result.push(message);
+      continue;
+    }
+    
+    // Message has tool calls - ensure thinking block is first
+    const hasThinkingAtStart = message.parts.length > 0 && isThinkingPart(message.parts[0]);
+    
+    if (hasThinkingAtStart) {
+      // Already compliant
+      result.push(message);
+      continue;
+    }
+    
+    // Need to fix: either reorder or add a placeholder thinking block
+    const thinkingBlocks = message.parts.filter(isThinkingPart);
+    const nonThinkingParts = message.parts.filter(p => !isThinkingPart(p));
+    
+    if (thinkingBlocks.length > 0) {
+      // Reorder: thinking blocks first, then everything else
+      console.log(`🔧 [Message ${i}] Reordering thinking blocks to start of message for extended thinking compliance`);
+      const reorderedMessage = {
+        ...message,
+        parts: [...thinkingBlocks, ...nonThinkingParts]
+      };
+      result.push(reorderedMessage);
+    } else {
+      // No thinking blocks found, but tool calls present
+      // This is the problematic case that causes the error
+      console.warn(`⚠️ [Message ${i}] Assistant message has tool calls but no thinking block - this may cause API errors with extended thinking enabled`);
+      // For now, just push as-is and let the API error be caught
+      // In a future enhancement, we could add a synthetic thinking block here
+      result.push(message);
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -239,6 +361,8 @@ export function ensureToolMessageStructure(messages: UIMessage[]): UIMessage[] {
     result.push(message);
   }
 
+  // Note: ensureThinkingBlockCompliance() should be called separately after this function
+  // to ensure it runs even when validation passes
   return result;
 }
 
@@ -342,18 +466,20 @@ export function logMessageStructure(messages: UIMessage[], label: string = 'Mess
     
     for (const part of parts) {
       const partAny = part as any; // Type assertion for accessing runtime properties
-      if (part.type === 'tool-call') {
-        console.log(`    - 🔧 tool-call: ${partAny.toolName || 'unknown'} (id: ${part.toolCallId})`);
-      } else if (part.type === 'tool-result') {
-        console.log(`    - ✅ tool-result: ${partAny.toolName || 'unknown'} (id: ${part.toolCallId})`);
-      } else if (part.type === 'text') {
+      const partType = partAny.type;
+      
+      if (partType === 'tool-call') {
+        console.log(`    - 🔧 tool-call: ${partAny.toolName || 'unknown'} (id: ${partAny.toolCallId})`);
+      } else if (partType === 'tool-result') {
+        console.log(`    - ✅ tool-result: ${partAny.toolName || 'unknown'} (id: ${partAny.toolCallId})`);
+      } else if (partType === 'text') {
         const preview = partAny.text?.substring(0, 50) || '';
         console.log(`    - 💬 text: "${preview}${preview.length >= 50 ? '...' : ''}"`);
-      } else if (part.type === 'reasoning') {
+      } else if (partType === 'reasoning') {
         const preview = partAny.text?.substring(0, 50) || '';
         console.log(`    - 🧠 reasoning: "${preview}${preview.length >= 50 ? '...' : ''}"`);
       } else {
-        console.log(`    - ${part.type}`);
+        console.log(`    - ${partType}`);
       }
     }
   }
