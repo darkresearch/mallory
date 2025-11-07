@@ -359,34 +359,49 @@ export function enforceTokenBudget(
   let truncatedToolResults = false;
   let windowedMessages = false;
   
-  // Calculate tokens for recent messages (always include these)
+  // Calculate tokens for recent messages (always try to include these)
   const recentTokens = recentMessages.reduce((sum, sm) => sum + sm.tokens, 0);
   currentTokens = recentTokens;
   
   console.log(`   Recent messages: ${recentTokens} tokens (${KEEP_RECENT_COUNT} messages)`);
   
+  // Check if recent messages alone exceed budget
+  if (recentTokens > maxTokens) {
+    console.log(`⚠️  Recent messages alone exceed budget (${recentTokens} > ${maxTokens})`);
+    console.log(`   Will need to truncate recent tool results`);
+  }
+  
   // Strategy 1: Fit as many high-priority older messages as possible
   // Sort older messages by priority (highest priority first = keep first)
   const sortedOlderMessages = [...olderMessages].sort((a, b) => b.score - a.score);
   
-  const remainingBudget = maxTokens - recentTokens;
+  const remainingBudget = Math.max(0, maxTokens - recentTokens);
   console.log(`   Remaining budget for older messages: ${remainingBudget} tokens`);
   
   const processedOlderMessages: UIMessage[] = [];
   let olderTokensAccumulated = 0;
   
-  // First pass: fit complete messages without truncation (highest priority first)
-  for (const scoredMsg of sortedOlderMessages) {
-    const { message, tokens, score } = scoredMsg;
-    
-    if (olderTokensAccumulated + tokens <= remainingBudget) {
-      // Fits completely - keep as-is
-      processedOlderMessages.push(message);
-      olderTokensAccumulated += tokens;
-    } else {
-      // Doesn't fit - we'll drop it (windowing)
+  // Only try to fit older messages if we have budget left
+  if (remainingBudget > 0) {
+    // Fit complete messages without truncation (highest priority first)
+    for (const scoredMsg of sortedOlderMessages) {
+      const { message, tokens, score } = scoredMsg;
+      
+      if (olderTokensAccumulated + tokens <= remainingBudget) {
+        // Fits completely - keep as-is
+        processedOlderMessages.push(message);
+        olderTokensAccumulated += tokens;
+      } else {
+        // Doesn't fit - we'll drop it (windowing)
+        windowedMessages = true;
+        console.log(`   Dropped message: ${tokens} tokens (score: ${Math.round(score)}) - doesn't fit`);
+      }
+    }
+  } else {
+    // No budget for older messages - drop them all
+    if (olderMessages.length > 0) {
       windowedMessages = true;
-      console.log(`   Dropped message: ${tokens} tokens (score: ${Math.round(score)}) - doesn't fit`);
+      console.log(`   Dropped all ${olderMessages.length} older messages - no budget remaining`);
     }
   }
   
