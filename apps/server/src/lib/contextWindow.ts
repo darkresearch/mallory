@@ -424,7 +424,7 @@ export function enforceTokenBudget(
     console.log(`⚠️  Still over budget (${currentTokens} tokens) - applying minimal truncation to recent messages`);
     
     // Find recent messages with tool results and truncate them slightly
-    const processedRecentMessages = recentMessages.map(({ message, tokens }) => {
+    const processedRecentMessages: UIMessage[] = recentMessages.map(({ message, tokens }) => {
       const hasToolResults = message.parts?.some(p => p.type === 'tool-result');
       
       if (hasToolResults && currentTokens > maxTokens) {
@@ -448,7 +448,7 @@ export function enforceTokenBudget(
         const bIdx = messages.findIndex(m => m.id === b.id);
         return aIdx - bIdx;
       }),
-      ...processedRecentMessages.map(sm => sm.message)
+      ...processedRecentMessages
     ];
   } else {
     // Under budget - combine messages
