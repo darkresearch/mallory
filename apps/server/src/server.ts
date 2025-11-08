@@ -110,8 +110,40 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   });
 });
 
+// Check OpenMemory connection
+async function checkOpenMemory() {
+  const openMemoryUrl = process.env.OPENMEMORY_URL;
+  const openMemoryApiKey = process.env.OPENMEMORY_API_KEY;
+  
+  if (!openMemoryUrl || !openMemoryApiKey) {
+    console.log('⚠️  OpenMemory: Not configured (OPENMEMORY_URL or OPENMEMORY_API_KEY missing)');
+    console.log('   Infinite memory will be disabled. Add to .env to enable.');
+    return;
+  }
+
+  try {
+    // Try to ping OpenMemory health endpoint
+    const response = await fetch(`${openMemoryUrl}/health`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(2000), // 2 second timeout
+    });
+
+    if (response.ok) {
+      console.log(`✅ OpenMemory: Connected (${openMemoryUrl})`);
+      console.log(`   Infinite memory enabled with semantic retrieval`);
+    } else {
+      console.log(`⚠️  OpenMemory: Unreachable (HTTP ${response.status})`);
+      console.log(`   Check that OpenMemory is running on ${openMemoryUrl}`);
+    }
+  } catch (error) {
+    console.log(`❌ OpenMemory: Connection failed (${openMemoryUrl})`);
+    console.log(`   Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.log(`   Run: cd services/openmemory/backend && bun start`);
+  }
+}
+
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log('');
   console.log('🚀 Mallory Server Started');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -127,6 +159,10 @@ app.listen(PORT, () => {
   console.log(`   POST /api/grid/verify-otp - Grid OTP verify (CORS proxy)`);
   console.log(`   POST /api/grid/send-tokens - Grid token transfer (CORS proxy)`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('');
+  
+  // Check OpenMemory connection
+  await checkOpenMemory();
   console.log('');
 });
 

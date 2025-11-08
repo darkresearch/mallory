@@ -82,7 +82,10 @@ GRID_API_KEY=your-grid-api-key
 
 # Optional (for AI tools):
 EXA_API_KEY=your-exa-key
-SUPERMEMORY_API_KEY=your-supermemory-key
+
+# Infinite Memory (OpenMemory for infinite context):
+OPENMEMORY_URL=http://localhost:8080
+OPENMEMORY_API_KEY=your-openmemory-key
 ```
 
 ### 3. Run Development Servers

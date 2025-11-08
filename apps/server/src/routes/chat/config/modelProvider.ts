@@ -1,16 +1,16 @@
 /**
- * Model provider setup with Supermemory Memory Router
+ * Model provider setup with Infinite Memory
  * 
- * Supermemory handles ALL context management:
- * - Intelligent compression via RAG
- * - Semantic summarization of long conversations
- * - User profile integration
+ * Infinite Memory handles context retrieval:
+ * - Semantic retrieval via OpenMemory
+ * - Smart hybrid strategy (recent + relevant)
+ * - Token-aware budget management
  * 
- * No manual truncation/windowing needed - just pass full context!
+ * Storage happens explicitly after messages are saved to Supabase
  */
 
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { UIMessage } from 'ai';
+import { createInfiniteMemory } from '@darkresearch/infinite-memory';
+import type { UIMessage } from 'ai';
 import { estimateTotalTokens } from '../../../lib/contextWindow';
 
 interface ModelProviderResult {
@@ -18,159 +18,132 @@ interface ModelProviderResult {
   processedMessages: UIMessage[];
   strategy: {
     useExtendedThinking: boolean;
-    useSupermemoryProxy: boolean;
+    useInfiniteMemory: boolean;
     estimatedTokens: number;
     reason: string;
   };
 }
 
+// Initialize Infinite Memory provider once at module level
+let infiniteMemory: ReturnType<typeof createInfiniteMemory> | null = null;
+
+export async function getInfiniteMemory() {
+  if (!infiniteMemory) {
+    const openMemoryUrl = process.env.OPENMEMORY_URL || 'http://localhost:8080';
+    const openMemoryApiKey = process.env.OPENMEMORY_API_KEY;
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+
+    if (!openMemoryApiKey) {
+      throw new Error('OPENMEMORY_API_KEY is required but not configured');
+    }
+
+    if (!anthropicApiKey) {
+      throw new Error('ANTHROPIC_API_KEY is required but not configured');
+    }
+
+    infiniteMemory = createInfiniteMemory({
+      openMemoryUrl,
+      openMemoryApiKey,
+      anthropicApiKey,
+      openMemoryTimeout: 2000, // 2 second timeout for localhost
+    });
+
+    console.log('✨ [InfiniteMemory] Provider initialized');
+  }
+
+  return infiniteMemory;
+}
+
 /**
- * Setup model provider with Supermemory Memory Router
+ * Setup model provider with Infinite Memory
  * 
- * @param messages - Full conversation history (no truncation needed!)
- * @param conversationId - Conversation ID for Supermemory scoping
- * @param userId - User ID for Supermemory scoping
+ * Gets relevant context from OpenMemory and returns Anthropic model
+ * 
+ * @param messages - Full conversation history (from client)
+ * @param conversationId - Conversation ID for memory scoping
+ * @param userId - User ID for memory scoping
  * @param claudeModel - Claude model to use
- * @returns Model instance and full messages
+ * @returns Model instance and context-enriched messages
  */
-export function setupModelProvider(
+export async function setupModelProvider(
   messages: UIMessage[],
   conversationId: string,
   userId: string,
   claudeModel: string
-): ModelProviderResult {
-  const supermemoryApiKey = process.env.SUPERMEMORY_API_KEY;
-  
-  if (!supermemoryApiKey) {
-    throw new Error('SUPERMEMORY_API_KEY is required but not configured');
-  }
-  
+): Promise<ModelProviderResult> {
   const estimatedTokens = estimateTotalTokens(messages);
   
-  // For Supermemory Infinite Chat, we should only send the LATEST user message
-  // Supermemory uses x-sm-conversation-id to inject relevant historical context
-  // See: https://supermemory.ai/docs/ai-sdk/infinite-chat
-  const latestUserMessage = messages.filter(m => m.role === 'user').slice(-1);
+  console.log(`🧠 [InfiniteMemory] Full conversation: ${messages.length} messages, ${estimatedTokens.toLocaleString()} tokens`);
   
-  console.log('🧠 [Supermemory] Sending this latest user message:', JSON.stringify(latestUserMessage, null, 2));
+  // Get or create the infinite memory provider
+  const memory = await getInfiniteMemory();
+  
+  // Get relevant context from OpenMemory
+  // This retrieves recent + semantically relevant messages
+  const contextResult = await memory.getRelevantContext(
+    conversationId,
+    userId,
+    messages as any,
+    claudeModel
+  );
+  
+  console.log(`📝 [InfiniteMemory] Context: ${contextResult.messages.length} messages${contextResult.historicalContext ? ' + historical context' : ''}`);
+  console.log(`📊 [InfiniteMemory] Source: ${contextResult.metadata.usedOpenMemory ? 'OpenMemory' : 'Fallback (recent only)'}`);
+  
+  // Get the Anthropic model
+  const model = memory.getModel(claudeModel);
+  
+  // Convert CoreMessages back to UIMessages (preserve parts structure)
+  let uiMessages = contextResult.messages.map((msg: any) => {
+    // If message already has parts array (from client), preserve it
+    if (msg.parts) {
+      return msg;
+    }
+    
+    // Otherwise convert content to parts format
+    const content = msg.content;
+    if (typeof content === 'string') {
+      return {
+        role: msg.role,
+        parts: [{ type: 'text', text: content }],
+      };
+    } else if (Array.isArray(content)) {
+      // Content is already a parts array
+      return {
+        role: msg.role,
+        parts: content,
+      };
+    }
+    
+    return msg;
+  });
 
-  const messagesToSend = latestUserMessage.length > 0 ? latestUserMessage : messages;
-  
-  // Always use Supermemory Infinite Chat Router
-  // It handles context intelligently:
-  // - Short conversations: pass through efficiently
-  // - Long conversations: compress via RAG/summarization
-  // - Massive tool results: semantic extraction
-  // User scoping via x-sm-user-id header enables user-specific memory access
-  console.log('🧠 [Supermemory] Sending latest message (full history: ' + messages.length + ' messages, ' + estimatedTokens.toLocaleString() + ' tokens):', {
-    messagesToSend: messagesToSend.length,
-    estimatedTokensForSent: estimateTotalTokens(messagesToSend).toLocaleString(),
-    conversationId
-  });
-  
-  // Custom fetch wrapper to log Supermemory compression metrics
-  // Reading headers doesn't affect the response body/stream at all
-  const fetchWithSupermemoryLogging: typeof fetch = async (input, init) => {
-    // Log the request body for debugging
-    let requestBody: any = null;
-    if (init?.body) {
-      try {
-        requestBody = JSON.parse(init.body as string);
-        console.log('📤 [Supermemory] Request body:', {
-          model: requestBody.model,
-          messageCount: requestBody.messages?.length,
-          firstMessage: requestBody.messages?.[0] ? {
-            role: requestBody.messages[0].role,
-            contentType: typeof requestBody.messages[0].content,
-            contentPreview: JSON.stringify(requestBody.messages[0].content).substring(0, 200)
-          } : null
-        });
-      } catch (e) {
-        console.log('📤 [Supermemory] Could not parse request body');
-      }
-    }
+  // Inject historical context as a system message before the recent messages
+  if (contextResult.historicalContext) {
+    const contextMessage: UIMessage = {
+      role: 'user',
+      parts: [{
+        type: 'text',
+        text: `[CONTEXT FROM PAST CONVERSATIONS]\n${contextResult.historicalContext}\n\n[END CONTEXT - Continue with current conversation]`,
+      }],
+    };
     
-    const response = await fetch(input, init);
+    // Insert context before the first recent message
+    uiMessages = [contextMessage, ...uiMessages];
     
-    // If there's an error, log the full request AND response for debugging
-    if (!response.ok) {
-      console.error('❌ [Supermemory] Request failed with status:', response.status);
-      
-      // Try to read the error response body
-      const responseClone = response.clone();
-      try {
-        const errorBody = await responseClone.text();
-        console.error('📥 [Supermemory] Error response body:', errorBody);
-        
-        // Try to parse if it's JSON
-        try {
-          const errorJson = JSON.parse(errorBody);
-          if (errorJson.error?.message) {
-            console.error('💥 [Supermemory] Error message:', errorJson.error.message);
-          }
-        } catch (e) {
-          // Not JSON, already logged as text
-        }
-      } catch (e) {
-        console.error('📥 [Supermemory] Could not read error response body');
-      }
-      
-      // Log what WE sent
-      if (requestBody) {
-        console.error('📤 [Supermemory] What we sent:', JSON.stringify(requestBody.messages, null, 2));
-      }
-      
-      // Log all response headers to see what Supermemory is telling us
-      const allHeaders: Record<string, string> = {};
-      response.headers.forEach((value, key) => {
-        allHeaders[key] = value;
-      });
-      console.error('📋 [Supermemory] Response headers:', allHeaders);
-    }
-    
-    // Check for Supermemory compression headers
-    const originalTokens = response.headers.get('x-supermemory-original-tokens');
-    const finalTokens = response.headers.get('x-supermemory-final-tokens');
-    const tokensSaved = response.headers.get('x-supermemory-tokens-saved');
-    
-    // Log compression results
-    if (originalTokens && finalTokens) {
-      const saved = tokensSaved ? parseInt(tokensSaved) : 0;
-      const ratio = saved > 0 
-        ? `${((saved / parseInt(originalTokens)) * 100).toFixed(1)}%`
-        : '0%';
-      
-      console.log(`🧠 [Supermemory] Compressed: ${parseInt(originalTokens).toLocaleString()} → ${parseInt(finalTokens).toLocaleString()} tokens (saved ${saved.toLocaleString()} / ${ratio})`);
-    } else {
-      // No Supermemory headers - likely pass-through mode
-      const sentTokens = estimateTotalTokens(messagesToSend);
-      console.log(`🧠 [Supermemory] Pass-through mode (sent ${sentTokens.toLocaleString()} tokens, no compression headers)`);
-    }
-    
-    return response;
-  };
-  
-  const infiniteChatProvider = createAnthropic({
-    baseURL: 'https://api.supermemory.ai/v3/https://api.anthropic.com/v1',
-    apiKey: process.env.ANTHROPIC_API_KEY,
-    headers: {
-      'x-supermemory-api-key': supermemoryApiKey,
-      'x-sm-conversation-id': conversationId,
-      'x-sm-user-id': userId,
-    },
-    fetch: fetchWithSupermemoryLogging,
-  });
-  
-  const model = infiniteChatProvider(claudeModel);
-  
+    console.log('📝 [InfiniteMemory] Injected historical context as system message');
+  }
+
   return {
     model,
-    processedMessages: messagesToSend, // Send only latest message - Supermemory injects history!
+    processedMessages: uiMessages as UIMessage[],
     strategy: {
-      useExtendedThinking: false, // TODO: Re-enable
-      useSupermemoryProxy: true,
-      estimatedTokens: estimateTotalTokens(messagesToSend),
-      reason: 'Supermemory Infinite Chat: latest message only, history via conversation ID'
+      useExtendedThinking: false,
+      useInfiniteMemory: true,
+      estimatedTokens: contextResult.metadata.estimatedTokens,
+      reason: contextResult.metadata.usedOpenMemory 
+        ? `Infinite Memory: ${contextResult.metadata.retrievedCount} memories + ${contextResult.metadata.recentCount} recent` 
+        : 'Infinite Memory: fallback to recent messages'
     }
   };
 }
