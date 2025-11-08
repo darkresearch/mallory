@@ -5,6 +5,9 @@ import { chatRouter } from './routes/chat/index.js';
 import { holdingsRouter } from './routes/wallet/holdings.js';
 import gridRouter from './routes/grid.js';
 import authRouter from './routes/auth.js';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 // Load environment variables
 dotenv.config();
@@ -160,6 +163,19 @@ app.listen(PORT, async () => {
   console.log(`   POST /api/grid/send-tokens - Grid token transfer (CORS proxy)`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('');
+  
+  // Log infinite-memory version
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const infiniteMemoryPkgPath = join(__dirname, '../node_modules/infinite-memory/package.json');
+    const infiniteMemoryPkg = JSON.parse(readFileSync(infiniteMemoryPkgPath, 'utf-8'));
+    console.log(`📦 infinite-memory version: ${infiniteMemoryPkg.version}`);
+    console.log('');
+  } catch (error) {
+    console.log('⚠️  Could not read infinite-memory version');
+    console.log('');
+  }
   
   // Check OpenMemory connection
   await checkOpenMemory();
