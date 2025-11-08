@@ -201,11 +201,21 @@ export function ensureThinkingBlockCompliance(messages: UIMessage[]): UIMessage[
       result.push(reorderedMessage);
     } else {
       // No thinking blocks found, but tool calls present
-      // This is the problematic case that causes the error
-      console.warn(`⚠️ [Message ${i}] Assistant message has tool calls but no thinking block - this may cause API errors with extended thinking enabled`);
-      // For now, just push as-is and let the API error be caught
-      // In a future enhancement, we could add a synthetic thinking block here
-      result.push(message);
+      // This MUST be fixed for extended thinking API compliance
+      console.warn(`⚠️ [Message ${i}] Assistant message has tool calls but no thinking block - adding placeholder thinking block for API compliance`);
+      
+      // Add a minimal placeholder thinking block at the start
+      // This is required by Anthropic's extended thinking API
+      const placeholderThinking = {
+        type: 'thinking',
+        text: '[Planning tool usage]'
+      } as any;
+      
+      const fixedMessage = {
+        ...message,
+        parts: [placeholderThinking, ...nonThinkingParts]
+      };
+      result.push(fixedMessage);
     }
   }
 
