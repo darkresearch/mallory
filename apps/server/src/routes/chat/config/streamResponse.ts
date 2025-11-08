@@ -110,6 +110,10 @@ export function buildStreamResponse(
 
     // Save assistant message server-side when stream completes
     // Saves the full message with all parts (reasoning, text, etc.) after streaming finishes
+    // 
+    // NOTE: toUIMessageStreamResponse combines originalMessages + new message for UI streaming,
+    // so onFinish receives the ENTIRE conversation (not just the new message).
+    // We filter to get only the newly generated assistant message.
     onFinish: async ({ messages: allMessages, isAborted }: any) => {
       console.log('🏁 onFinish callback triggered:', { 
         messageCount: allMessages.length, 
@@ -123,7 +127,9 @@ export function buildStreamResponse(
       
       // Save assistant message to database (server-side persistence)
       if (!isAborted && allMessages.length > 0) {
-        const assistantMessage = allMessages.find((msg: UIMessage) => msg.role === 'assistant');
+        // Get the LAST assistant message (the newly generated one, not previous ones in history)
+        const assistantMessages = allMessages.filter((msg: UIMessage) => msg.role === 'assistant');
+        const assistantMessage = assistantMessages[assistantMessages.length - 1];
         if (assistantMessage) {
           console.log('💾 Saving assistant message to database:', {
             messageId: assistantMessage.id,
