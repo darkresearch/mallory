@@ -9,7 +9,7 @@
  * Storage happens explicitly after messages are saved to Supabase
  */
 
-import { createInfiniteMemory } from '@darkresearch/infinite-memory';
+import { createInfiniteMemory } from 'infinite-memory';
 import type { UIMessage } from 'ai';
 import { estimateTotalTokens } from '../../../lib/contextWindow';
 import { v4 as uuidv4 } from 'uuid';
