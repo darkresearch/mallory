@@ -117,6 +117,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@ai-sdk/anthropic": "^2.0.16",
+        "@anthropic-ai/sdk": "^0.32.1",
         "@darkresearch/mallory-shared": "workspace:*",
         "@solana/spl-token": "^0.4.9",
         "@solana/web3.js": "^1.95.8",
