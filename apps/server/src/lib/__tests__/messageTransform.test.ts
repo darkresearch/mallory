@@ -590,7 +590,8 @@ describe('messageTransform', () => {
       const result = convertReasoningToThinking(messages);
       
       expect(result[0].parts?.[0].type).toBe('thinking');
-      expect((result[0].parts?.[0] as any).text).toBe('Let me think about this...');
+      // CRITICAL: Anthropic expects 'thinking' field, not 'text' field
+      expect((result[0].parts?.[0] as any).thinking).toBe('Let me think about this...');
       expect(result[0].parts?.[1].type).toBe('text');
     });
 
@@ -610,7 +611,8 @@ describe('messageTransform', () => {
       const result = convertReasoningToThinking(messages);
       
       expect(result[0].parts?.[0].type).toBe('thinking');
-      expect((result[0].parts?.[0] as any).text).toBe('Partial thinking...');
+      // CRITICAL: Anthropic expects 'thinking' field, not 'text' field
+      expect((result[0].parts?.[0] as any).thinking).toBe('Partial thinking...');
     });
 
     test('preserves messages without reasoning parts', () => {

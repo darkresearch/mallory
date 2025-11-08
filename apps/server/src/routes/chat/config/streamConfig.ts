@@ -24,9 +24,42 @@ interface StreamConfigOptions {
 export function buildStreamConfig(options: StreamConfigOptions) {
   const { model, processedMessages, systemPrompt, tools, strategy } = options;
   
+  // Convert UIMessages to model messages
+  const modelMessages = convertToModelMessages(processedMessages);
+  
+  // CRITICAL DEBUG: Log what we're actually sending to Anthropic API
+  console.log('\n🔍 ANTHROPIC API MESSAGE STRUCTURE DEBUG:');
+  console.log('═'.repeat(80));
+  console.log('Total messages being sent to API:', modelMessages.length);
+  
+  for (let i = 0; i < modelMessages.length; i++) {
+    const msg = modelMessages[i];
+    console.log(`\n[${i}] ${msg.role.toUpperCase()}:`);
+    
+    if (Array.isArray(msg.content)) {
+      console.log(`  Content array with ${msg.content.length} items:`);
+      for (let j = 0; j < msg.content.length; j++) {
+        const contentItem = msg.content[j];
+        console.log(`    [${j}] type: ${contentItem.type}`);
+        if (contentItem.type === 'text') {
+          console.log(`        text preview: "${contentItem.text?.substring(0, 50)}..."`);
+        } else if (contentItem.type === 'thinking' || contentItem.type === 'redacted_thinking') {
+          console.log(`        thinking preview: "${contentItem.thinking?.substring(0, 50)}..."`);
+        } else if (contentItem.type === 'tool_use') {
+          console.log(`        tool: ${contentItem.name}`);
+        } else if (contentItem.type === 'tool_result') {
+          console.log(`        tool_result for: ${contentItem.tool_use_id}`);
+        }
+      }
+    } else if (typeof msg.content === 'string') {
+      console.log(`  String content: "${msg.content.substring(0, 100)}..."`);
+    }
+  }
+  console.log('\n' + '═'.repeat(80) + '\n');
+  
   return {
     model,
-    messages: convertToModelMessages(processedMessages),
+    messages: modelMessages,
     system: systemPrompt,
     temperature: 0.7,
     

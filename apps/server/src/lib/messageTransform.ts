@@ -61,9 +61,11 @@ export function convertReasoningToThinking(messages: UIMessage[]): UIMessage[] {
       // Note: 'reasoning' and 'reasoning-delta' are runtime types from streaming,
       // not part of the official AI SDK types, so we use 'as any' for type safety
       if (partType === 'reasoning' || partType === 'reasoning-delta') {
+        // CRITICAL: Anthropic expects 'thinking' field, not 'text' field
+        const reasoningPart = part as any;
         return {
-          ...part,
-          type: 'thinking'
+          type: 'thinking',
+          thinking: reasoningPart.text || reasoningPart.thinking || ''
         } as any;
       }
       return part;
@@ -206,9 +208,10 @@ export function ensureThinkingBlockCompliance(messages: UIMessage[]): UIMessage[
       
       // Add a minimal placeholder thinking block at the start
       // This is required by Anthropic's extended thinking API
+      // CRITICAL: Use 'thinking' field, not 'text' field
       const placeholderThinking = {
         type: 'thinking',
-        text: '[Planning tool usage]'
+        thinking: '[Planning tool usage]'
       } as any;
       
       const fixedMessage = {

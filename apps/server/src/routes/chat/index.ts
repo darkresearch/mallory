@@ -139,6 +139,34 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     // Per Anthropic's requirements: assistant messages with tool calls MUST start with thinking blocks
     console.log('🧠 Ensuring thinking block compliance for extended thinking API...');
     conversationMessages = ensureThinkingBlockCompliance(conversationMessages);
+    
+    // CRITICAL DEBUG: Log the message structure BEFORE AI SDK conversion
+    console.log('\n🔍 MESSAGE STRUCTURE BEFORE AI SDK CONVERSION:');
+    console.log('═'.repeat(80));
+    for (let i = 0; i < conversationMessages.length; i++) {
+      const msg = conversationMessages[i];
+      console.log(`\n[${i}] ${msg.role.toUpperCase()} (id: ${msg.id})`);
+      if (msg.parts && Array.isArray(msg.parts)) {
+        console.log(`  Parts: ${msg.parts.length}`);
+        for (let j = 0; j < msg.parts.length; j++) {
+          const part = msg.parts[j] as any;
+          console.log(`    [${j}] type: ${part.type}`);
+          if (part.type === 'text' && part.text) {
+            console.log(`        text preview: "${part.text.substring(0, 50)}..."`);
+          } else if (part.type === 'thinking') {
+            const thinkingText = part.thinking || part.text || '';
+            console.log(`        thinking field: "${thinkingText.substring(0, 50)}..."`);
+            if (part.thinking) console.log(`        ✓ Uses 'thinking' field (correct)`);
+            if (part.text && !part.thinking) console.log(`        ✗ Uses 'text' field (WRONG - should be 'thinking')`);
+          } else if (part.type === 'tool-call') {
+            console.log(`        tool: ${part.toolName} (id: ${part.toolCallId})`);
+          } else if (part.type === 'tool-result') {
+            console.log(`        tool_result for: ${part.toolName} (id: ${part.toolCallId})`);
+          }
+        }
+      }
+    }
+    console.log('\n' + '═'.repeat(80) + '\n');
 
     // If system-initiated (proactive) and no messages, add synthetic user prompt
     // AI SDK requires at least one message - can't have just system prompt
