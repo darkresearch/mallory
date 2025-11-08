@@ -700,6 +700,75 @@ describe('messageTransform', () => {
   });
 
   describe('extended thinking API compliance', () => {
+    test('handles historical messages from database without thinking blocks', () => {
+      // This simulates loading messages from Supabase that were created before
+      // extended thinking was enabled. These messages have tool calls but no thinking blocks.
+      const historicalMessages: UIMessage[] = [
+        {
+          id: '1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'What is Bitcoin price?' }],
+          content: 'What is Bitcoin price?'
+        } as UIMessage,
+        {
+          id: '2',
+          role: 'assistant',
+          parts: [
+            { type: 'text', text: 'Let me check that for you.' },
+            { 
+              type: 'tool-call', 
+              toolCallId: 'call-1',
+              toolName: 'searchWeb',
+              args: { query: 'bitcoin price' }
+            }
+          ],
+          content: 'Let me check that for you.'
+        } as UIMessage,
+        {
+          id: '3',
+          role: 'user',
+          parts: [
+            { 
+              type: 'tool-result', 
+              toolCallId: 'call-1',
+              toolName: 'searchWeb',
+              result: { price: '$50,000' }
+            }
+          ],
+          content: ''
+        } as UIMessage,
+        {
+          id: '4',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Bitcoin is at $50,000' }],
+          content: 'Bitcoin is at $50,000'
+        } as UIMessage,
+      ];
+
+      // Apply transformations (same as in chat/index.ts)
+      const result = ensureThinkingBlockCompliance(historicalMessages);
+      
+      // Find the assistant message with tool call
+      const assistantWithCall = result.find(m => 
+        m.role === 'assistant' && 
+        m.parts?.some(p => p.type === 'tool-call')
+      );
+      
+      expect(assistantWithCall).toBeDefined();
+      
+      // CRITICAL: Should have placeholder thinking block added at start
+      expect(assistantWithCall!.parts![0].type).toBe('thinking');
+      expect((assistantWithCall!.parts![0] as any).text).toBe('[Planning tool usage]');
+      
+      // Tool call should still be present
+      expect(assistantWithCall!.parts?.some(p => p.type === 'tool-call')).toBe(true);
+      
+      // Original text should be preserved
+      const textPart = assistantWithCall!.parts?.find(p => p.type === 'text');
+      expect(textPart).toBeDefined();
+      expect((textPart as any).text).toBe('Let me check that for you.');
+    });
+
     test('ensures assistant messages with tool calls have thinking blocks first', () => {
       const messages: UIMessage[] = [
         {
@@ -762,11 +831,15 @@ describe('messageTransform', () => {
       ];
 
       const result = ensureToolMessageStructure(messages);
+      const compliant = ensureThinkingBlockCompliance(result);
       
-      // This case is problematic for extended thinking but should not crash
-      // The message should be preserved as-is with a warning
-      expect(result.length).toBe(1);
-      expect(result[0].parts?.some(p => p.type === 'tool-call')).toBe(true);
+      // Should add a placeholder thinking block at the start
+      expect(compliant.length).toBe(1);
+      expect(compliant[0].parts?.some(p => p.type === 'tool-call')).toBe(true);
+      
+      // CRITICAL: First part should now be a thinking block (added as placeholder)
+      expect(compliant[0].parts![0].type).toBe('thinking');
+      expect((compliant[0].parts![0] as any).text).toBe('[Planning tool usage]');
     });
 
     test('complete flow: reasoning conversion + structure fixing for extended thinking', () => {
