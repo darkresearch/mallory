@@ -54,18 +54,20 @@ export function buildStreamConfig(options: StreamConfigOptions) {
       }
     },
     
+    // Disabling thinking for now given bugs
+    // TODO: Re-enable
     // Enable extended thinking based on smart strategy decision
-    ...(strategy.useExtendedThinking ? {
-      headers: {
-        'anthropic-beta': 'interleaved-thinking-2025-05-14',
-      },
-      providerOptions: {
-        anthropic: {
-          thinking: { type: 'enabled', budgetTokens: 15000 },
-          sendReasoning: true,
-        } satisfies AnthropicProviderOptions,
-      },
-    } : {}),
+    // ...(strategy.useExtendedThinking ? {
+    //   headers: {
+    //     'anthropic-beta': 'interleaved-thinking-2025-05-14',
+    //   },
+    //   providerOptions: {
+    //     anthropic: {
+    //       thinking: { type: 'enabled', budgetTokens: 15000 },
+    //       sendReasoning: true,
+    //     } satisfies AnthropicProviderOptions,
+    //   },
+    // } : {}),
     
     onError: (error: any) => {
       console.error('❌ AI streaming error:', error);

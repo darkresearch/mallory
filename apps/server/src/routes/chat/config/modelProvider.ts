@@ -85,7 +85,7 @@ export function setupModelProvider(
     model,
     processedMessages: messages, // Send EVERYTHING - no truncation!
     strategy: {
-      useExtendedThinking: true,
+      useExtendedThinking: false, // TODO: Re-enable
       useSupermemoryProxy: true,
       estimatedTokens,
       reason: 'Supermemory Memory Router handles all context management'
