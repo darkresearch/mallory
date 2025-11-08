@@ -3,10 +3,11 @@
  * Configures the UI message stream response with metadata and callbacks
  */
 
-import { UIMessage } from 'ai';
+import type { UIMessage } from 'ai';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../../../lib/supabase.js';
 import { saveAssistantMessage } from '../persistence.js';
+import { getInfiniteMemory } from './modelProvider.js';
 
 /**
  * Build UI message stream response configuration
@@ -24,7 +25,8 @@ export function buildStreamResponse(
   onboardingContext?: {
     userId: string;
     isOnboarding: boolean;
-  }
+  },
+  userId?: string
 ) {
   // Track stream progress
   let partCount = 0;
@@ -137,7 +139,27 @@ export function buildStreamResponse(
             hasReasoning: assistantMessage.parts?.some((p: any) => p.type === 'reasoning'),
             contentLength: assistantMessage.content?.length || 0
           });
+          
+          // Save to Supabase
           await saveAssistantMessage(conversationId, assistantMessage);
+          
+          // Also store in OpenMemory for future context retrieval
+          if (userId) {
+            try {
+              const memory = await getInfiniteMemory();
+              // Store entire message object (preserves parts array with text, reasoning, tool-calls, etc.)
+              await memory.storeMessage(
+                conversationId,
+                userId,
+                'assistant',
+                assistantMessage, // Pass whole message object
+                assistantMessage.id
+              );
+              console.log('✅ [InfiniteMemory] Stored assistant message:', assistantMessage.id);
+            } catch (error) {
+              console.error('❌ [InfiniteMemory] Failed to store assistant message:', error);
+            }
+          }
         }
       }
       

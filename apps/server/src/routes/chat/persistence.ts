@@ -89,25 +89,26 @@ async function ensureConversationExists(conversationId: string): Promise<boolean
 export async function saveUserMessage(
   conversationId: string,
   message: UIMessage
-): Promise<boolean> {
+): Promise<{ success: boolean; messageId?: string; content?: string }> {
   try {
     if (message.role !== 'user') {
       console.error('saveUserMessage called with non-user message');
-      return false;
+      return { success: false };
     }
 
     // Ensure conversation exists before attempting to save
     const conversationExists = await ensureConversationExists(conversationId);
     if (!conversationExists) {
       console.warn(`⚠️ Skipping user message save - conversation ${conversationId} not found`);
-      return false;
+      return { success: false };
     }
 
     const textContent = extractTextContent(message.parts || []);
     const chainOfThought = buildChainOfThoughtMetadata(message.parts || []);
+    const messageId = ensureUUID(message.id);
 
     const messageData = {
-      id: ensureUUID(message.id),
+      id: messageId,
       conversation_id: conversationId,
       role: 'user' as const,
       content: textContent,
@@ -130,7 +131,7 @@ export async function saveUserMessage(
 
     if (error) {
       console.error('💾 Failed to save user message:', error);
-      return false;
+      return { success: false };
     }
 
     // Update conversation updated_at timestamp
@@ -139,12 +140,12 @@ export async function saveUserMessage(
       .update({ updated_at: new Date().toISOString() })
       .eq('id', conversationId);
 
-    console.log('✅ User message saved:', messageData.id);
-    return true;
+    console.log('✅ User message saved:', messageId);
+    return { success: true, messageId, content: textContent };
 
   } catch (error) {
     console.error('💾 Error saving user message:', error);
-    return false;
+    return { success: false };
   }
 }
 

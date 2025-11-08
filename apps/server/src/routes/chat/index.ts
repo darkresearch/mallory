@@ -1,5 +1,5 @@
 import express, { Router } from 'express';
-import { streamText, UIMessage } from 'ai';
+import { streamText, type UIMessage } from 'ai';
 import { v4 as uuidv4 } from 'uuid';
 import { authenticateUser, AuthenticatedRequest } from '../../middleware/auth.js';
 import { toolRegistry } from './tools/registry.js';
@@ -118,10 +118,15 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     // This ensures messages persist even if the stream fails or client disconnects
     const userMessages = conversationMessages.filter((msg: UIMessage) => msg.role === 'user');
     const lastUserMessage = userMessages[userMessages.length - 1];
+    let userMessageData: { messageId?: string; message?: any } = {};
     
     if (lastUserMessage) {
       console.log('💾 Saving user message immediately:', lastUserMessage.id);
-      await saveUserMessage(conversationId, lastUserMessage);
+      const result = await saveUserMessage(conversationId, lastUserMessage);
+      if (result.success && result.messageId) {
+        // Store the whole message object for OpenMemory (preserves all parts)
+        userMessageData = { messageId: result.messageId, message: lastUserMessage };
+      }
     }
 
     // If system-initiated (proactive) and no messages, add synthetic user prompt
@@ -139,12 +144,33 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     }
 
     // Setup model provider with smart strategy
-    const { model, processedMessages, strategy } = setupModelProvider(
+    // This retrieves relevant context from OpenMemory
+    const { model, processedMessages, strategy } = await setupModelProvider(
       conversationMessages,
       conversationId,
       userId,
       getClaudeModel()
     );
+
+    // After getting context, store the current user message to OpenMemory
+    // (Do this AFTER context retrieval so the current message isn't included in search)
+    if (userMessageData.messageId && userMessageData.message) {
+      try {
+        const { getInfiniteMemory } = await import('./config/modelProvider.js');
+        const memory = await getInfiniteMemory();
+        // Store entire message object (preserves parts array with all content types)
+        await memory.storeMessage(
+          conversationId,
+          userId,
+          'user',
+          userMessageData.message,
+          userMessageData.messageId
+        );
+        console.log('✅ [InfiniteMemory] Stored user message:', userMessageData.messageId);
+      } catch (error) {
+        console.error('❌ [InfiniteMemory] Failed to store user message:', error);
+      }
+    }
 
     // Prepare x402 context for Nansen tools
     const x402Context = (gridSessionSecrets && gridSession) ? {
@@ -152,8 +178,7 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       gridSession
     } : undefined;
 
-    // Prepare tools (always include memory tools if available)
-    const supermemoryApiKey = process.env.SUPERMEMORY_API_KEY;
+    // Prepare tools
     const tools = {
       searchWeb: toolRegistry.searchWeb,
       nansenHistoricalBalances: toolRegistry.createNansenTool(x402Context),
@@ -180,7 +205,7 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       nansenTokenJupiterDcas: toolRegistry.createNansenTokenJupiterDcasTool(x402Context),
       nansenPnlLeaderboard: toolRegistry.createNansenPnlLeaderboardTool(x402Context),
       nansenPortfolio: toolRegistry.createNansenPortfolioTool(x402Context),
-      ...(supermemoryApiKey ? toolRegistry.createSupermemoryTools(supermemoryApiKey, userId) : {}),
+      // Memory now handled by infinite-memory package (automatic)
     };
 
     // Log model configuration with actual enabled tools
@@ -218,7 +243,8 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       result, 
       originalMessages,  // Use original messages (without synthetic message)
       conversationId, 
-      isOnboardingConversation ? { userId, isOnboarding: true } : undefined
+      isOnboardingConversation ? { userId, isOnboarding: true } : undefined,
+      userId  // Pass userId for OpenMemory storage
     );
     console.log('🚀 Stream response created');
     

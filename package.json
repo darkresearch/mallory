@@ -10,7 +10,9 @@
   "scripts": {
     "client": "cd apps/client && bun run web",
     "server": "cd apps/server && bun run dev",
-    "dev": "concurrently \"bun run client\" \"bun run server\"",
+    "openmemory": "cd services/openmemory/backend && bun start",
+    "dev": "concurrently \"bun run client\" \"bun run server\" \"bun run openmemory\"",
+    "dev:server": "concurrently \"bun run server\" \"bun run openmemory\"",
     "install:all": "bun install && cd apps/client && bun install && cd ../server && bun install",
     "test:e2e:web": "playwright test",
     "test:e2e:web:ui": "playwright test --ui",
