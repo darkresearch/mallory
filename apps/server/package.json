@@ -16,7 +16,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.16",
     "@anthropic-ai/sdk": "^0.32.1",
-    "@darkresearch/infinite-memory": "file:../../../infinite-memory",
+    "infinite-memory": "^0.1.1",
     "@darkresearch/mallory-shared": "workspace:*",
     "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.95.8",
