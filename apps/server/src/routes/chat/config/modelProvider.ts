@@ -12,6 +12,7 @@
 import { createInfiniteMemory } from '@darkresearch/infinite-memory';
 import type { UIMessage } from 'ai';
 import { estimateTotalTokens } from '../../../lib/contextWindow';
+import { v4 as uuidv4 } from 'uuid';
 
 interface ModelProviderResult {
   model: any;
@@ -27,7 +28,7 @@ interface ModelProviderResult {
 // Initialize Infinite Memory provider once at module level
 let infiniteMemory: ReturnType<typeof createInfiniteMemory> | null = null;
 
-export async function getInfiniteMemory() {
+export async function getInfiniteMemory(): Promise<ReturnType<typeof createInfiniteMemory>> {
   if (!infiniteMemory) {
     const openMemoryUrl = process.env.OPENMEMORY_URL || 'http://localhost:8080';
     const openMemoryApiKey = process.env.OPENMEMORY_API_KEY;
@@ -121,6 +122,7 @@ export async function setupModelProvider(
   // Inject historical context as a system message before the recent messages
   if (contextResult.historicalContext) {
     const contextMessage: UIMessage = {
+      id: uuidv4(),
       role: 'user',
       parts: [{
         type: 'text',

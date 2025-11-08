@@ -16,7 +16,6 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.16",
     "@anthropic-ai/sdk": "^0.32.1",
-    "infinite-memory": "^0.1.1",
     "@darkresearch/mallory-shared": "workspace:*",
     "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.95.8",
@@ -27,6 +26,7 @@
     "dotenv": "^16.4.7",
     "exa-js": "^1.0.14",
     "express": "^4.18.2",
+    "infinite-memory": "^0.1.1",
     "ioredis": "^5.4.2",
     "uuid": "^13.0.0",
     "zod": "^4.1.8"
