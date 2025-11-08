@@ -914,5 +914,62 @@ describe('messageTransform', () => {
       expect(thinkingParts).toBeDefined();
       expect(thinkingParts!.length).toBeGreaterThan(0);
     });
+
+    test('CRITICAL: validates that thinking blocks survive the full transformation pipeline', () => {
+      // This test simulates the EXACT flow in chat/index.ts to verify the fix works
+      const messages: UIMessage[] = [
+        {
+          id: '1',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Search for Bitcoin' }],
+          content: 'Search for Bitcoin'
+        } as UIMessage,
+        {
+          id: '2',
+          role: 'assistant',
+          parts: [
+            { type: 'text', text: 'Let me search for that.' },
+            { 
+              type: 'tool-call', 
+              toolCallId: 'call-1',
+              toolName: 'searchWeb',
+              args: { query: 'bitcoin' }
+            }
+          ],
+          content: 'Let me search for that.'
+        } as UIMessage,
+      ];
+
+      // Simulate the exact transformation pipeline from chat/index.ts
+      let conversationMessages = [...messages];
+      
+      // Step 1: Tool structure validation/fixing
+      conversationMessages = ensureToolMessageStructure(conversationMessages);
+      
+      // Step 2: Convert reasoning to thinking
+      conversationMessages = convertReasoningToThinking(conversationMessages);
+      
+      // Step 3: Ensure thinking block compliance
+      conversationMessages = ensureThinkingBlockCompliance(conversationMessages);
+      
+      // Find the assistant message with tool call
+      const assistantMsg = conversationMessages.find(m => 
+        m.role === 'assistant' && 
+        m.parts?.some(p => p.type === 'tool-call')
+      );
+      
+      expect(assistantMsg).toBeDefined();
+      expect(assistantMsg!.parts).toBeDefined();
+      expect(assistantMsg!.parts!.length).toBeGreaterThan(0);
+      
+      // CRITICAL: First part MUST be a thinking block for extended thinking API compliance
+      const firstPart = assistantMsg!.parts![0];
+      expect((firstPart as any).type).toBe('thinking');
+      expect((firstPart as any).text).toBe('[Planning tool usage]'); // Placeholder text
+      
+      // Verify tool call is still present
+      const hasToolCall = assistantMsg!.parts!.some(p => p.type === 'tool-call');
+      expect(hasToolCall).toBe(true);
+    });
   });
 });

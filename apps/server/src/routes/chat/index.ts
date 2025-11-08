@@ -133,12 +133,36 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     // The AI SDK uses 'reasoning' internally, but Anthropic's extended thinking API expects 'thinking'
     console.log('🧠 Converting reasoning parts to thinking parts for Anthropic API compatibility...');
     conversationMessages = convertReasoningToThinking(conversationMessages);
+    
+    // 🔍 DIAGNOSTIC: Log after reasoning conversion
+    console.log('🔍 After convertReasoningToThinking:');
+    conversationMessages.forEach((msg, i) => {
+      if (msg.role === 'assistant') {
+        const thinkingParts = msg.parts?.filter((p: any) => p.type === 'thinking' || p.type === 'reasoning');
+        const toolCallParts = msg.parts?.filter((p: any) => p.type === 'tool-call');
+        console.log(`  [${i}] Assistant: ${thinkingParts?.length || 0} thinking, ${toolCallParts?.length || 0} tool-calls, ${msg.parts?.length || 0} total parts`);
+      }
+    });
 
     // CRITICAL: Always ensure thinking block compliance for extended thinking API
     // This must be called regardless of whether tool structure validation passes or fails
     // Per Anthropic's requirements: assistant messages with tool calls MUST start with thinking blocks
     console.log('🧠 Ensuring thinking block compliance for extended thinking API...');
     conversationMessages = ensureThinkingBlockCompliance(conversationMessages);
+    
+    // 🔍 DIAGNOSTIC: Log after thinking compliance
+    console.log('🔍 After ensureThinkingBlockCompliance:');
+    conversationMessages.forEach((msg, i) => {
+      if (msg.role === 'assistant') {
+        const firstPartType = msg.parts?.[0] ? (msg.parts[0] as any).type : 'none';
+        const thinkingParts = msg.parts?.filter((p: any) => p.type === 'thinking' || p.type === 'reasoning');
+        const toolCallParts = msg.parts?.filter((p: any) => p.type === 'tool-call');
+        console.log(`  [${i}] Assistant: first=${firstPartType}, ${thinkingParts?.length || 0} thinking, ${toolCallParts?.length || 0} tool-calls`);
+        if (toolCallParts && toolCallParts.length > 0) {
+          console.log(`      ⚠️ Has tool calls - MUST have thinking block first!`);
+        }
+      }
+    });
 
     // If system-initiated (proactive) and no messages, add synthetic user prompt
     // AI SDK requires at least one message - can't have just system prompt
