@@ -36,6 +36,7 @@
     "test:e2e:persistence": "bun test __tests__/e2e/otp-flow-persistence.test.ts",
     "test:e2e:chat": "bun test __tests__/e2e/chat-user-journey-updated.test.ts",
     "test:e2e:chat-history": "bun test __tests__/e2e/chat-history-journey.test.ts",
+    "test:e2e:extended-thinking": "bun test __tests__/e2e/extended-thinking-compliance.test.ts",
     "test:signup": "bun test __tests__/e2e/signup-flow.test.ts",
     "test:signup:errors": "bun test __tests__/e2e/signup-error-scenarios.test.ts",
     "test:all": "bun run test:unit && bun run test:integration && bun run test:e2e",

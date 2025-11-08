@@ -197,6 +197,18 @@ jobs:
           EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # For AI completeness review
       
+      - name: Run Extended Thinking Compliance tests
+        run: cd apps/client && bun test __tests__/e2e/extended-thinking-compliance.test.ts
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
+          TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
+          EXPO_PUBLIC_GRID_ENV: production
+          TEST_BACKEND_URL: http://localhost:3001
+          EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      
       - name: Stop backend server
         if: always()
         run: |
