@@ -19,63 +19,38 @@ interface StreamConfigOptions {
 }
 
 /**
- * Ensure assistant messages in Anthropic format have thinking blocks first
- * This must be done AFTER convertToModelMessages because that function doesn't preserve
- * manually-added thinking blocks in UIMessage parts.
+ * CRITICAL FIX: Remove thinking blocks from request messages
+ * 
+ * Thinking blocks can ONLY come FROM Claude (they include cryptographic signatures).
+ * When we load historical messages from the database that include thinking blocks,
+ * we must STRIP them before sending back to Anthropic, otherwise we get:
+ * "messages.X.content.0.thinking.signature: Field required"
+ * 
+ * However, when extended thinking is enabled and an assistant message has tool_use,
+ * Anthropic requires that message to have started with a thinking block WHEN IT WAS
+ * ORIGINALLY CREATED. Since we can't add valid thinking blocks, we need to ensure
+ * messages are properly structured when they're first received.
  */
-function ensureThinkingBlocksInModelMessages(modelMessages: any[]): any[] {
+function removeThinkingBlocksFromRequests(modelMessages: any[]): any[] {
   return modelMessages.map(msg => {
-    // Only process assistant messages
     if (msg.role !== 'assistant' || !Array.isArray(msg.content)) {
       return msg;
     }
     
-    // Check if this message has tool_use blocks
-    const hasToolUse = msg.content.some((block: any) => block.type === 'tool_use');
-    
-    if (!hasToolUse) {
-      // No tool use - no special handling needed
-      return msg;
-    }
-    
-    // Message has tool_use - ensure thinking block is first
-    const hasThinkingAtStart = msg.content.length > 0 && 
-      (msg.content[0].type === 'thinking' || msg.content[0].type === 'redacted_thinking');
-    
-    if (hasThinkingAtStart) {
-      // Already compliant
-      return msg;
-    }
-    
-    // Check if there are any thinking blocks elsewhere
-    const thinkingBlocks = msg.content.filter((b: any) => 
-      b.type === 'thinking' || b.type === 'redacted_thinking'
-    );
-    const nonThinkingBlocks = msg.content.filter((b: any) => 
-      b.type !== 'thinking' && b.type !== 'redacted_thinking'
+    // Remove any thinking or redacted_thinking blocks - they're invalid in requests
+    const contentWithoutThinking = msg.content.filter((block: any) => 
+      block.type !== 'thinking' && block.type !== 'redacted_thinking'
     );
     
-    if (thinkingBlocks.length > 0) {
-      // Reorder: thinking blocks first
-      console.log('🔧 [Model Message] Reordering thinking blocks to start');
+    if (contentWithoutThinking.length !== msg.content.length) {
+      console.log('🔧 [Model Message] Removed thinking blocks from request (can only come FROM Claude)');
       return {
         ...msg,
-        content: [...thinkingBlocks, ...nonThinkingBlocks]
-      };
-    } else {
-      // No thinking blocks - add placeholder
-      console.warn('⚠️ [Model Message] Adding placeholder thinking block for extended thinking compliance');
-      return {
-        ...msg,
-        content: [
-          {
-            type: 'thinking',
-            text: '[Planning tool usage]'
-          },
-          ...msg.content
-        ]
+        content: contentWithoutThinking
       };
     }
+    
+    return msg;
   });
 }
 
@@ -108,17 +83,17 @@ export function buildStreamConfig(options: StreamConfigOptions) {
   // Convert UIMessages to model messages
   const modelMessages = convertToModelMessages(processedMessages);
   
-  // 🔍 CRITICAL FIX: Ensure thinking blocks are present in model messages
-  // This must be done AFTER convertToModelMessages because that function doesn't
-  // properly preserve manually-added thinking blocks from UIMessage parts
-  const modelMessagesWithThinking = strategy.useExtendedThinking 
-    ? ensureThinkingBlocksInModelMessages(modelMessages)
+  // 🔍 CRITICAL FIX: Remove thinking blocks from requests
+  // Thinking blocks can ONLY come FROM Claude (they need cryptographic signatures).
+  // We must strip any thinking blocks from messages we're sending TO Claude.
+  const modelMessagesWithoutThinking = strategy.useExtendedThinking 
+    ? removeThinkingBlocksFromRequests(modelMessages)
     : modelMessages;
   
   // 🔍 CRITICAL DIAGNOSTIC: Log messages AFTER convertToModelMessages
   console.log('\n🔍 ========== POST-CONVERSION MESSAGE STRUCTURE (TO ANTHROPIC) ==========');
-  console.log('Message count:', modelMessagesWithThinking.length);
-  modelMessagesWithThinking.forEach((msg: any, i: number) => {
+  console.log('Message count:', modelMessagesWithoutThinking.length);
+  modelMessagesWithoutThinking.forEach((msg: any, i: number) => {
     console.log(`\n[${i}] ${msg.role.toUpperCase()}`);
     if (Array.isArray(msg.content)) {
       console.log(`    Content blocks: ${msg.content.length}`);
@@ -145,7 +120,7 @@ export function buildStreamConfig(options: StreamConfigOptions) {
   
   return {
     model,
-    messages: modelMessagesWithThinking,
+    messages: modelMessagesWithoutThinking,
     system: systemPrompt,
     temperature: 0.7,
     
