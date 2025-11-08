@@ -19,34 +19,45 @@ interface StreamConfigOptions {
 }
 
 /**
- * CRITICAL FIX: Remove thinking blocks from request messages
+ * CRITICAL FIX: Remove thinking blocks WITHOUT valid signatures from request messages
  * 
  * Thinking blocks can ONLY come FROM Claude (they include cryptographic signatures).
- * When we load historical messages from the database that include thinking blocks,
- * we must STRIP them before sending back to Anthropic, otherwise we get:
- * "messages.X.content.0.thinking.signature: Field required"
+ * When we load historical messages from the database that include thinking blocks WITHOUT
+ * valid signatures, we must STRIP them before sending to Anthropic.
  * 
- * However, when extended thinking is enabled and an assistant message has tool_use,
- * Anthropic requires that message to have started with a thinking block WHEN IT WAS
- * ORIGINALLY CREATED. Since we can't add valid thinking blocks, we need to ensure
- * messages are properly structured when they're first received.
+ * Key insight: We must strip thinking blocks that lack signatures (from old conversations),
+ * but KEEP thinking blocks that have signatures (from Claude's recent responses).
+ * 
+ * This allows extended thinking to stay enabled for NEW responses while handling
+ * historical messages correctly.
  */
-function removeThinkingBlocksFromRequests(modelMessages: any[]): any[] {
+function removeInvalidThinkingBlocks(modelMessages: any[]): any[] {
   return modelMessages.map(msg => {
     if (msg.role !== 'assistant' || !Array.isArray(msg.content)) {
       return msg;
     }
     
-    // Remove any thinking or redacted_thinking blocks - they're invalid in requests
-    const contentWithoutThinking = msg.content.filter((block: any) => 
-      block.type !== 'thinking' && block.type !== 'redacted_thinking'
-    );
+    // Remove thinking/redacted_thinking blocks that lack valid signatures
+    const contentFiltered = msg.content.filter((block: any) => {
+      const isThinkingBlock = block.type === 'thinking' || block.type === 'redacted_thinking';
+      if (!isThinkingBlock) {
+        return true; // Keep non-thinking blocks
+      }
+      
+      // For thinking blocks, only keep if they have a valid signature
+      const hasValidSignature = block.signature && typeof block.signature === 'string' && block.signature.length > 0;
+      if (!hasValidSignature) {
+        console.log('🔧 [Model Message] Removing thinking block without valid signature');
+        return false; // Strip invalid thinking blocks
+      }
+      
+      return true; // Keep thinking blocks with valid signatures
+    });
     
-    if (contentWithoutThinking.length !== msg.content.length) {
-      console.log('🔧 [Model Message] Removed thinking blocks from request (can only come FROM Claude)');
+    if (contentFiltered.length !== msg.content.length) {
       return {
         ...msg,
-        content: contentWithoutThinking
+        content: contentFiltered
       };
     }
     
@@ -83,17 +94,18 @@ export function buildStreamConfig(options: StreamConfigOptions) {
   // Convert UIMessages to model messages
   const modelMessages = convertToModelMessages(processedMessages);
   
-  // 🔍 CRITICAL FIX: Remove thinking blocks from requests
+  // 🔍 CRITICAL FIX: Remove thinking blocks WITHOUT valid signatures
   // Thinking blocks can ONLY come FROM Claude (they need cryptographic signatures).
-  // We must strip any thinking blocks from messages we're sending TO Claude.
-  const modelMessagesWithoutThinking = strategy.useExtendedThinking 
-    ? removeThinkingBlocksFromRequests(modelMessages)
+  // We strip invalid thinking blocks but KEEP valid ones (from Claude's recent responses).
+  // This allows extended thinking to work for NEW messages while handling old history.
+  const modelMessagesFiltered = strategy.useExtendedThinking 
+    ? removeInvalidThinkingBlocks(modelMessages)
     : modelMessages;
   
   // 🔍 CRITICAL DIAGNOSTIC: Log messages AFTER convertToModelMessages
   console.log('\n🔍 ========== POST-CONVERSION MESSAGE STRUCTURE (TO ANTHROPIC) ==========');
-  console.log('Message count:', modelMessagesWithoutThinking.length);
-  modelMessagesWithoutThinking.forEach((msg: any, i: number) => {
+  console.log('Message count:', modelMessagesFiltered.length);
+  modelMessagesFiltered.forEach((msg: any, i: number) => {
     console.log(`\n[${i}] ${msg.role.toUpperCase()}`);
     if (Array.isArray(msg.content)) {
       console.log(`    Content blocks: ${msg.content.length}`);

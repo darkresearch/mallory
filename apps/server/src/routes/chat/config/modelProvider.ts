@@ -81,78 +81,14 @@ export function setupModelProvider(
     note: 'Supermemory handles all compression/optimization'
   });
   
-  // CRITICAL: Check if we should disable extended thinking
-  // Extended thinking requires that assistant messages with tool_use have valid thinking blocks
-  // (with cryptographic signatures from Claude). Historical messages may not have these.
-  const shouldDisableThinking = checkIfShouldDisableExtendedThinking(messages);
-  const useExtendedThinking = !shouldDisableThinking;
-  
-  if (shouldDisableThinking) {
-    console.warn('⚠️ Disabling extended thinking for this request');
-    console.warn('   Reason: Found assistant messages with tool_use but no valid thinking signature');
-    console.warn('   This prevents: "messages.X.content.0.type: Expected `thinking`..." errors');
-  }
-  
   return {
     model,
     processedMessages: messages, // Send EVERYTHING - no truncation!
     strategy: {
-      useExtendedThinking,
+      useExtendedThinking: true, // Always keep extended thinking enabled
       useSupermemoryProxy: true,
       estimatedTokens,
-      reason: shouldDisableThinking 
-        ? 'Extended thinking disabled - historical messages lack thinking signatures'
-        : 'Supermemory Memory Router handles all context management'
+      reason: 'Supermemory Memory Router handles all context management'
     }
   };
-}
-
-/**
- * Check if we should disable extended thinking for this conversation
- * 
- * Extended thinking requires that assistant messages with tool_use have thinking blocks
- * with valid signatures. If we detect messages that would violate this, we must disable
- * extended thinking to avoid API errors.
- */
-function checkIfShouldDisableExtendedThinking(messages: UIMessage[]): boolean {
-  // Find the last assistant message (the one Claude will continue from)
-  let lastAssistantIndex = -1;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'assistant') {
-      lastAssistantIndex = i;
-      break;
-    }
-  }
-  
-  if (lastAssistantIndex === -1) {
-    // No assistant messages, extended thinking is fine
-    return false;
-  }
-  
-  const lastAssistantMsg = messages[lastAssistantIndex];
-  
-  // Check if this message has tool-call parts
-  const hasToolCalls = lastAssistantMsg.parts?.some((p: any) => p.type === 'tool-call');
-  
-  if (!hasToolCalls) {
-    // No tool calls, extended thinking is fine
-    return false;
-  }
-  
-  // Has tool calls - check if it has a thinking part with valid signature
-  const hasThinkingWithSignature = lastAssistantMsg.parts?.some((p: any) => {
-    if (p.type !== 'thinking' && p.type !== 'redacted_thinking') {
-      return false;
-    }
-    // Check if it has a signature field (indicates it came from Claude, not us)
-    return (p as any).signature !== undefined;
-  });
-  
-  if (!hasThinkingWithSignature) {
-    // Tool calls but no valid thinking signature - must disable extended thinking
-    console.log('🔍 Last assistant message has tool_use but no valid thinking signature');
-    return true;
-  }
-  
-  return false;
 }
