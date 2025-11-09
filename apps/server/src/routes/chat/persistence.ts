@@ -106,7 +106,6 @@ export async function saveUserMessage(
     const textContent = extractTextContent(message.parts || []);
     const chainOfThought = buildChainOfThoughtMetadata(message.parts || []);
     const messageId = ensureUUID(message.id);
-    const originalClientId = message.id !== messageId ? message.id : undefined;
 
     const messageData = {
       id: messageId,
@@ -118,7 +117,6 @@ export async function saveUserMessage(
         chainOfThought,
         source: 'user_input',
         timestamp: new Date().toISOString(),
-        ...(originalClientId ? { clientId: originalClientId } : {}),
         ...(message.metadata || {})
       },
       created_at: (message as any).createdAt 
@@ -175,7 +173,6 @@ export async function saveAssistantMessage(
     const textContent = extractTextContent(message.parts || []);
     const chainOfThought = buildChainOfThoughtMetadata(message.parts || []);
     const messageId = ensureUUID(message.id);
-    const originalClientId = message.id !== messageId ? message.id : undefined;
 
     const messageData = {
       id: messageId,
@@ -187,7 +184,6 @@ export async function saveAssistantMessage(
         chainOfThought,
         source: 'claude_stream',
         timestamp: new Date().toISOString(),
-        ...(originalClientId ? { clientId: originalClientId } : {}),
         ...(message.metadata || {})
       },
       created_at: (message as any).createdAt || (message as any).metadata?.created_at
@@ -248,11 +244,9 @@ export async function saveMessages(
     const messagesToInsert = conversationMessages.map(msg => {
       const textContent = extractTextContent(msg.parts || []);
       const chainOfThought = buildChainOfThoughtMetadata(msg.parts || []);
-      const messageId = ensureUUID(msg.id);
-      const originalClientId = msg.id !== messageId ? msg.id : undefined;
 
       return {
-        id: messageId,
+        id: ensureUUID(msg.id),
         conversation_id: conversationId,
         role: msg.role,
         content: textContent,
@@ -261,7 +255,6 @@ export async function saveMessages(
           chainOfThought,
           source: msg.role === 'user' ? 'user_input' : 'claude_stream',
           timestamp: new Date().toISOString(),
-          ...(originalClientId ? { clientId: originalClientId } : {}),
           ...(msg.metadata || {})
         },
         created_at: (msg as any).createdAt 

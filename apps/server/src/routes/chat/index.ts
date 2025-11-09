@@ -42,6 +42,21 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ error: 'Conversation ID is required' });
     }
 
+    // CRITICAL: Convert all client IDs to UUIDs immediately
+    // This ensures consistent UUID usage throughout the system (database, InfiniteMemory, etc.)
+    messages.forEach((msg: UIMessage) => {
+      if (msg.id) {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(msg.id)) {
+          const newId = uuidv4();
+          console.log(`🔄 Converting client ID to UUID: ${msg.id} → ${newId}`);
+          msg.id = newId;
+        }
+      } else {
+        msg.id = uuidv4();
+      }
+    });
+
     // Log Grid context availability (for x402 payments)
     if (gridSessionSecrets && gridSession) {
       console.log('🔐 Grid context available for x402 payments');
@@ -118,7 +133,7 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     // This ensures messages persist even if the stream fails or client disconnects
     const userMessages = conversationMessages.filter((msg: UIMessage) => msg.role === 'user');
     const lastUserMessage = userMessages[userMessages.length - 1];
-    let userMessageData: { messageId?: string; message?: any } = {};
+    let userMessageData: { messageId?: string; message?: any} = {};
     
     if (lastUserMessage) {
       console.log('💾 Saving user message immediately:', lastUserMessage.id);
@@ -126,14 +141,6 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       if (result.success && result.messageId) {
         // Store the whole message object for OpenMemory (preserves all parts)
         userMessageData = { messageId: result.messageId, message: lastUserMessage };
-        
-        // CRITICAL: Update the message ID in conversationMessages to use database ID
-        // This ensures InfiniteMemory checks for server IDs, not client IDs
-        const messageIndex = conversationMessages.findIndex((msg: UIMessage) => msg.id === lastUserMessage.id);
-        if (messageIndex !== -1) {
-          conversationMessages[messageIndex].id = result.messageId;
-          console.log(`✅ Updated message ID: ${lastUserMessage.id} → ${result.messageId}`);
-        }
       }
     }
 
@@ -149,41 +156,6 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
           text: 'Please proceed as instructed, accounting for what you know about me and how I would most prefer your response. Do not mention that you saw this user message of mine or reference it in any way.',
         }],
       } as any);
-    }
-
-    // Map all message IDs to database IDs before passing to InfiniteMemory
-    // This ensures we check for server IDs, not client IDs
-    try {
-      const { data: dbMessages } = await supabase
-        .from('messages')
-        .select('id, metadata')
-        .eq('conversation_id', conversationId);
-      
-      if (dbMessages && dbMessages.length > 0) {
-        // Create a map of client ID → database ID
-        const idMap = new Map<string, string>();
-        for (const dbMsg of dbMessages) {
-          // Check if metadata has originalId or clientId
-          const clientId = dbMsg.metadata?.clientId || dbMsg.metadata?.originalId;
-          if (clientId && clientId !== dbMsg.id) {
-            idMap.set(clientId, dbMsg.id);
-          }
-        }
-        
-        // Update message IDs in conversationMessages
-        if (idMap.size > 0) {
-          conversationMessages = conversationMessages.map((msg: UIMessage) => {
-            const dbId = idMap.get(msg.id);
-            if (dbId) {
-              console.log(`🔄 Mapped message ID: ${msg.id} → ${dbId}`);
-              return { ...msg, id: dbId };
-            }
-            return msg;
-          });
-        }
-      }
-    } catch (error) {
-      console.warn('⚠️ Failed to map message IDs:', error);
     }
 
     // Setup model provider with smart strategy
