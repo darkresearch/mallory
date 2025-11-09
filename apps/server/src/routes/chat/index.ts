@@ -126,6 +126,14 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
       if (result.success && result.messageId) {
         // Store the whole message object for OpenMemory (preserves all parts)
         userMessageData = { messageId: result.messageId, message: lastUserMessage };
+        
+        // CRITICAL: Update the message ID in conversationMessages to use database ID
+        // This ensures InfiniteMemory checks for server IDs, not client IDs
+        const messageIndex = conversationMessages.findIndex((msg: UIMessage) => msg.id === lastUserMessage.id);
+        if (messageIndex !== -1) {
+          conversationMessages[messageIndex].id = result.messageId;
+          console.log(`✅ Updated message ID: ${lastUserMessage.id} → ${result.messageId}`);
+        }
       }
     }
 
@@ -141,6 +149,41 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
           text: 'Please proceed as instructed, accounting for what you know about me and how I would most prefer your response. Do not mention that you saw this user message of mine or reference it in any way.',
         }],
       } as any);
+    }
+
+    // Map all message IDs to database IDs before passing to InfiniteMemory
+    // This ensures we check for server IDs, not client IDs
+    try {
+      const { data: dbMessages } = await supabase
+        .from('messages')
+        .select('id, metadata')
+        .eq('conversation_id', conversationId);
+      
+      if (dbMessages && dbMessages.length > 0) {
+        // Create a map of client ID → database ID
+        const idMap = new Map<string, string>();
+        for (const dbMsg of dbMessages) {
+          // Check if metadata has originalId or clientId
+          const clientId = dbMsg.metadata?.clientId || dbMsg.metadata?.originalId;
+          if (clientId && clientId !== dbMsg.id) {
+            idMap.set(clientId, dbMsg.id);
+          }
+        }
+        
+        // Update message IDs in conversationMessages
+        if (idMap.size > 0) {
+          conversationMessages = conversationMessages.map((msg: UIMessage) => {
+            const dbId = idMap.get(msg.id);
+            if (dbId) {
+              console.log(`🔄 Mapped message ID: ${msg.id} → ${dbId}`);
+              return { ...msg, id: dbId };
+            }
+            return msg;
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to map message IDs:', error);
     }
 
     // Setup model provider with smart strategy
