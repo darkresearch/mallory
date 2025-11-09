@@ -128,7 +128,7 @@
         "dotenv": "^16.4.7",
         "exa-js": "^1.0.14",
         "express": "^4.18.2",
-        "infinite-memory": "0.1.8-beta.5",
+        "infinite-memory": "0.1.8-beta.6",
         "ioredis": "^5.4.2",
         "uuid": "^13.0.0",
         "zod": "^4.1.8",
@@ -1877,7 +1877,7 @@
 
     "indent-string": ["indent-string@4.0.0", "", {}, "sha512-EdDDZu4A2OyIK7Lr/2zG+w5jmbuk1DVBnEwREQvBzspBJkCEbRa8GxU1lghYcaGJCnRWibjDXlq779X1/y5xwg=="],
 
-    "infinite-memory": ["infinite-memory@0.1.8-beta.5", "", { "dependencies": { "@ai-sdk/anthropic": "^2.0.16", "ai": "^5.0.50", "openmemory-js": "^0.3.0", "zod": "^4.1.8" } }, "sha512-rPDWbrcVdTqUvFjTN6SPl5ClgbP63Jzv30XHDDq8J+mBU3rmbniOFshJkeBlamvsWERMYi2BNyo2MJh6tDnriw=="],
+    "infinite-memory": ["infinite-memory@0.1.8-beta.6", "", { "dependencies": { "@ai-sdk/anthropic": "^2.0.16", "ai": "^5.0.50", "openmemory-js": "^0.3.0", "zod": "^4.1.8" } }, "sha512-eHuBSJRO3Ky41gQd//RLM+zSSiMIq9kp1MuibZO4z7QN2/vt6trc+dYPTaOYYHIpnvI0kkR4krmoxCfNnKlRvA=="],
 
     "inflight": ["inflight@1.0.6", "", { "dependencies": { "once": "^1.3.0", "wrappy": "1" } }, "sha512-k92I/b08q4wvFscXCLvqfsHCrjrF7yiXsQuIVvVE7N82W3+aqpzuUdBbfhWcy/FZR3/4IgflMgKLOsvPDrGCJA=="],
 
