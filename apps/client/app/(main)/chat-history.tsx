@@ -71,6 +71,9 @@ export default function ChatHistoryScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
+  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const lastTapRef = useRef<{ [key: string]: number }>({});
   
   // Determine if we're on mobile (small screen) or desktop/tablet
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
@@ -287,10 +290,17 @@ export default function ChatHistoryScreen() {
 
   // Helper function to get display title for a conversation
   const getConversationDisplayTitle = (
-    metadata?: { summary_title?: string },
-    fallback: string = 'New conversation'
+    conversation: ConversationWithPreview
   ): string => {
-    return metadata?.summary_title || fallback;
+    // Use the title field directly if it's been customized
+    if (conversation.title && conversation.title !== 'mallory-global') {
+      return conversation.title;
+    }
+    // Check if there's an AI-generated summary in metadata
+    if (conversation.metadata?.summary_title) {
+      return conversation.metadata.summary_title;
+    }
+    return 'New conversation';
   };
 
   // Load current conversation ID for active indicator
@@ -445,6 +455,59 @@ export default function ChatHistoryScreen() {
     );
   };
 
+  // Handle conversation rename
+  const handleRenameConversation = async (conversationId: string, newTitle: string) => {
+    try {
+      console.log('📝 Renaming conversation:', conversationId, 'to:', newTitle);
+      
+      // Find the conversation to ensure it exists
+      const conversation = conversations.find(c => c.id === conversationId);
+      if (!conversation) return;
+      
+      // Update the conversation title directly
+      const { error } = await supabase
+        .from('conversations')
+        .update({
+          title: newTitle.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', conversationId)
+        .eq('user_id', user?.id);
+      
+      if (error) {
+        console.error('❌ Failed to rename conversation:', error);
+        return;
+      }
+      
+      console.log('✅ Conversation renamed successfully');
+      
+      // Update local state immediately for better UX (realtime will also update for consistency)
+      handleConversationUpdate({
+        ...conversation,
+        title: newTitle.trim(),
+        updated_at: new Date().toISOString()
+      });
+      
+      // Clear editing state
+      setEditingConversationId(null);
+      setEditingTitle('');
+    } catch (error) {
+      console.error('Error renaming conversation:', error);
+    }
+  };
+
+  // Start editing a conversation title
+  const startEditingTitle = (conversationId: string, currentTitle: string) => {
+    setEditingConversationId(conversationId);
+    setEditingTitle(currentTitle);
+  };
+
+  // Cancel editing
+  const cancelEditingTitle = () => {
+    setEditingConversationId(null);
+    setEditingTitle('');
+  };
+
   // Handle new chat creation
   const handleNewChat = async () => {
     // Prevent multiple rapid clicks
@@ -489,24 +552,110 @@ export default function ChatHistoryScreen() {
   // Render conversation item
   const renderConversationItem = ({ item }: { item: ConversationWithPreview }) => {
     const isActive = currentConversationId === item.id;
-    const displayTitle = getConversationDisplayTitle(item.metadata, 'New conversation');
+    const isEditing = editingConversationId === item.id;
+    const displayTitle = getConversationDisplayTitle(item);
     const dateLabel = formatDate(item.updated_at);
     
     return (
       <View style={styles.conversationWrapper}>
-        <TouchableOpacity 
-          style={[styles.conversationItem, isActive && styles.conversationItemActive]}
-          onPress={() => handleConversationTap(item.id)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.conversationContent}>
-            {isActive && <View style={styles.activeIndicator} />}
-            <Text style={styles.conversationTitle} numberOfLines={1}>
-              {displayTitle}
-            </Text>
-            <Text style={styles.conversationDate}>{dateLabel}</Text>
+        {isEditing ? (
+          // Edit mode
+          <View style={[styles.conversationItem, isActive && styles.conversationItemActive]}>
+            <View style={styles.conversationEditContent}>
+              {isActive && <View style={styles.activeIndicator} />}
+              <TextInput
+                style={[
+                  styles.editInput,
+                  Platform.OS === 'web' && ({ outline: 'none' } as any)
+                ]}
+                value={editingTitle}
+                onChangeText={setEditingTitle}
+                autoFocus
+                onSubmitEditing={() => {
+                  if (editingTitle.trim()) {
+                    handleRenameConversation(item.id, editingTitle);
+                  } else {
+                    cancelEditingTitle();
+                  }
+                }}
+                onBlur={() => {
+                  // Small delay to prevent blur when clicking save button
+                  setTimeout(() => {
+                    if (editingConversationId === item.id) {
+                      if (editingTitle.trim() && editingTitle !== displayTitle) {
+                        handleRenameConversation(item.id, editingTitle);
+                      } else {
+                        cancelEditingTitle();
+                      }
+                    }
+                  }, 200);
+                }}
+                placeholder="Enter conversation title..."
+                placeholderTextColor="#999"
+                selectionColor="rgba(0, 0, 0, 0.3)"
+                returnKeyType="done"
+              />
+              <TouchableOpacity
+                onPress={() => {
+                  if (editingTitle.trim()) {
+                    handleRenameConversation(item.id, editingTitle);
+                  }
+                }}
+                style={styles.editButton}
+              >
+                <Ionicons name="checkmark" size={20} color="#000" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={cancelEditingTitle}
+                style={styles.editButton}
+              >
+                <Ionicons name="close" size={20} color="#000" />
+              </TouchableOpacity>
+            </View>
           </View>
-        </TouchableOpacity>
+        ) : (
+          // Normal mode
+          <TouchableOpacity 
+            style={[styles.conversationItem, isActive && styles.conversationItemActive]}
+            onPress={() => handleConversationTap(item.id)}
+            onLongPress={() => startEditingTitle(item.id, displayTitle)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.conversationContent}>
+              {isActive && <View style={styles.activeIndicator} />}
+              <Text 
+                style={styles.conversationTitle} 
+                numberOfLines={1}
+                onPress={(e) => {
+                  // Check for double tap
+                  const now = Date.now();
+                  const lastTap = lastTapRef.current[item.id];
+                  if (lastTap && (now - lastTap) < 300) {
+                    e.stopPropagation();
+                    startEditingTitle(item.id, displayTitle);
+                    delete lastTapRef.current[item.id];
+                  } else {
+                    lastTapRef.current[item.id] = now;
+                    handleConversationTap(item.id);
+                  }
+                }}
+              >
+                {displayTitle}
+              </Text>
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  startEditingTitle(item.id, displayTitle);
+                }}
+                style={styles.editIconButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="pencil-outline" size={16} color="#000000AA" />
+              </TouchableOpacity>
+              <Text style={styles.conversationDate}>{dateLabel}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
     );
   };
@@ -835,5 +984,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#000000',
     fontFamily: 'Satoshi',
+  },
+  conversationEditContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  editInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '400',
+    color: '#000000',
+    fontFamily: 'Satoshi',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E67B25',
+  },
+  editButton: {
+    padding: 6,
+    marginHorizontal: 4,
+  },
+  editIconButton: {
+    padding: 4,
+    marginHorizontal: 8,
+    opacity: 0.6,
   },
 });

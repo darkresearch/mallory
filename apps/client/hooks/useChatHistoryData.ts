@@ -210,7 +210,7 @@ export function useChatHistoryData(userId?: string) {
     setConversations(prev => {
       const updated = prev.map(conv => 
         conv.id === newRecord.id 
-          ? { ...conv, updated_at: newRecord.updated_at, metadata: newRecord.metadata }
+          ? { ...conv, ...newRecord }  // Merge all updated fields including title
           : conv
       ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
       
