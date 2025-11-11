@@ -42,10 +42,13 @@ export function ActiveConversationProvider({ children }: ActiveConversationProvi
     if (conversationId) {
       console.log('💾 [ActiveConversationProvider] Saving to storage:', conversationId);
       storage.persistent.setItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID, conversationId);
-    } else {
-      console.log('🗑️ [ActiveConversationProvider] Removing from storage (conversationId is null)');
-      storage.persistent.removeItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
     }
+    // DON'T clear storage when conversationId becomes null during navigation
+    // Storage should persist across navigation - only clear explicitly (e.g., on logout)
+    // else {
+    //   console.log('🗑️ [ActiveConversationProvider] Removing from storage (conversationId is null)');
+    //   storage.persistent.removeItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
+    // }
   }, [conversationId]);
   
   return (

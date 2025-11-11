@@ -16,6 +16,7 @@ import { storage, SECURE_STORAGE_KEYS, supabase } from '../../lib';
 import { PressableButton } from '../../components/ui/PressableButton';
 import { createNewConversation } from '../../features/chat';
 import { useChatHistoryData } from '../../hooks/useChatHistoryData';
+import { useActiveConversationContext } from '../../contexts/ActiveConversationContext';
 
 const GLOBAL_TOKEN_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -47,7 +48,8 @@ export default function ChatHistoryScreen() {
   const router = useRouter();
   const { user } = useAuth();
   
-  // Use the shared hook for data loading with caching
+  const { conversationId: contextConversationId, setConversationId: setGlobalConversationId } = useActiveConversationContext();
+  
   const {
     conversations,
     allMessages,
@@ -293,17 +295,24 @@ export default function ChatHistoryScreen() {
     return metadata?.summary_title || fallback;
   };
 
-  // Load current conversation ID for active indicator
   useEffect(() => {
     const loadCurrentConversationId = async () => {
       try {
-        const currentId = await storage.persistent.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
+        const currentId = contextConversationId || await storage.persistent.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
         setCurrentConversationId(currentId);
       } catch (error) {
         console.error('Error loading current conversation ID:', error);
+        setCurrentConversationId(contextConversationId);
       }
     };
     loadCurrentConversationId();
+  }, [contextConversationId]);
+
+  useEffect(() => {
+    setIsCreatingChat(false);
+    return () => {
+      setIsCreatingChat(false);
+    };
   }, []);
 
   // Filtered conversations based on search (using useMemo for performance)
@@ -368,7 +377,6 @@ export default function ChatHistoryScreen() {
   }, []);
 
   const handleBack = () => {
-    // Slide out to left with callback
     translateX.value = withTiming(
       -Dimensions.get('window').width,
       {
@@ -376,8 +384,19 @@ export default function ChatHistoryScreen() {
         easing: Easing.in(Easing.cubic),
       },
       () => {
-        // Navigate directly to chat instead of router.back() to avoid issues with empty history stack
-        runOnJS(() => router.push('/(main)/chat'))();
+        runOnJS(async () => {
+          try {
+            const activeConversationId = await storage.persistent.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
+            if (activeConversationId) {
+              router.push(`/(main)/chat?conversationId=${activeConversationId}`);
+            } else {
+              router.push('/(main)/chat');
+            }
+          } catch (error) {
+            console.error('Error reading conversationId from storage:', error);
+            router.push('/(main)/chat');
+          }
+        })();
       }
     );
   };
@@ -445,43 +464,23 @@ export default function ChatHistoryScreen() {
     );
   };
 
-  // Handle new chat creation
   const handleNewChat = async () => {
-    // Prevent multiple rapid clicks
     if (isCreatingChat) {
-      console.log('💬 Already creating a chat, ignoring duplicate click');
       return;
     }
     
-    console.log('💬 Creating new chat');
     setIsCreatingChat(true);
     
     try {
-      // Create new conversation directly with user ID
       const conversationData = await createNewConversation(user?.id);
+      setCurrentConversationId(conversationData.conversationId);
+      router.push(`/(main)/chat?conversationId=${conversationData.conversationId}`);
       
-      console.log('💬 New conversation created:', conversationData.conversationId);
-      
-      // Create navigation function to be called on the JS thread
-      const navigateToNewChat = () => {
-        console.log('💬 Navigating to new chat:', conversationData.conversationId);
-        router.push(`/(main)/chat?conversationId=${conversationData.conversationId}`);
-      };
-      
-      // Slide out to left with smooth transition, then navigate to new chat
-      translateX.value = withTiming(
-        -Dimensions.get('window').width,
-        {
-          duration: 350,
-          easing: Easing.in(Easing.cubic),
-        },
-        () => {
-          runOnJS(navigateToNewChat)();
-        }
-      );
+      setTimeout(() => {
+        setIsCreatingChat(false);
+      }, 100);
     } catch (error) {
-      console.error('💬 Error creating new chat:', error);
-      // Reset state on error so user can try again
+      console.error('Error creating new chat:', error);
       setIsCreatingChat(false);
     }
   };
