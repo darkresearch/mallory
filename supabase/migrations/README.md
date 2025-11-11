@@ -99,7 +99,7 @@ You can re-run this migration without errors, which is useful for:
 
 2. **`conversations`**
    - `id` (UUID, Primary Key)
-   - `user_id` (UUID, references `auth.users`)
+   - `user_id` (UUID, references `auth.users`, NOT NULL)
    - `title` (TEXT)
    - `token_ca` (TEXT)
    - `metadata` (JSONB)
@@ -118,7 +118,9 @@ You can re-run this migration without errors, which is useful for:
 
 - **Row Level Security (RLS)** enabled on all tables
 - **Policies** ensure users can only access their own data
-- **Realtime policies** restrict broadcast subscriptions to user-specific channels
+- **NOT NULL constraints** on `conversations.user_id` to prevent RLS bypass
+- **Function security**: Helper functions use `SECURITY DEFINER` with `auth.uid()` validation
+- **Realtime policies** restrict broadcast subscriptions to user-specific channels only
 
 ### Functions
 

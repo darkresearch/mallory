@@ -25,7 +25,7 @@ COMMENT ON COLUMN users.instayield_enabled IS 'Whether user has enabled instayie
 -- Create conversations table
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES auth.users ON DELETE CASCADE,
+    user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
     title TEXT NOT NULL,
     token_ca TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -295,6 +295,7 @@ DROP POLICY IF EXISTS "Authenticated users can receive broadcasts" ON realtime.m
 DROP POLICY IF EXISTS "Users can only receive their own broadcasts" ON realtime.messages;
 
 -- Create restrictive policy that enforces channel-level authorization
+-- Only allows channels that contain the authenticated user's ID
 CREATE POLICY "Users can only receive their own broadcasts" 
 ON realtime.messages
 FOR SELECT 
@@ -303,14 +304,12 @@ USING (
   -- Allow if channel name (topic) contains the authenticated user's ID
   -- Format: conversations:user:{userId} or messages:user:{userId}
   topic LIKE '%:user:' || (auth.uid())::text || '%'
-  OR
-  -- Allow public/shared channels that don't contain :user: pattern
-  topic NOT LIKE '%:user:%'
 );
 
-COMMENT ON POLICY "Users can only receive their own broadcasts" ON realtime.messages IS 'Prevents users from subscribing to other users'' private broadcast channels';
+COMMENT ON POLICY "Users can only receive their own broadcasts" ON realtime.messages IS 'Prevents users from subscribing to other users'' private broadcast channels. Only user-specific channels are allowed.';
 
 -- Create a function to get conversation history with user info
+-- SECURITY: This function validates that the caller owns the conversation
 CREATE OR REPLACE FUNCTION get_conversation_with_messages(conv_id UUID)
 RETURNS TABLE(
     conversation_id UUID,
@@ -325,6 +324,7 @@ RETURNS TABLE(
     message_metadata JSONB
 )
 LANGUAGE SQL
+SECURITY DEFINER
 AS $$
     SELECT
         c.id as conversation_id,
@@ -340,10 +340,14 @@ AS $$
     FROM conversations c
     LEFT JOIN messages m ON c.id = m.conversation_id
     WHERE c.id = conv_id
+      AND c.user_id = auth.uid()
     ORDER BY m.created_at ASC;
 $$;
 
+COMMENT ON FUNCTION get_conversation_with_messages(UUID) IS 'Gets full conversation with all messages. Only returns conversations owned by the authenticated user.';
+
 -- Create a function to get recent conversations for a user
+-- SECURITY: This function validates that the caller is querying their own conversations
 CREATE OR REPLACE FUNCTION get_user_conversations(user_id_param UUID)
 RETURNS TABLE(
     id UUID,
@@ -355,6 +359,7 @@ RETURNS TABLE(
     message_count BIGINT
 )
 LANGUAGE SQL
+SECURITY DEFINER
 AS $$
     SELECT
         c.id,
@@ -370,8 +375,11 @@ AS $$
         (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id) as message_count
     FROM conversations c
     WHERE c.user_id = user_id_param
+      AND c.user_id = auth.uid()
     ORDER BY c.updated_at DESC;
 $$;
+
+COMMENT ON FUNCTION get_user_conversations(UUID) IS 'Gets all conversations for a user with metadata. Only returns conversations owned by the authenticated user.';
 
 -- Add comments to describe the tables
 COMMENT ON TABLE users IS 'User profiles - minimal table for Mallory-specific data';
@@ -389,6 +397,22 @@ COMMENT ON COLUMN messages.metadata IS 'Full message data including rich content
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE users TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE conversations TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE messages TO authenticated;
+
+-- Grant execute permissions on functions to authenticated users
+GRANT EXECUTE ON FUNCTION get_conversation_with_messages(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_user_conversations(UUID) TO authenticated;
+
+-- Fix token_ca for existing conversations
+-- Update existing conversations to set token_ca to GLOBAL_TOKEN_ID if NULL
+-- This ensures all existing conversations are found by queries filtering on token_ca
+-- The GLOBAL_TOKEN_ID is '00000000-0000-0000-0000-000000000000' (all zeros UUID)
+UPDATE conversations 
+SET token_ca = '00000000-0000-0000-0000-000000000000' 
+WHERE token_ca IS NULL;
+
+-- Set default value for token_ca to prevent NULL values in future inserts
+ALTER TABLE conversations 
+ALTER COLUMN token_ca SET DEFAULT '00000000-0000-0000-0000-000000000000';
 
 -- Enable Row Level Security on users table too (if not already enabled by auth)
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -409,3 +433,6 @@ CREATE POLICY "Users can update own profile" ON users
     FOR UPDATE TO authenticated
     USING (auth.uid() = id);
 
+-- Users cannot delete their own profile (data retention policy)
+-- If profile deletion is needed in the future, add a DELETE policy here
+-- For now, explicit denial: no DELETE policy = users cannot delete profiles
