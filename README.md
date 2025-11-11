@@ -206,6 +206,20 @@ See [apps/client/README.md](./apps/client/README.md#deployment) for details.
 
 See [apps/server/README.md](./apps/server/README.md#deployment) for details.
 
+## 🛠 Troubleshooting
+
+**Google OAuth “Unsupported provider: provider is not enabled”** as highlighted in https://github.com/darkresearch/mallory/issues/73
+- **Summary:** Supabase blocks Google sign-in until the provider is enabled in the dashboard.
+- **Steps to reproduce:** run Mallory with valid Supabase env vars, click **Continue with Google**, Supabase returns the 400 error.
+- **Observed behaviour:** Supabase responds with `{"code":400,"error_code":"validation_failed","msg":"Unsupported provider: provider is not enabled"}` and the user cannot sign in.
+- **Root cause:** the Google OAuth provider is disabled by default in Supabase projects.
+- **Fix:**
+  - In the Supabase dashboard open `Authentication → Providers → Google`, flip **Enable** on.
+  - In Google Cloud Console create OAuth credentials (type “Web application”) if you haven’t already.
+    - Add redirect URIs such as `https://<your-supabase-project>.supabase.co/auth/v1/callback`.
+    - Copy the client ID and secret back into Supabase.
+  - Save the provider settings, reload Mallory, and try **Continue with Google** again.
+
 ## 🏷️ Version Management
 
 Mallory uses synchronized semantic versioning across all packages.
