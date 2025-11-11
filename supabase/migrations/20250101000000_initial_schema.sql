@@ -398,7 +398,7 @@ COMMENT ON TABLE conversations IS 'Chat conversations between users and AI';
 COMMENT ON COLUMN conversations.token_ca IS 'Token contract address (default is all zeros for global conversations)';
 COMMENT ON COLUMN conversations.metadata IS 'Additional conversation metadata (e.g., onboarding status)';
 COMMENT ON TABLE messages IS 'Individual messages within conversations';
-COMMENT ON COLUMN messages.role IS 'Message role: user, assistant, system, tool_use, tool_result';
+COMMENT ON COLUMN messages.role IS 'Message role: user or assistant. System messages are filtered out before saving. Tool data (tool_use, tool_result) is stored in metadata.parts, not as role values.';
 COMMENT ON COLUMN messages.content IS 'Text content of the message (for display purposes)';
 COMMENT ON COLUMN messages.metadata IS 'Full message data including rich content and tool usage';
 
