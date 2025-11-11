@@ -215,6 +215,15 @@ BEGIN
   FROM conversations 
   WHERE id = COALESCE(NEW.conversation_id, OLD.conversation_id);
   
+  -- Skip broadcast if conversation is already deleted (CASCADE DELETE scenario)
+  -- This happens when conversation is deleted and messages are cascade-deleted
+  -- The conversation is already gone, so conversation_user_id will be NULL
+  IF conversation_user_id IS NULL THEN
+    RAISE LOG 'Skipping message broadcast: conversation % already deleted', 
+      COALESCE(NEW.conversation_id, OLD.conversation_id);
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+  
   -- Broadcast to user-specific channel
   PERFORM realtime.broadcast_changes(
     'messages:user:' || conversation_user_id,
