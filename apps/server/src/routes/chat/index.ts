@@ -156,6 +156,8 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     const supermemoryApiKey = process.env.SUPERMEMORY_API_KEY;
     const tools = {
       searchWeb: toolRegistry.searchWeb,
+      checkBalance: toolRegistry.createCheckBalanceTool(x402Context),
+      sendPayment: toolRegistry.createSendPaymentTool(x402Context),
       nansenHistoricalBalances: toolRegistry.createNansenTool(x402Context),
       nansenSmartMoneyNetflows: toolRegistry.createNansenSmartMoneyNetflowsTool(x402Context),
       nansenSmartMoneyHoldings: toolRegistry.createNansenSmartMoneyHoldingsTool(x402Context),
