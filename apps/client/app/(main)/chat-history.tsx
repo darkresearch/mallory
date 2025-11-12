@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, RefreshControl, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, RefreshControl, Platform, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -54,6 +54,7 @@ export default function ChatHistoryScreen() {
     isLoading,
     isInitialized,
     refresh: refreshData,
+    deleteConversation,
     handleConversationInsert,
     handleConversationUpdate,
     handleConversationDelete,
@@ -71,6 +72,8 @@ export default function ChatHistoryScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
+  const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   
   // Determine if we're on mobile (small screen) or desktop/tablet
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
@@ -486,6 +489,38 @@ export default function ChatHistoryScreen() {
     }
   };
 
+  // Handle delete confirmation
+  const handleDeletePress = (conversationId: string) => {
+    setConversationToDelete(conversationId);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!conversationToDelete) return;
+    
+    const result = await deleteConversation(conversationToDelete);
+    
+    if (result.success) {
+      // If we deleted the current conversation, navigate away
+      if (currentConversationId === conversationToDelete) {
+        setCurrentConversationId(null);
+        router.push('/chat');
+      }
+      console.log('✅ Conversation deleted successfully');
+    } else {
+      console.error('❌ Failed to delete conversation');
+      alert('Failed to delete conversation. Please try again.');
+    }
+    
+    setShowDeleteModal(false);
+    setConversationToDelete(null);
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+    setConversationToDelete(null);
+  };
+
   // Render conversation item
   const renderConversationItem = ({ item }: { item: ConversationWithPreview }) => {
     const isActive = currentConversationId === item.id;
@@ -501,10 +536,20 @@ export default function ChatHistoryScreen() {
         >
           <View style={styles.conversationContent}>
             {isActive && <View style={styles.activeIndicator} />}
-            <Text style={styles.conversationTitle} numberOfLines={1}>
-              {displayTitle}
-            </Text>
-            <Text style={styles.conversationDate}>{dateLabel}</Text>
+            <View style={styles.conversationTextWrapper}>
+              <Text style={styles.conversationTitle} numberOfLines={1}>
+                {displayTitle}
+              </Text>
+              <Text style={styles.conversationDate}>{dateLabel}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleDeletePress(item.id)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="trash-outline" size={18} color="#E67B25" />
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </View>
@@ -649,6 +694,43 @@ export default function ChatHistoryScreen() {
         </View>
         </View>
       </SafeAreaView>
+      
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCancelDelete}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={handleCancelDelete}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <Text style={styles.modalTitle}>Delete Conversation</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to delete this conversation? This action cannot be undone.
+            </Text>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={handleCancelDelete}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.deleteButton]}
+                onPress={handleConfirmDelete}
+              >
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </Animated.View>
   );
 }
@@ -815,7 +897,13 @@ const styles = StyleSheet.create({
   conversationContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 12, // Increased vertical padding for better visual balance
+  },
+  conversationTextWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   activeIndicator: {
     width: 8,
@@ -835,5 +923,74 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#000000',
     fontFamily: 'Satoshi',
+  },
+  deleteButton: {
+    padding: 8,
+    marginLeft: 8,
+    backgroundColor: '#E67B25',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFF2E8',
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#000000',
+    fontFamily: 'Satoshi',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#000000',
+    fontFamily: 'Satoshi',
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#E0CBB9',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: '#000000',
+    fontFamily: 'Satoshi',
+    fontWeight: '500',
+  },
+  deleteButtonText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontFamily: 'Satoshi',
+    fontWeight: '600',
   },
 });

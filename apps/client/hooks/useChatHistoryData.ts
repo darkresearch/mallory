@@ -335,12 +335,62 @@ export function useChatHistoryData(userId?: string) {
     await loadConversationsAndMessages(true);
   }, [loadConversationsAndMessages]);
 
+  // Delete conversation permanently from database
+  const deleteConversation = useCallback(async (conversationId: string) => {
+    try {
+      console.log('🗑️ [useChatHistoryData] Deleting conversation:', conversationId);
+      
+      // Delete all messages for this conversation first (due to foreign key constraint)
+      const { error: messagesError } = await supabase
+        .from('messages')
+        .delete()
+        .eq('conversation_id', conversationId);
+      
+      if (messagesError) {
+        console.error('Error deleting messages:', messagesError);
+        throw messagesError;
+      }
+      
+      // Then delete the conversation itself
+      const { error: conversationError } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', conversationId);
+      
+      if (conversationError) {
+        console.error('Error deleting conversation:', conversationError);
+        throw conversationError;
+      }
+      
+      // Update local state and cache immediately for optimistic UI update
+      setConversations(prev => {
+        const updated = prev.filter(conv => conv.id !== conversationId);
+        cache.conversations = updated;
+        return updated;
+      });
+      
+      setAllMessages(prev => {
+        const updated = { ...prev };
+        delete updated[conversationId];
+        cache.allMessages = updated;
+        return updated;
+      });
+      
+      console.log('✅ [useChatHistoryData] Successfully deleted conversation:', conversationId);
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      return { success: false, error };
+    }
+  }, []);
+
   return {
     conversations,
     allMessages,
     isLoading,
     isInitialized,
     refresh,
+    deleteConversation,
     // Export handlers for real-time subscriptions (to be set up by the screen)
     handleConversationInsert,
     handleConversationUpdate,
