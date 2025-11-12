@@ -124,7 +124,11 @@ async function fetchSolPriceFromJupiter(): Promise<number | null> {
     if (response.ok) {
       const quote = await response.json() as any;
       if (quote.outAmount) {
-        const solAmount = parseInt(quote.outAmount) / 1e9; // SOL has 9 decimals
+        const parsed = parseInt(quote.outAmount, 10);
+        if (!isFinite(parsed) || parsed <= 0) {
+          return null;
+        }
+        const solAmount = parsed / 1e9; // SOL has 9 decimals
         const solPrice = 1 / solAmount; // Price of 1 SOL in USDC
         console.log('💰 [Jupiter] SOL price fetched:', solPrice.toFixed(2));
         return solPrice;
