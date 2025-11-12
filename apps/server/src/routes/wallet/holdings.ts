@@ -159,7 +159,6 @@ async function fetchBirdeyeMarketData(tokenAddresses: string[]): Promise<Map<str
       headers['X-API-KEY'] = process.env.BIRDEYE_API_KEY;
     }
 
-    console.log('💰 [Birdeye] Fetching market data for tokens:', addressList);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -207,27 +206,34 @@ async function fetchBirdeyeMarketData(tokenAddresses: string[]): Promise<Map<str
     }
 
     const data = await response.json() as any;
-    console.log('💰 [Birdeye] API response:', {
-      success: data.success,
-      hasData: !!data.data,
-      dataKeys: data.data ? Object.keys(data.data) : [],
-      fullResponse: JSON.stringify(data).substring(0, 1000)
-    });
     
     // Try multiple response formats
     let priceData: any = null;
     if (data.success && data.data) {
-      priceData = data.data;
-    } else if (data.data && typeof data.data === 'object') {
-      // Try direct data object
-      priceData = data.data;
-    } else if (Array.isArray(data.data)) {
-      // Try array format
-      priceData = {};
-      for (const item of data.data) {
-        if (item.address) {
-          priceData[item.address] = item;
+      // Check if data.data is an array first (before typeof check, since arrays are objects)
+      if (Array.isArray(data.data)) {
+        // Convert array format to object with address keys
+        priceData = {};
+        for (const item of data.data) {
+          if (item.address) {
+            priceData[item.address] = item;
+          }
         }
+      } else if (data.data && typeof data.data === 'object') {
+        // Direct data object format
+        priceData = data.data;
+      }
+    } else if (data.data) {
+      // Handle case where success is false but data exists
+      if (Array.isArray(data.data)) {
+        priceData = {};
+        for (const item of data.data) {
+          if (item.address) {
+            priceData[item.address] = item;
+          }
+        }
+      } else if (typeof data.data === 'object') {
+        priceData = data.data;
       }
     }
     
@@ -241,11 +247,6 @@ async function fetchBirdeyeMarketData(tokenAddresses: string[]): Promise<Map<str
                       marketData.usdPrice ||
                       (marketData.priceInfo?.price) ||
                       0;
-        console.log('💰 [Birdeye] Token price:', {
-          address,
-          price,
-          rawData: JSON.stringify(marketData).substring(0, 200)
-        });
         resultMap.set(address, {
           price: price > 0 ? price : (FALLBACK_PRICES[address] || 0),
           market_cap: marketData.market_cap || marketData.marketCap || 0
