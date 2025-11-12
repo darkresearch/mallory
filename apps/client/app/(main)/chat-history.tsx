@@ -74,6 +74,7 @@ export default function ChatHistoryScreen() {
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false);
   
   // Determine if we're on mobile (small screen) or desktop/tablet
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
@@ -496,27 +497,34 @@ export default function ChatHistoryScreen() {
   };
 
   const handleConfirmDelete = async () => {
-    if (!conversationToDelete) return;
+    if (!conversationToDelete || isDeletingConversation) return;
     
-    const result = await deleteConversation(conversationToDelete);
+    setIsDeletingConversation(true);
     
-    if (result.success) {
-      // If we deleted the current conversation, navigate away
-      if (currentConversationId === conversationToDelete) {
-        setCurrentConversationId(null);
-        router.push('/chat');
+    try {
+      const result = await deleteConversation(conversationToDelete);
+      
+      if (result.success) {
+        // If we deleted the current conversation, navigate away
+        if (currentConversationId === conversationToDelete) {
+          setCurrentConversationId(null);
+          router.push('/chat');
+        }
+        console.log('✅ Conversation deleted successfully');
+      } else {
+        console.error('❌ Failed to delete conversation');
+        alert('Failed to delete conversation. Please try again.');
       }
-      console.log('✅ Conversation deleted successfully');
-    } else {
-      console.error('❌ Failed to delete conversation');
-      alert('Failed to delete conversation. Please try again.');
+      
+      setShowDeleteModal(false);
+      setConversationToDelete(null);
+    } finally {
+      setIsDeletingConversation(false);
     }
-    
-    setShowDeleteModal(false);
-    setConversationToDelete(null);
   };
 
   const handleCancelDelete = () => {
+    if (isDeletingConversation) return; // Prevent closing modal while deleting
     setShowDeleteModal(false);
     setConversationToDelete(null);
   };
@@ -715,17 +723,21 @@ export default function ChatHistoryScreen() {
             
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={[styles.modalButton, styles.cancelButton, isDeletingConversation && { opacity: 0.5 }]}
                 onPress={handleCancelDelete}
+                disabled={isDeletingConversation}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={[styles.modalButton, styles.deleteButtonModal]}
+                style={[styles.modalButton, styles.deleteButtonModal, isDeletingConversation && { opacity: 0.5 }]}
                 onPress={handleConfirmDelete}
+                disabled={isDeletingConversation}
               >
-                <Text style={styles.deleteButtonText}>Delete</Text>
+                <Text style={styles.deleteButtonText}>
+                  {isDeletingConversation ? 'Deleting...' : 'Delete'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
