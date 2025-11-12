@@ -134,7 +134,7 @@ async function fetchSolPriceFromJupiter(): Promise<number | null> {
       console.warn('💰 [Jupiter] API error:', response.status, errorText.substring(0, 100));
     }
   } catch (error: any) {
-    if (error.name !== 'AbortError' && error.code !== 'ConnectionRefused') {
+    if (error.name !== 'AbortError' && error.code !== 'ECONNREFUSED') {
       console.error('💰 [Jupiter] Error fetching SOL price:', error.message);
     }
   }
