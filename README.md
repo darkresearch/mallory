@@ -84,7 +84,7 @@ GRID_API_KEY=your-grid-api-key
 EXA_API_KEY=your-exa-key
 
 # Infinite Memory (OpenMemory for infinite context):
-OPENMEMORY_URL=http://localhost:8080
+OPENMEMORY_URL=http://localhost:8765
 OPENMEMORY_API_KEY=your-openmemory-key
 ```
 

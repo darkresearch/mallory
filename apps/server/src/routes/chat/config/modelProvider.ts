@@ -30,7 +30,7 @@ let infiniteMemory: ReturnType<typeof createInfiniteMemory> | null = null;
 
 export async function getInfiniteMemory(): Promise<ReturnType<typeof createInfiniteMemory>> {
   if (!infiniteMemory) {
-    const openMemoryUrl = process.env.OPENMEMORY_URL || 'http://localhost:8080';
+    const openMemoryUrl = process.env.OPENMEMORY_URL || 'http://localhost:8765';
     const openMemoryApiKey = process.env.OPENMEMORY_API_KEY;
     const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
 

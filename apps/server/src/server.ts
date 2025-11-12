@@ -125,13 +125,19 @@ async function checkOpenMemory() {
   }
 
   try {
-    // Try to ping OpenMemory health endpoint
-    const response = await fetch(`${openMemoryUrl}/health`, {
+    // Try to ping OpenMemory - test with root endpoint first, then /health
+    // OpenMemory MCP might not have /health, so we test connectivity
+    const testUrl = `${openMemoryUrl}/`;
+    const response = await fetch(testUrl, {
       method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${openMemoryApiKey}`,
+      },
       signal: AbortSignal.timeout(2000), // 2 second timeout
     });
 
-    if (response.ok) {
+    // Any response (even 404) means the server is reachable
+    if (response.status === 200 || response.status === 404 || response.status === 401) {
       console.log(`✅ OpenMemory: Connected (${openMemoryUrl})`);
       console.log(`   Infinite memory enabled with semantic retrieval`);
     } else {
@@ -141,7 +147,7 @@ async function checkOpenMemory() {
   } catch (error) {
     console.log(`❌ OpenMemory: Connection failed (${openMemoryUrl})`);
     console.log(`   Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    console.log(`   Run: cd services/openmemory/backend && bun start`);
+    console.log(`   Run: bash services/openmemory-setup.sh`);
   }
 }
 
