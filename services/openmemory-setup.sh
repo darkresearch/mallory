@@ -1,6 +1,10 @@
 #!/bin/bash
 # OpenMemory setup script for Mallory
 
+# Exit on error and ensure pipeline failures are caught
+set -e
+set -o pipefail
+
 echo "🚀 Setting up OpenMemory for Mallory..."
 
 # Check if Docker is available
@@ -30,7 +34,7 @@ fi
 # Use the official Mem0 setup script
 echo "📥 Running Mem0 OpenMemory setup script..."
 cd services
-curl -sL https://raw.githubusercontent.com/mem0ai/mem0/main/openmemory/run.sh | bash
+curl -fsL https://raw.githubusercontent.com/mem0ai/mem0/main/openmemory/run.sh | bash
 
 echo ""
 echo "✅ OpenMemory setup complete!"
