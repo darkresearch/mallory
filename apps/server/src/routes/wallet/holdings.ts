@@ -27,6 +27,187 @@ interface GridBalanceResponse {
   };
 }
 
+// Import types from birdeye service
+type BirdeyeMarketData = { price?: number; market_cap?: number };
+type BirdeyeMetadata = { symbol?: string; name?: string; logo_uri?: string; decimals?: number };
+
+/**
+ * Fallback prices for stablecoins only (these should always be ~1.0)
+ */
+const FALLBACK_PRICES: Record<string, number> = {
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 1.0, // USDC
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 1.0, // USDT
+};
+
+/**
+ * Fetch SOL price from CoinGecko (free, no API key needed)
+ */
+async function fetchSolPriceFromCoinGecko(): Promise<number | null> {
+  try {
+    const url = 'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(url, { 
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
+      const data = await response.json() as any;
+      if (data.solana?.usd) {
+        const price = data.solana.usd;
+        console.log('💰 [CoinGecko] SOL price fetched:', price.toFixed(2));
+        return price;
+      }
+    } else {
+      console.warn('💰 [CoinGecko] API error:', response.status);
+    }
+  } catch (error: any) {
+    if (error.name !== 'AbortError') {
+      console.error('💰 [CoinGecko] Error fetching SOL price:', error.message);
+    }
+  }
+  return null;
+}
+
+/**
+ * Fetch SOL price from Jupiter (real-time price source)
+ */
+async function fetchSolPriceFromJupiter(): Promise<number | null> {
+  try {
+    const usdcMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+    const solMint = 'So11111111111111111111111111111111111111112';
+    const usdcAmount = 1_000_000; // 1 USDC in smallest units (6 decimals)
+    
+    // Use new Jupiter API endpoints (updated Oct 2025)
+    // Free tier: lite-api.jup.ag (no API key required)
+    // Pro tier: api.jup.ag (requires API key from portal.jup.ag)
+    // Reference: https://hub.jup.ag/docs/
+    const jupiterApiBase = process.env.JUPITER_API_KEY 
+      ? 'https://api.jup.ag/swap/v1'
+      : 'https://lite-api.jup.ag/swap/v1';
+    
+    const params = new URLSearchParams({
+      inputMint: usdcMint,
+      outputMint: solMint,
+      amount: usdcAmount.toString(),
+      slippageBps: '50'
+    });
+    
+    const headers: Record<string, string> = {
+      'Accept': 'application/json'
+    };
+    
+    // Add API key header if available (for pro tier)
+    if (process.env.JUPITER_API_KEY) {
+      headers['Authorization'] = `Bearer ${process.env.JUPITER_API_KEY}`;
+    }
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(`${jupiterApiBase}/quote?${params}`, {
+      headers,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
+      const quote = await response.json() as any;
+      if (quote.outAmount) {
+        const parsed = parseInt(quote.outAmount, 10);
+        if (!isFinite(parsed) || parsed <= 0) {
+          return null;
+        }
+        const solAmount = parsed / 1e9; // SOL has 9 decimals
+        const solPrice = 1 / solAmount; // Price of 1 SOL in USDC
+        console.log('💰 [Jupiter] SOL price fetched:', solPrice.toFixed(2));
+        return solPrice;
+      }
+    } else {
+      const errorText = await response.text();
+      console.warn('💰 [Jupiter] API error:', response.status, errorText.substring(0, 100));
+    }
+  } catch (error: any) {
+    if (error.name !== 'AbortError' && error.code !== 'ECONNREFUSED') {
+      console.error('💰 [Jupiter] Error fetching SOL price:', error.message);
+    }
+  }
+  return null;
+}
+
+/**
+ * Fetch SOL price with multiple fallbacks
+ * Tries: Jupiter -> CoinGecko -> null
+ */
+async function fetchSolPriceWithFallbacks(): Promise<number | null> {
+  // Try Jupiter first (most accurate for Solana)
+  const jupiterPrice = await fetchSolPriceFromJupiter();
+  if (jupiterPrice !== null) {
+    return jupiterPrice;
+  }
+  
+  // Fallback to CoinGecko
+  const coinGeckoPrice = await fetchSolPriceFromCoinGecko();
+  if (coinGeckoPrice !== null) {
+    return coinGeckoPrice;
+  }
+  
+  return null;
+}
+
+/**
+ * Enhanced market data fetcher with fallback support
+ * Uses Birdeye service first, then falls back to Jupiter/CoinGecko for SOL and stablecoins
+ */
+async function fetchMarketDataWithFallbacks(tokenAddresses: string[]): Promise<Map<string, BirdeyeMarketData>> {
+  const resultMap = new Map<string, BirdeyeMarketData>();
+  
+  if (tokenAddresses.length === 0) return resultMap;
+
+  // Try Birdeye first
+  try {
+    const birdeyeData = await fetchBirdeyeMarketData(tokenAddresses);
+    
+    // Copy successful results
+    for (const [address, data] of birdeyeData) {
+      if (data.price && data.price > 0) {
+        resultMap.set(address, data);
+      }
+    }
+  } catch (error) {
+    console.error('💰 [Birdeye] Error in market data fetch:', error);
+  }
+
+  // Apply fallbacks for missing tokens
+  const solAddress = 'So11111111111111111111111111111111111111112';
+  
+  // For SOL, try fallback sources if not found in Birdeye response
+  if (tokenAddresses.includes(solAddress) && !resultMap.has(solAddress)) {
+    const solPrice = await fetchSolPriceWithFallbacks();
+    if (solPrice !== null) {
+      resultMap.set(solAddress, {
+        price: solPrice,
+        market_cap: 0
+      });
+    }
+  }
+  
+  // Use fallback prices only for stablecoins that weren't found
+  for (const address of tokenAddresses) {
+    if (FALLBACK_PRICES[address] && !resultMap.has(address)) {
+      resultMap.set(address, {
+        price: FALLBACK_PRICES[address],
+        market_cap: 0
+      });
+    }
+  }
+
+  return resultMap;
+}
+
 /**
  * Get wallet holdings with price enrichment
  * GET /api/wallet/holdings?address=<wallet_address>
@@ -110,18 +291,30 @@ router.get('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
         };
       });
 
-    // Fetch price data from Birdeye in parallel
+    // Fetch price data from Birdeye in parallel with fallbacks
     const tokenAddresses = tokensToEnrich.map(t => t.address);
+    console.log('💰 Fetching prices for tokens:', tokenAddresses);
     const [marketDataMap, metadataMap] = await Promise.all([
-      fetchBirdeyeMarketData(tokenAddresses),
+      fetchMarketDataWithFallbacks(tokenAddresses),
       fetchBirdeyeMetadata(tokenAddresses)
     ]);
+
+    console.log('💰 Market data map size:', marketDataMap.size);
+    console.log('💰 Metadata map size:', metadataMap.size);
 
     // Enrich holdings with price data
     const enrichedHoldings: TokenHolding[] = tokensToEnrich.map(token => {
       const marketData = marketDataMap.get(token.address);
       const metadata = metadataMap.get(token.address);
       const price = marketData?.price || 0;
+      
+      console.log('💰 Enriching token:', {
+        address: token.address,
+        symbol: token.symbol,
+        price,
+        hasMarketData: !!marketData,
+        hasMetadata: !!metadata
+      });
       
       return {
         tokenAddress: token.address,
