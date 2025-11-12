@@ -88,12 +88,35 @@ async function fetchSolPriceFromJupiter(): Promise<number | null> {
     const solMint = 'So11111111111111111111111111111111111111112';
     const usdcAmount = 1_000_000; // 1 USDC in smallest units (6 decimals)
     
-    const url = `https://quote-api.jup.ag/v6/quote?inputMint=${usdcMint}&outputMint=${solMint}&amount=${usdcAmount}&slippageBps=50`;
+    // Use new Jupiter API endpoints (updated Oct 2025)
+    // Free tier: lite-api.jup.ag (no API key required)
+    // Pro tier: api.jup.ag (requires API key from portal.jup.ag)
+    // Reference: https://hub.jup.ag/docs/
+    const jupiterApiBase = process.env.JUPITER_API_KEY 
+      ? 'https://api.jup.ag/swap/v1'
+      : 'https://lite-api.jup.ag/swap/v1';
+    
+    const params = new URLSearchParams({
+      inputMint: usdcMint,
+      outputMint: solMint,
+      amount: usdcAmount.toString(),
+      slippageBps: '50'
+    });
+    
+    const headers: Record<string, string> = {
+      'Accept': 'application/json'
+    };
+    
+    // Add API key header if available (for pro tier)
+    if (process.env.JUPITER_API_KEY) {
+      headers['Authorization'] = `Bearer ${process.env.JUPITER_API_KEY}`;
+    }
+    
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch(url, {
-      headers: { 'Accept': 'application/json' },
+    const response = await fetch(`${jupiterApiBase}/quote?${params}`, {
+      headers,
       signal: controller.signal
     });
     clearTimeout(timeoutId);
