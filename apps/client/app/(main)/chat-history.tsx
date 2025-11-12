@@ -548,7 +548,7 @@ export default function ChatHistoryScreen() {
               activeOpacity={0.7}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="trash-outline" size={18} color="#E67B25" />
+              <Ionicons name="trash-outline" size={18} />
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -722,7 +722,7 @@ export default function ChatHistoryScreen() {
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={[styles.modalButton, styles.deleteButton]}
+                style={[styles.modalButton, styles.deleteButtonModal]}
                 onPress={handleConfirmDelete}
               >
                 <Text style={styles.deleteButtonText}>Delete</Text>
@@ -925,6 +925,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Satoshi',
   },
   deleteButton: {
+    padding: 8,
+    marginLeft: 8,
+    // backgroundColor: '#E67B25',
+  },
+  deleteButtonModal: {
     padding: 8,
     marginLeft: 8,
     backgroundColor: '#E67B25',
