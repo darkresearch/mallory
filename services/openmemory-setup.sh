@@ -3,50 +3,39 @@
 
 echo "🚀 Setting up OpenMemory for Mallory..."
 
-# Create .env file if it doesn't exist
-if [ ! -f services/openmemory/backend/.env ]; then
-  echo "📝 Creating OpenMemory .env file..."
-  cat > services/openmemory/backend/.env << 'EOF'
-# OpenMemory Configuration for Mallory
-
-# Embedding Provider - Using Gemini (free tier!)
-OM_EMBED_PROVIDER=gemini
-OM_GEMINI_API_KEY=${GEMINI_API_KEY}
-
-# Server Configuration
-OM_PORT=8080
-
-# Database - Using SQLite for local development (no Redis needed!)
-OM_DB_TYPE=sqlite
-OM_DB_PATH=./data/openmemory.sqlite
-
-# Memory Tier
-OM_TIER=smart
-
-# Vector Dimensions (Gemini)
-OM_VEC_DIM=768
-
-# API Key
-OM_API_KEY=${OPENMEMORY_API_KEY:-openmemory_dev_key}
-EOF
-  echo "✅ .env file created"
-else
-  echo "✅ .env file already exists"
+# Check if Docker is available
+if ! command -v docker &> /dev/null; then
+  echo "❌ Error: Docker is required but not installed"
+  echo "   Please install Docker first: https://docs.docker.com/get-docker/"
+  exit 1
 fi
 
-# Build OpenMemory
-echo "🔨 Building OpenMemory..."
-cd services/openmemory/backend
-bun run build
+# Ensure compose directory exists with qdrant.yml
+if [ ! -f services/compose/qdrant.yml ]; then
+  echo "📝 Creating Qdrant compose file..."
+  mkdir -p services/compose
+  cat > services/compose/qdrant.yml << 'EOF'
+services:
+  mem0_store:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+    volumes:
+      - mem0_storage:/qdrant/storage
+EOF
+  echo "✅ Qdrant compose file created"
+fi
+
+# Use the official Mem0 setup script
+echo "📥 Running Mem0 OpenMemory setup script..."
+cd services
+curl -sL https://raw.githubusercontent.com/mem0ai/mem0/main/openmemory/run.sh | bash
 
 echo ""
-echo "✅ OpenMemory is ready!"
+echo "✅ OpenMemory setup complete!"
 echo ""
-echo "To start OpenMemory:"
-echo "  cd services/openmemory/backend && bun start"
-echo ""
-echo "Or add to your .env:"
-echo "  OPENMEMORY_URL=http://localhost:8080"
+echo "Note: OpenMemory is now running in Docker"
+echo "Add to your server .env:"
+echo "  OPENMEMORY_URL=http://localhost:8765"
 echo "  OPENMEMORY_API_KEY=openmemory_dev_key"
-echo "  OPENAI_API_KEY=your_openai_key"
-
