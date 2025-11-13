@@ -17,6 +17,7 @@ mallory/
 ## ✨ Features
 
 ### Client (Mobile & Web)
+
 - 🔐 **Authentication**: Google OAuth via Supabase
 - 💬 **AI Chat**: Streaming conversations with Claude
 - 💰 **Embedded Wallet**: Grid-powered smart contract wallets
@@ -26,6 +27,7 @@ mallory/
 - 🏷️ **Version Tracking**: Automatic version display with git commit hash
 
 ### Server (Backend API)
+
 - 🤖 **AI Streaming**: Claude integration with Server-Sent Events and extended thinking
 - 🔧 **AI Tools**: Web search (Exa), user memory (Supermemory), and 20+ Nansen data APIs
 - 💰 **x402 Payments**: Server-side implementation for premium data access
@@ -34,6 +36,7 @@ mallory/
 - 🚀 **Production Ready**: Comprehensive testing infrastructure
 
 ### Monorepo Management
+
 - 🔄 **Synchronized Versioning**: Single command updates all packages
 - 🏷️ **Automatic Releases**: GitHub releases created on version tags
 - 📝 **Generated Changelogs**: Commit history automatically compiled
@@ -41,6 +44,7 @@ mallory/
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - Node.js 18+ or Bun
 - Git
 - Expo CLI (optional, included in dependencies)
@@ -56,6 +60,7 @@ bun install
 ### 2. Environment Setup
 
 #### Client Environment (`.env` in `apps/client/`)
+
 ```bash
 # Copy from template
 cp apps/client/.env.example apps/client/.env
@@ -69,6 +74,7 @@ EXPO_PUBLIC_GRID_ENV=sandbox
 ```
 
 #### Server Environment (`.env` in `apps/server/`)
+
 ```bash
 # Copy from template
 cp apps/server/.env.example apps/server/.env
@@ -84,18 +90,24 @@ GRID_API_KEY=your-grid-api-key
 EXA_API_KEY=your-exa-key
 
 # Infinite Memory (OpenMemory for infinite context):
+# Note: Run 'bash services/openmemory-setup.sh' first to set up the backend
+# Default API key is 'openmemory_dev_key' (configurable in openmemory/backend/.env)
 OPENMEMORY_URL=http://localhost:8080
-OPENMEMORY_API_KEY=your-openmemory-key
+OPENMEMORY_API_KEY=openmemory_dev_key
+# Optional: For free embeddings, set GEMINI_API_KEY (otherwise uses OpenAI)
+GEMINI_API_KEY=your-gemini-key
 ```
 
 ### 3. Run Development Servers
 
 #### Option A: Run Both (Client + Server)
+
 ```bash
 bun run dev
 ```
 
 #### Option B: Run Separately
+
 ```bash
 # Terminal 1 - Backend
 bun run server
@@ -105,6 +117,7 @@ bun run client
 ```
 
 The client will be available at:
+
 - Web: http://localhost:8081
 - API: http://localhost:3001
 
@@ -113,6 +126,7 @@ The client will be available at:
 See [apps/client/README.md](./apps/client/README.md) for detailed client documentation.
 
 **Key Commands:**
+
 ```bash
 cd apps/client
 
@@ -131,11 +145,13 @@ bun run android
 See [apps/server/README.md](./apps/server/README.md) for detailed server documentation.
 
 **API Endpoints:**
+
 - `POST /api/chat` - AI chat streaming with tool calling
 - `GET /api/wallet/holdings` - Wallet holdings with price data
 - `GET /health` - Health check
 
 **AI Tools:**
+
 - `searchWeb` - Web search via Exa (always available)
 - `addMemory` - User memory via Supermemory (optional)
 - `nansen*` - 20+ Nansen API endpoints for blockchain analytics (requires x402 payments)
@@ -158,8 +174,11 @@ Grid's architecture means neither the client nor server ever has access to user 
 The `packages/shared` directory contains TypeScript types and utilities shared between client and server:
 
 ```typescript
-import type { ChatRequest, HoldingsResponse } from '@darkresearch/mallory-shared';
-import { X402PaymentService } from '@darkresearch/mallory-shared';
+import type {
+  ChatRequest,
+  HoldingsResponse,
+} from "@darkresearch/mallory-shared";
+import { X402PaymentService } from "@darkresearch/mallory-shared";
 ```
 
 ## 🧪 Testing
@@ -167,6 +186,7 @@ import { X402PaymentService } from '@darkresearch/mallory-shared';
 Mallory has comprehensive test coverage: unit tests, integration tests, and E2E tests.
 
 **Run tests:**
+
 ```bash
 cd apps/client
 
@@ -183,17 +203,19 @@ bun test __tests__/e2e/long-context.test.ts       # ~10-20 min, ~$2-3
 ```
 
 **CI/CD:**
+
 - Regular tests run on every PR
 - AI tests only run when `[run-ai-tests]` is in commit message:
   ```bash
   git commit -m "fix: improve streaming [run-ai-tests]"
   ```
 
-See [apps/client/__tests__/CHAT_STATE_TESTS.md](./apps/client/__tests__/CHAT_STATE_TESTS.md) for full testing documentation.
+See [apps/client/**tests**/CHAT_STATE_TESTS.md](./apps/client/__tests__/CHAT_STATE_TESTS.md) for full testing documentation.
 
 ## 🚢 Deployment
 
 ### Client Deployment
+
 - **Web**: Deploy to Vercel, Netlify, or any static host
 - **iOS**: Deploy via Expo EAS or native build
 - **Android**: Deploy via Expo EAS or native build
@@ -201,6 +223,7 @@ See [apps/client/__tests__/CHAT_STATE_TESTS.md](./apps/client/__tests__/CHAT_STA
 See [apps/client/README.md](./apps/client/README.md#deployment) for details.
 
 ### Server Deployment
+
 - **Recommended**: Railway, Render, Fly.io
 - **Node.js**: Any Node.js 18+ hosting
 
@@ -300,6 +323,7 @@ Apache License 2.0 - see [LICENSE](./LICENSE) for details.
 ## 🙏 Acknowledgments
 
 Built with:
+
 - [Expo](https://expo.dev) - React Native framework
 - [Grid (Squads)](https://developers.squads.so) - Embedded wallets
 - [Anthropic](https://anthropic.com) - Claude AI with extended thinking
@@ -314,4 +338,3 @@ Built with:
 ---
 
 **Made with ❤️ by [Dark](https://darkresearch.ai)**
-
