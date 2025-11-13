@@ -137,10 +137,18 @@ async function checkOpenMemory() {
       signal: AbortSignal.timeout(2000), // 2 second timeout
     });
 
-    // Any response (even 404) means the server is reachable
-    if (response.status === 200 || response.status === 404 || response.status === 401) {
+    // Only HTTP 200 indicates successful connection
+    if (response.status === 200) {
       console.log(`✅ OpenMemory: Connected (${openMemoryUrl})`);
       console.log(`   Infinite memory enabled with semantic retrieval`);
+    } else if (response.status === 401) {
+      console.log(`❌ OpenMemory: Authentication failed (${openMemoryUrl})`);
+      console.log(`   Invalid API key. Check OPENMEMORY_API_KEY in .env`);
+      console.log(`   Infinite memory will be disabled until this is fixed.`);
+    } else if (response.status === 404) {
+      console.log(`⚠️  OpenMemory: Endpoint not found (HTTP 404)`);
+      console.log(`   OpenMemory server is reachable but endpoint may be incorrect`);
+      console.log(`   Check OPENMEMORY_URL in .env`);
     } else {
       console.log(`⚠️  OpenMemory: Unreachable (HTTP ${response.status})`);
       console.log(`   Check that OpenMemory is running on ${openMemoryUrl}`);
