@@ -29,7 +29,7 @@ fi
 if [ ! -f openmemory/backend/.env ]; then
   echo "📝 Creating OpenMemory .env file..."
   mkdir -p openmemory/backend/data
-  cat > openmemory/backend/.env << 'EOF'
+  cat > openmemory/backend/.env << EOF
 # OpenMemory Configuration for Mallory
 
 # Embedding Provider - Using Gemini (free tier!) or OpenAI
