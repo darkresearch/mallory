@@ -28,9 +28,10 @@ bun run dev
 
 1. Make your changes in a feature branch
 2. Test your changes thoroughly
-3. Commit with clear, descriptive messages
-4. Push to your fork
-5. Open a Pull Request
+3. Run `bun run changeset` to document the change
+4. Commit with clear, descriptive messages (including the generated changeset)
+5. Push to your fork
+6. Open a Pull Request
 
 ## Pull Request Guidelines
 
@@ -60,6 +61,13 @@ Follow [Semantic Versioning](https://semver.org/):
 - **MINOR** (0.1.0): New features, backwards compatible
 - **PATCH** (0.0.1): Bug fixes, backwards compatible
 
+## Changesets
+
+- Run `bun run changeset` after implementing changes. The CLI will ask which packages are affected and what semantic version bump to apply.
+- Provide a short summary so the automated changelog stays readable.
+- Commit the generated markdown file under `.changeset/` along with your code changes.
+- When your PR merges, the automated workflow will aggregate pending changesets and prepare the release PR.
+
 ## Code Style
 
 - Use TypeScript for type safety
@@ -82,7 +90,7 @@ bun test:e2e:web
 
 ## Version Management
 
-All packages in the monorepo maintain synchronized versions. See [VERSION.md](../VERSION.md) for details.
+All packages in the monorepo maintain synchronized versions. See [VERSION.mdx](../VERSION.mdx) for details.
 
 ## Questions?
 
