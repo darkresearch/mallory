@@ -131,10 +131,13 @@ export function useChatState({ currentConversationId, isLoadingConversation = fa
     }
     
     // Trigger message send via custom event (ChatManager listens)
-    const event = new CustomEvent('chat:sendMessage', { 
-      detail: { conversationId: currentConversationId, message } 
-    });
-    window.dispatchEvent(event);
+    // Only dispatch on web (window doesn't exist in React Native)
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('chat:sendMessage', { 
+        detail: { conversationId: currentConversationId, message } 
+      });
+      window.dispatchEvent(event);
+    }
     
     // Optimistically set waiting state
     setStreamState({ status: 'waiting', startTime: Date.now() });
@@ -146,10 +149,13 @@ export function useChatState({ currentConversationId, isLoadingConversation = fa
     if (!currentConversationId || currentConversationId === 'temp-loading') return;
     
     console.log('🛑 [useChatState] Stopping stream');
-    const event = new CustomEvent('chat:stop', { 
-      detail: { conversationId: currentConversationId } 
-    });
-    window.dispatchEvent(event);
+    // Only dispatch on web (window doesn't exist in React Native)
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('chat:stop', { 
+        detail: { conversationId: currentConversationId } 
+      });
+      window.dispatchEvent(event);
+    }
   };
 
   // Handle regenerate
@@ -157,10 +163,13 @@ export function useChatState({ currentConversationId, isLoadingConversation = fa
     if (!currentConversationId || currentConversationId === 'temp-loading') return;
     
     console.log('🔄 [useChatState] Regenerating message');
-    const event = new CustomEvent('chat:regenerate', { 
-      detail: { conversationId: currentConversationId } 
-    });
-    window.dispatchEvent(event);
+    // Only dispatch on web (window doesn't exist in React Native)
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('chat:regenerate', { 
+        detail: { conversationId: currentConversationId } 
+      });
+      window.dispatchEvent(event);
+    }
   };
 
   return {
