@@ -131,6 +131,21 @@ class WalletDataService {
 
       if (!response.ok) {
         const errorText = await response.text();
+        
+        // Check if this is a Grid account not found error (expected when Grid wallet not set up)
+        const isGridAccountNotFound = response.status === 500 && 
+          (errorText.includes('Grid API error: 404') || errorText.includes('Account'));
+        
+        if (isGridAccountNotFound) {
+          // This is expected - Grid account doesn't exist yet
+          console.warn('💰 [Mobile] Grid account not found (expected if wallet not set up)', {
+            requestId,
+            status: response.status,
+            duration: `${duration}ms`
+          });
+          throw new Error('Grid account not found. Please complete Grid wallet setup.');
+        }
+        
         console.error('💰 [Mobile] API request failed', {
           requestId,
           status: response.status,
@@ -144,6 +159,19 @@ class WalletDataService {
       const data = await response.json();
 
       if (!data.success) {
+        // Check if this is a Grid account not found error
+        const isGridAccountNotFound = data.error?.includes('Grid API error: 404') || 
+          data.error?.includes('Account');
+        
+        if (isGridAccountNotFound) {
+          // This is expected - Grid account doesn't exist yet
+          console.warn('💰 [Mobile] Grid account not found (expected if wallet not set up)', {
+            requestId,
+            duration: `${duration}ms`
+          });
+          throw new Error('Grid account not found. Please complete Grid wallet setup.');
+        }
+        
         console.error('💰 [Mobile] API returned error', {
           requestId,
           error: data.error,
@@ -189,11 +217,25 @@ class WalletDataService {
 
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.error('💰 [Mobile] fetchEnrichedHoldings() ERROR', {
-        requestId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        duration: `${duration}ms`
-      });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Only log as error if it's not an expected "Grid account not found" error
+      const isExpectedError = errorMessage.includes('Grid account not found') || 
+        errorMessage.includes('No wallet found');
+      
+      if (isExpectedError) {
+        console.warn('💰 [Mobile] fetchEnrichedHoldings() - Grid account not available', {
+          requestId,
+          error: errorMessage,
+          duration: `${duration}ms`
+        });
+      } else {
+        console.error('💰 [Mobile] fetchEnrichedHoldings() ERROR', {
+          requestId,
+          error: errorMessage,
+          duration: `${duration}ms`
+        });
+      }
       throw error;
     }
   }
@@ -236,11 +278,23 @@ class WalletDataService {
       return walletData;
 
     } catch (error) {
-      console.error('💰 [Mobile] Error fetching wallet data:', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        hasCache: !!this.cache,
-        cacheAge: this.cache ? `${Math.round((Date.now() - this.cacheExpiry + this.CACHE_DURATION) / 1000)}s old` : 'none'
-      });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const isExpectedError = errorMessage.includes('Grid account not found') || 
+        errorMessage.includes('No wallet found');
+      
+      // Only log as error if it's unexpected
+      if (isExpectedError) {
+        console.warn('💰 [Mobile] Wallet data unavailable (Grid account not set up)', {
+          hasCache: !!this.cache,
+          cacheAge: this.cache ? `${Math.round((Date.now() - this.cacheExpiry + this.CACHE_DURATION) / 1000)}s old` : 'none'
+        });
+      } else {
+        console.error('💰 [Mobile] Error fetching wallet data:', {
+          error: errorMessage,
+          hasCache: !!this.cache,
+          cacheAge: this.cache ? `${Math.round((Date.now() - this.cacheExpiry + this.CACHE_DURATION) / 1000)}s old` : 'none'
+        });
+      }
       
       // Graceful degradation: return stale cache or empty data
       return this.cache || this.createEmptyWalletData();
