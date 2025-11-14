@@ -1,11 +1,23 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+
+/**
+ * Platform-aware URL helper: converts localhost/127.0.0.1 to 10.0.2.2 on Android
+ * Android emulator uses 10.0.2.2 as an alias for the host machine's localhost
+ */
+function getPlatformAwareUrl(url: string): string {
+  if (Platform.OS === 'android' && (url.includes('localhost') || url.includes('127.0.0.1'))) {
+    return url.replace(/localhost|127\.0\.0\.1/g, '10.0.2.2');
+  }
+  return url;
+}
 
 /**
  * Runtime configuration values
  * Tries Constants.expoConfig.extra first (works on native), 
  * falls back to process.env (works on web with Metro)
  */
-export const config = {
+const rawConfig = {
   webOAuthRedirectUrl: (Constants.expoConfig?.extra?.webOAuthRedirectUrl || process.env.EXPO_PUBLIC_WEB_OAUTH_REDIRECT_URL) as string,
   backendApiUrl: (Constants.expoConfig?.extra?.backendApiUrl || process.env.EXPO_PUBLIC_BACKEND_API_URL) as string,
   solanaRpcUrl: (Constants.expoConfig?.extra?.solanaRpcUrl || process.env.EXPO_PUBLIC_SOLANA_RPC_URL) as string,
@@ -19,6 +31,12 @@ export const config = {
   privacyUrl: (Constants.expoConfig?.extra?.privacyUrl || process.env.EXPO_PUBLIC_PRIVACY_URL) as string,
   // Development mode detection
   isDevelopment: __DEV__,
+};
+
+// Apply platform-aware URL transformation for backendApiUrl
+export const config = {
+  ...rawConfig,
+  backendApiUrl: rawConfig.backendApiUrl ? getPlatformAwareUrl(rawConfig.backendApiUrl) : rawConfig.backendApiUrl,
 };
 
 // Debug log on load
