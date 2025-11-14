@@ -15,8 +15,7 @@ function getTrackedMarkdownFiles() {
   } catch (error) {
     console.error('Failed to list tracked markdown files via git ls-files');
     console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 1;
-    return [];
+    process.exit(1);
   }
 }
 
