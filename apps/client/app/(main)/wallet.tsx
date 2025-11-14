@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, RefreshControl, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -63,6 +63,41 @@ export default function WalletScreen() {
   
   // Use wallet context (data loaded in background)
   const { walletData, isLoading, isRefreshing, error, refreshWalletData, clearError } = useWallet();
+  const { initiateGridSignIn, isSigningInToGrid } = useGrid();
+  
+  // Track if we've already attempted Grid sign-in to prevent infinite retry loops
+  const hasAttemptedGridSignIn = useRef(false);
+
+  // Trigger Grid sign-in when wallet screen is accessed without Grid account
+  useEffect(() => {
+    // Only trigger if:
+    // 1. User is authenticated
+    // 2. No Grid account exists
+    // 3. Not currently loading wallet data
+    // 4. Not already signing in to Grid
+    // 5. Haven't already attempted sign-in (prevents retry loops on errors)
+    if (user?.email && !gridAccount && !isLoading && !isSigningInToGrid && !hasAttemptedGridSignIn.current) {
+      console.log('🏠 [WalletScreen] No Grid account found, triggering Grid sign-in');
+      hasAttemptedGridSignIn.current = true; // Mark as attempted to prevent retries
+      initiateGridSignIn(user.email, {
+        backgroundColor: '#FFEFE3',
+        textColor: '#000000',
+        returnPath: '/(main)/wallet'
+      }).catch(error => {
+        console.error('❌ [WalletScreen] Failed to initiate Grid sign-in:', error);
+        // Reset the flag after a delay to allow retry if user manually triggers it
+        // But prevent automatic retry loops
+        setTimeout(() => {
+          hasAttemptedGridSignIn.current = false;
+        }, 5000); // Allow retry after 5 seconds
+      });
+    }
+    
+    // Reset the flag when Grid account becomes available (successful sign-in)
+    if (gridAccount) {
+      hasAttemptedGridSignIn.current = false;
+    }
+  }, [user?.email, gridAccount, isLoading, isSigningInToGrid, initiateGridSignIn]);
 
   
   console.log('🏠 [WalletScreen] Hook data', { 
