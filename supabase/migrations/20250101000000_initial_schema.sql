@@ -1,4 +1,6 @@
 -- Mallory Supabase Database Setup Script
+-- This migration creates the initial database schema for the Mallory application
+-- It is idempotent and can be run multiple times safely
 
 -- Create extension for UUID generation (needed for primary keys)
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -12,10 +14,18 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Add missing user preference columns
+ALTER TABLE users 
+  ADD COLUMN IF NOT EXISTS instant_buy_amount NUMERIC,
+  ADD COLUMN IF NOT EXISTS instayield_enabled BOOLEAN DEFAULT false;
+
+COMMENT ON COLUMN users.instant_buy_amount IS 'User preference for instant buy amount';
+COMMENT ON COLUMN users.instayield_enabled IS 'Whether user has enabled instayield feature';
+
 -- Create conversations table
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID REFERENCES auth.users ON DELETE CASCADE,
+    user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
     title TEXT NOT NULL,
     token_ca TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -105,10 +115,10 @@ CREATE POLICY "Users can delete messages in their conversations" ON messages
 -- Create indexes for better performance
 -- Compound index covers both user_id lookups and user_id + updated_at ordering
 CREATE INDEX IF NOT EXISTS idx_conversations_user_updated ON conversations(user_id, updated_at DESC);
+
 -- Compound index for loading messages in chronological order
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at);
 
--- Insert a trigger to automatically update updated_at timestamps
 -- Function to update the updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -118,15 +128,18 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Triggers for updated_at timestamp
+-- Triggers for updated_at timestamp (idempotent)
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at
     BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_conversations_updated_at ON conversations;
 CREATE TRIGGER update_conversations_updated_at
     BEFORE UPDATE ON conversations
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_messages_updated_at ON messages;
 CREATE TRIGGER update_messages_updated_at
     BEFORE UPDATE ON messages
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -145,6 +158,7 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION update_conversation_on_message_change() IS 'Updates conversation timestamp when messages are added/updated/deleted';
 
+DROP TRIGGER IF EXISTS update_conversation_on_message_change ON messages;
 CREATE TRIGGER update_conversation_on_message_change
     AFTER INSERT OR UPDATE OR DELETE ON messages
     FOR EACH ROW EXECUTE FUNCTION update_conversation_on_message_change();
@@ -201,6 +215,15 @@ BEGIN
   FROM conversations 
   WHERE id = COALESCE(NEW.conversation_id, OLD.conversation_id);
   
+  -- Skip broadcast if conversation is already deleted (CASCADE DELETE scenario)
+  -- This happens when conversation is deleted and messages are cascade-deleted
+  -- The conversation is already gone, so conversation_user_id will be NULL
+  IF conversation_user_id IS NULL THEN
+    RAISE LOG 'Skipping message broadcast: conversation % already deleted', 
+      COALESCE(NEW.conversation_id, OLD.conversation_id);
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+  
   -- Broadcast to user-specific channel
   PERFORM realtime.broadcast_changes(
     'messages:user:' || conversation_user_id,
@@ -252,16 +275,36 @@ CREATE TRIGGER create_user_profile_trigger
     FOR EACH ROW EXECUTE FUNCTION create_user_profile();
 
 -- Enable the Realtime subscription for the tables
--- Add tables to realtime publication for websocket subscriptions
-ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
-ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+-- Add tables to realtime publication for websocket subscriptions (idempotent)
+DO $$
+BEGIN
+    -- Add conversations table if not already in publication
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND tablename = 'conversations'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
+    END IF;
+    
+    -- Add messages table if not already in publication
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND tablename = 'messages'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+    END IF;
+END $$;
 
 -- Security: Restrict realtime broadcast subscriptions to user-specific channels only
 -- This prevents users from hijacking other users' broadcast channels
--- Drop existing permissive policy if it exists
+-- Drop existing policies if they exist
 DROP POLICY IF EXISTS "Authenticated users can receive broadcasts" ON realtime.messages;
+DROP POLICY IF EXISTS "Users can only receive their own broadcasts" ON realtime.messages;
 
 -- Create restrictive policy that enforces channel-level authorization
+-- Only allows channels that contain the authenticated user's ID
 CREATE POLICY "Users can only receive their own broadcasts" 
 ON realtime.messages
 FOR SELECT 
@@ -270,14 +313,12 @@ USING (
   -- Allow if channel name (topic) contains the authenticated user's ID
   -- Format: conversations:user:{userId} or messages:user:{userId}
   topic LIKE '%:user:' || (auth.uid())::text || '%'
-  OR
-  -- Allow public/shared channels that don't contain :user: pattern
-  topic NOT LIKE '%:user:%'
 );
 
-COMMENT ON POLICY "Users can only receive their own broadcasts" ON realtime.messages IS 'Prevents users from subscribing to other users'' private broadcast channels';
+COMMENT ON POLICY "Users can only receive their own broadcasts" ON realtime.messages IS 'Prevents users from subscribing to other users'' private broadcast channels. Only user-specific channels are allowed.';
 
 -- Create a function to get conversation history with user info
+-- SECURITY: This function validates that the caller owns the conversation
 CREATE OR REPLACE FUNCTION get_conversation_with_messages(conv_id UUID)
 RETURNS TABLE(
     conversation_id UUID,
@@ -292,6 +333,7 @@ RETURNS TABLE(
     message_metadata JSONB
 )
 LANGUAGE SQL
+SECURITY DEFINER
 AS $$
     SELECT
         c.id as conversation_id,
@@ -307,10 +349,14 @@ AS $$
     FROM conversations c
     LEFT JOIN messages m ON c.id = m.conversation_id
     WHERE c.id = conv_id
+      AND c.user_id = auth.uid()
     ORDER BY m.created_at ASC;
 $$;
 
+COMMENT ON FUNCTION get_conversation_with_messages(UUID) IS 'Gets full conversation with all messages. Only returns conversations owned by the authenticated user.';
+
 -- Create a function to get recent conversations for a user
+-- SECURITY: This function validates that the caller is querying their own conversations
 CREATE OR REPLACE FUNCTION get_user_conversations(user_id_param UUID)
 RETURNS TABLE(
     id UUID,
@@ -322,6 +368,7 @@ RETURNS TABLE(
     message_count BIGINT
 )
 LANGUAGE SQL
+SECURITY DEFINER
 AS $$
     SELECT
         c.id,
@@ -337,20 +384,21 @@ AS $$
         (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id) as message_count
     FROM conversations c
     WHERE c.user_id = user_id_param
+      AND c.user_id = auth.uid()
     ORDER BY c.updated_at DESC;
 $$;
+
+COMMENT ON FUNCTION get_user_conversations(UUID) IS 'Gets all conversations for a user with metadata. Only returns conversations owned by the authenticated user.';
 
 -- Add comments to describe the tables
 COMMENT ON TABLE users IS 'User profiles - minimal table for Mallory-specific data';
 COMMENT ON COLUMN users.id IS 'Primary key - matches the auth.users.id';
 COMMENT ON COLUMN users.has_completed_onboarding IS 'Whether user has completed onboarding flow';
-
 COMMENT ON TABLE conversations IS 'Chat conversations between users and AI';
 COMMENT ON COLUMN conversations.token_ca IS 'Token contract address (default is all zeros for global conversations)';
 COMMENT ON COLUMN conversations.metadata IS 'Additional conversation metadata (e.g., onboarding status)';
-
 COMMENT ON TABLE messages IS 'Individual messages within conversations';
-COMMENT ON COLUMN messages.role IS 'Message role: user, assistant, system, tool_use, tool_result';
+COMMENT ON COLUMN messages.role IS 'Message role: user or assistant. System messages are filtered out before saving. Tool data (tool_use, tool_result) is stored in metadata.parts, not as role values.';
 COMMENT ON COLUMN messages.content IS 'Text content of the message (for display purposes)';
 COMMENT ON COLUMN messages.metadata IS 'Full message data including rich content and tool usage';
 
@@ -358,6 +406,22 @@ COMMENT ON COLUMN messages.metadata IS 'Full message data including rich content
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE users TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE conversations TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE messages TO authenticated;
+
+-- Grant execute permissions on functions to authenticated users
+GRANT EXECUTE ON FUNCTION get_conversation_with_messages(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_user_conversations(UUID) TO authenticated;
+
+-- Fix token_ca for existing conversations
+-- Update existing conversations to set token_ca to GLOBAL_TOKEN_ID if NULL
+-- This ensures all existing conversations are found by queries filtering on token_ca
+-- The GLOBAL_TOKEN_ID is '00000000-0000-0000-0000-000000000000' (all zeros UUID)
+UPDATE conversations 
+SET token_ca = '00000000-0000-0000-0000-000000000000' 
+WHERE token_ca IS NULL;
+
+-- Set default value for token_ca to prevent NULL values in future inserts
+ALTER TABLE conversations 
+ALTER COLUMN token_ca SET DEFAULT '00000000-0000-0000-0000-000000000000';
 
 -- Enable Row Level Security on users table too (if not already enabled by auth)
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -377,3 +441,7 @@ DROP POLICY IF EXISTS "Users can update own profile" ON users;
 CREATE POLICY "Users can update own profile" ON users
     FOR UPDATE TO authenticated
     USING (auth.uid() = id);
+
+-- Users cannot delete their own profile (data retention policy)
+-- If profile deletion is needed in the future, add a DELETE policy here
+-- For now, explicit denial: no DELETE policy = users cannot delete profiles
