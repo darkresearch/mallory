@@ -75,6 +75,7 @@ export default function ChatHistoryScreen() {
   const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
+  const [hoveredConversationId, setHoveredConversationId] = useState<string | null>(null);
   
   // Determine if we're on mobile (small screen) or desktop/tablet
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
@@ -532,11 +533,18 @@ export default function ChatHistoryScreen() {
   // Render conversation item
   const renderConversationItem = ({ item }: { item: ConversationWithPreview }) => {
     const isActive = currentConversationId === item.id;
+    const isHovered = hoveredConversationId === item.id;
     const displayTitle = getConversationDisplayTitle(item.metadata, 'New conversation');
     const dateLabel = formatDate(item.updated_at);
     
     return (
-      <View style={styles.conversationWrapper}>
+      <View 
+        style={styles.conversationWrapper}
+        {...(Platform.OS === 'web' ? {
+          onMouseEnter: () => setHoveredConversationId(item.id),
+          onMouseLeave: () => setHoveredConversationId(null)
+        } as any : {})}
+      >
         <TouchableOpacity 
           style={[styles.conversationItem, isActive && styles.conversationItemActive]}
           onPress={() => handleConversationTap(item.id)}
@@ -544,20 +552,25 @@ export default function ChatHistoryScreen() {
         >
           <View style={styles.conversationContent}>
             {isActive && <View style={styles.activeIndicator} />}
-            <View style={styles.conversationTextWrapper}>
-              <Text style={styles.conversationTitle} numberOfLines={1}>
-                {displayTitle}
-              </Text>
+            <Text style={styles.conversationTitle} numberOfLines={1}>
+              {displayTitle}
+            </Text>
+            <View style={styles.dateAndActions}>
+              {/* Show delete icon only on hover on web, always show on mobile */}
+              {(isHovered || Platform.OS !== 'web') && (
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => {
+                    handleDeletePress(item.id);
+                  }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#000000" />
+                </TouchableOpacity>
+              )}
               <Text style={styles.conversationDate}>{dateLabel}</Text>
             </View>
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={() => handleDeletePress(item.id)}
-              activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="trash-outline" size={18} />
-            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </View>
@@ -912,11 +925,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12, // Increased vertical padding for better visual balance
   },
-  conversationTextWrapper: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   activeIndicator: {
     width: 8,
     height: 8,
@@ -935,6 +943,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#000000',
     fontFamily: 'Satoshi',
+  },
+  dateAndActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    padding: 4,
+    marginRight: 8,
+    opacity: 0.7,
   },
   deleteButton: {
     padding: 8,
