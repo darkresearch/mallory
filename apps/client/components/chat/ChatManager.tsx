@@ -331,7 +331,42 @@ export function ChatManager({}: ChatManagerProps) {
     }
   }, [status, messages, currentConversationId]);
 
-  // Listen for custom events from useChatState
+  // Expose chat functions in cache for React Native (where window events don't work)
+  useEffect(() => {
+    updateChatCache({
+      chatFunctions: {
+        sendMessage: (message: { text: string }) => {
+          if (currentConversationId && currentConversationId !== 'temp-loading') {
+            console.log('📨 [ChatManager] Sending message via cache (React Native):', message.text);
+            updateChatCache({
+              streamState: { status: 'waiting', startTime: Date.now() },
+              liveReasoningText: '',
+            });
+            sendMessage(message);
+          }
+        },
+        stop: () => {
+          if (currentConversationId && currentConversationId !== 'temp-loading') {
+            console.log('🛑 [ChatManager] Stopping via cache (React Native)');
+            stop();
+          }
+        },
+        regenerate: () => {
+          if (currentConversationId && currentConversationId !== 'temp-loading') {
+            console.log('🔄 [ChatManager] Regenerating via cache (React Native)');
+            regenerate();
+          }
+        },
+      },
+    });
+
+    return () => {
+      // Clear functions when conversation changes or component unmounts
+      updateChatCache({ chatFunctions: undefined });
+    };
+  }, [currentConversationId, sendMessage, stop, regenerate]);
+
+  // Listen for custom events from useChatState (web only)
   useEffect(() => {
     const handleSendMessage = (event: Event) => {
       const { conversationId, message } = (event as CustomEvent).detail;

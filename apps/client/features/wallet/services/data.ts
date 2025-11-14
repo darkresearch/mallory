@@ -230,11 +230,11 @@ class WalletDataService {
           duration: `${duration}ms`
         });
       } else {
-        console.error('💰 [Mobile] fetchEnrichedHoldings() ERROR', {
-          requestId,
+      console.error('💰 [Mobile] fetchEnrichedHoldings() ERROR', {
+        requestId,
           error: errorMessage,
-          duration: `${duration}ms`
-        });
+        duration: `${duration}ms`
+      });
       }
       throw error;
     }
@@ -289,11 +289,11 @@ class WalletDataService {
           cacheAge: this.cache ? `${Math.round((Date.now() - this.cacheExpiry + this.CACHE_DURATION) / 1000)}s old` : 'none'
         });
       } else {
-        console.error('💰 [Mobile] Error fetching wallet data:', {
+      console.error('💰 [Mobile] Error fetching wallet data:', {
           error: errorMessage,
-          hasCache: !!this.cache,
-          cacheAge: this.cache ? `${Math.round((Date.now() - this.cacheExpiry + this.CACHE_DURATION) / 1000)}s old` : 'none'
-        });
+        hasCache: !!this.cache,
+        cacheAge: this.cache ? `${Math.round((Date.now() - this.cacheExpiry + this.CACHE_DURATION) / 1000)}s old` : 'none'
+      });
       }
       
       // Graceful degradation: return stale cache or empty data

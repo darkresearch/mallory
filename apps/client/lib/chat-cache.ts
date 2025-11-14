@@ -13,6 +13,15 @@ type StreamState =
   | { status: 'responding'; startTime: number }
 
 /**
+ * Chat functions exposed by ChatManager for React Native
+ */
+interface ChatFunctions {
+  sendMessage?: (message: { text: string }) => void;
+  stop?: () => void;
+  regenerate?: () => void;
+}
+
+/**
  * Active chat cache structure
  */
 interface ActiveChatCache {
@@ -23,6 +32,7 @@ interface ActiveChatCache {
   aiStatus: 'ready' | 'streaming' | 'error';
   aiError: Error | null;
   isLoadingHistory: boolean;
+  chatFunctions?: ChatFunctions; // Exposed by ChatManager for React Native
 }
 
 /**
@@ -37,6 +47,7 @@ const activeChatCache: ActiveChatCache = {
   aiStatus: 'ready',
   aiError: null,
   isLoadingHistory: false,
+  chatFunctions: undefined,
 };
 
 /**
@@ -131,5 +142,5 @@ export function isCacheForConversation(conversationId: string | null): boolean {
   return activeChatCache.conversationId === conversationId;
 }
 
-export type { ActiveChatCache, StreamState };
+export type { ActiveChatCache, StreamState, ChatFunctions };
 
