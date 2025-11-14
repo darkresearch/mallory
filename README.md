@@ -206,6 +206,59 @@ See [apps/client/README.md](./apps/client/README.md#deployment) for details.
 
 See [apps/server/README.md](./apps/server/README.md#deployment) for details.
 
+## 🛠 Troubleshooting
+---
+### Google OAuth “Unsupported provider” — Full Setup Guide (Web + Expo RN)
+The 400 response means Supabase doesn’t know about the Google provider yet. Here’s the full fix, covering both the browser login flow and the native Expo app.
+
+#### 1. Enable Google in Supabase
+- Go to **Supabase dashboard → your project → Authentication → Providers → Google**.
+- Toggle **Enable** on. Supabase now expects a Google Client ID/secret.
+Make a note of the **Redirect URL** shown at the top (it looks like `https://<project-ref>.supabase.co/auth/v1/callback`). You’ll paste that into Google Cloud Console in a moment.
+
+#### 2. Create Google OAuth credentials
+- Open <https://console.cloud.google.com/apis/credentials> (select the project you’ll use for Mallory).
+- Ensure the *OAuth consent screen* is configured (app name, support email, scopes, test users).
+- Click **Create credentials → OAuth client ID**.
+- Choose **Web application** (works for both the web and native flows Mallory uses).
+- Fill in:
+   - **Authorized redirect URIs**: add the Supabase callback from step 1, e.g.
+     ```
+     https://<project-ref>.supabase.co/auth/v1/callback
+     ```
+   - **Authorized JavaScript origins** aren’t required for Supabase, but you can add your local web origin (e.g. `http://localhost:8081`) if you’re running the web client.
+- Save. Copy the generated **Client ID** and **Client secret**.
+
+> **What about `exp://…`?**  
+> That kind of URI applies when you’re using Expo’s WebView-based AuthSession. Mallory’s native flow uses `@react-native-google-signin/google-signin`, which talks directly to Google Play Services and does **not** need (or accept) an `exp://` URI. So you can skip adding exp:// schemes here.
+
+#### 3. Paste credentials back into Supabase
+Still on the Google provider page in Supabase:
+- Paste the **Client ID** and **Client secret** you just copied.
+- Click **Save**.
+Supabase now accepts Google logins.
+
+#### 4. Update Mallory’s configuration (web + Expo)
+Whether you’re running the browser app or the Expo-native build, you need the same Google client ID available at runtime.
+- Edit `apps/client/.env` (or wherever you manage env vars) and set:
+   ```ini
+   EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=<the web client ID from Google>
+   EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<optional iOS client ID if you generated one>
+   ```
+   Mallory’s native layer uses the “Web application” client for Android; for iOS you can optionally create an iOS-specific client and set it here.
+- If you’re running the web client, also ensure the same ID is present; the `config.ts` module pulls from these `EXPO_PUBLIC_*` variables.
+- Restart Expo / Metro (and rebuild Android/iOS if needed) so the new env values take effect.
+
+#### 5. Test both surfaces
+- **Web**: open the browser client, click **Continue with Google**, finish the Google OAuth flow; you should be redirected to Supabase, then back into Mallory with a logged-in session.
+- **Expo + Android/iOS**: rebuild (`bun run android` or `bun run ios`), trigger **Continue with Google**. The native Google Sign-In dialog should appear. After you grant access, Supabase will issue the session tokens and Mallory should log you in.
+
+##### TL;DR on local dev URLs
+- **Web (browser)**: your “local dev URL” is the origin where your web app runs (e.g. `http://localhost:8081`). Add it under “Authorized JavaScript origins” if you need to load Google scripts directly (not strictly required for Supabase-based OAuth, but harmless).
+- **Expo React Native**: no `exp://` redirect URI is required for the Google Sign-In library Mallory uses. Just ensure the web client ID is configured and Supabase has the provider enabled.
+Once those steps are done, the “Unsupported provider: provider is not enabled” error disappears for both web and native runs.
+---
+
 ## 🏷️ Version Management
 
 Mallory uses synchronized semantic versioning across all packages.
