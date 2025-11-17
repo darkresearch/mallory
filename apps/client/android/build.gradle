@@ -1,0 +1,51 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath('com.android.tools.build:gradle:8.3.0')
+    classpath('com.facebook.react:react-native-gradle-plugin')
+    classpath('org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21')
+  }
+}
+
+// Define ext properties for all subprojects (including node_modules)
+ext {
+  // Kotlin version - required by some node_modules packages
+  // Must be 2.0.0+ for Expo SDK 54 compatibility
+  kotlinVersion = '2.0.21'
+  
+  // Android SDK versions - these may be overridden by Expo/React Native plugins
+  // but we define defaults here to prevent errors in node_modules
+  minSdkVersion = 24
+  compileSdkVersion = 35
+  targetSdkVersion = 35
+  buildToolsVersion = '35.0.0'
+  // NOTE: React Native 0.81.4 has C++20 compatibility issues with Android NDK
+  // The build uses C++20 features (std::regular, std::identity, concepts) that aren't
+  // fully supported in Android NDK's libc++. This is a known React Native/Expo issue.
+  // NDK 26.1.10909125 is the recommended version for Expo SDK 54
+  ndkVersion = '26.1.10909125'
+  
+  // Help node_modules libraries resolve React Native location
+  // This prevents "duplicate project android" errors in IDE
+  def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+  def reactNativePackage = new File(projectRoot, 'node_modules/react-native')
+  if (reactNativePackage.exists()) {
+    REACT_NATIVE_NODE_MODULES_DIR = reactNativePackage.absolutePath
+  }
+}
+
+allprojects {
+  repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://www.jitpack.io' }
+  }
+}
+
+apply plugin: "expo-root-project"
+apply plugin: "com.facebook.react.rootproject"
