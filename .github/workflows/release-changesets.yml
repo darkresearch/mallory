@@ -4,21 +4,13 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'package.json'
-      - 'apps/*/package.json'
-      - 'packages/*/package.json'
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   release:
-    # Only run if this is from changesets version bump
-    # Works with merge commits (default GitHub merge strategy): "Merge pull request #N ... Version Packages"
-    # Works with direct commits from changesets: message starts with "Version Packages"
-    if: contains(github.event.head_commit.message, 'Version Packages')
-    
     runs-on: ubuntu-latest
     
     steps:
@@ -30,22 +22,29 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
       
-      - name: Get version from package.json
-        id: get_version
-        run: |
-          VERSION=$(cat package.json | grep '"version"' | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' | tr -d '[[:space:]]')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-          echo "✅ Version: $VERSION"
+      - name: Install dependencies
+        run: bun install
       
-      - name: Configure Git
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: bun changeset version
+          commit: "chore: version packages"
+          title: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create tag and trigger deployment
+        if: steps.changesets.outputs.published == 'true'
         run: |
+          # Get the version from package.json
+          VERSION=$(cat package.json | grep '"version"' | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' | tr -d '[[:space:]]')
+          TAG="v$VERSION"
+          
+          # Configure git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-      
-      - name: Create and push tag
-        run: |
-          TAG="v${{ steps.get_version.outputs.version }}"
           
           # Check if tag already exists
           if git rev-parse "$TAG" >/dev/null 2>&1; then
@@ -53,31 +52,25 @@ jobs:
             exit 0
           fi
           
+          # Create and push tag
           git tag $TAG
           git push origin $TAG
           
           echo "✅ Created and pushed tag: $TAG"
-          echo "🚀 This will trigger production deployment to Vercel"
-      
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ steps.get_version.outputs.version }}
-          name: Release ${{ steps.get_version.outputs.version }}
-          body: |
-            ## What's Changed
-            
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "🚀 This will trigger Vercel production deployment"
       
       - name: Summary
+        if: steps.changesets.outputs.hasChangesets == 'true'
         run: |
-          echo "## 🎉 Release Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "## 📦 Changesets Detected" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version**: ${{ steps.get_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag**: v${{ steps.get_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "A 'Version Packages' PR has been created or updated." >> $GITHUB_STEP_SUMMARY
+          echo "Merge it when ready to release!" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Release Summary
+        if: steps.changesets.outputs.published == 'true'
+        run: |
+          echo "## 🎉 Release Published!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The tag will trigger Vercel production deployment automatically." >> $GITHUB_STEP_SUMMARY
+          echo "Packages have been versioned and tag created." >> $GITHUB_STEP_SUMMARY
+          echo "Vercel production deployment will trigger shortly." >> $GITHUB_STEP_SUMMARY
