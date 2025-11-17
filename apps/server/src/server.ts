@@ -179,7 +179,24 @@ app.listen(PORT, async () => {
   
   // Check OpenMemory connection
   await checkOpenMemory();
-  console.log('');
+  
+  // Validate Gas Abstraction configuration (if enabled)
+  try {
+    const { loadGasAbstractionConfig, validateGasAbstractionConfig } = await import('./lib/gasAbstractionConfig.js');
+    const gasConfig = loadGasAbstractionConfig();
+    validateGasAbstractionConfig(gasConfig);
+    console.log('');
+  } catch (error: any) {
+    if (error.message?.includes('required') || error.message?.includes('Invalid')) {
+      console.log('⚠️  Gas Abstraction: Not configured');
+      console.log('   Gas abstraction features will be disabled');
+      console.log('   To enable, set GAS_GATEWAY_URL and SOLANA_RPC_URL in .env');
+      console.log('');
+    } else {
+      // Re-throw unexpected errors
+      throw error;
+    }
+  }
 });
 
 // Graceful shutdown
