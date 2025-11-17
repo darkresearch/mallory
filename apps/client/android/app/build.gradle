@@ -158,6 +158,50 @@ tasks.named('clean').configure {
     }
 }
 
+// Task to patch React Native graphicsConversions.h to fix std::format C++20 compatibility issue
+// React Native 0.81.4 uses std::format which isn't available in Android NDK 26.1.10909125's libc++
+task patchReactNativeGraphicsConversions {
+    doLast {
+        // projectRoot points to apps/client, but node_modules is at workspace root (two levels up from app/build.gradle)
+        // app -> android -> client -> workspace root
+        def workspaceRoot = rootDir.getParentFile().getParentFile().getParentFile()
+        def graphicsConversionsFile = new File(workspaceRoot, "node_modules/react-native/ReactCommon/react/renderer/core/graphicsConversions.h")
+        
+        if (graphicsConversionsFile.exists()) {
+            def content = graphicsConversionsFile.text
+            
+            // Check if already patched
+            if (content.contains("std::to_string(dimension.value) + \"%\"")) {
+                println "ℹ️  graphicsConversions.h already patched"
+                return
+            }
+            
+            // Replace std::format with std::to_string + string concatenation
+            // Match: return std::format("{}%", dimension.value);
+            def patchedContent = content.replace(
+                'return std::format("{}%", dimension.value);',
+                'return std::to_string(dimension.value) + "%";'
+            )
+            
+            if (patchedContent != content) {
+                graphicsConversionsFile.text = patchedContent
+                println "✅ Patched graphicsConversions.h: replaced std::format with std::to_string"
+            } else {
+                println "ℹ️  graphicsConversions.h doesn't need patching (std::format not found)"
+            }
+        } else {
+            println "⚠️  graphicsConversions.h not found at ${graphicsConversionsFile.absolutePath}"
+        }
+    }
+}
+
+// Run patch task before any build tasks
+afterEvaluate {
+    tasks.matching { it.name.contains('externalNativeBuild') || it.name.contains('buildCMake') }.configureEach { task ->
+        task.dependsOn patchReactNativeGraphicsConversions
+    }
+}
+
 // Apply static values from `gradle.properties` to the `android.packagingOptions`
 // Accepts values in comma delimited lists, example:
 // android.packagingOptions.pickFirsts=/LICENSE,**/picasa.ini
@@ -175,60 +219,6 @@ tasks.named('clean').configure {
         options.each {
             android.packagingOptions[prop] += it
         }
-    }
-}
-
-// Task to patch React Native prefab headers in Gradle cache
-// This fixes the std::format C++20 compatibility issue with Android NDK
-task patchReactNativePrefab {
-    doLast {
-        def patchScript = new File("${projectDir}/patch-react-native.sh")
-        if (patchScript.exists()) {
-            def result = exec {
-                commandLine 'bash', patchScript.absolutePath
-                ignoreExitValue = false
-            }
-            println "✅ Patch script executed"
-        } else {
-            // Fallback to direct patching
-            def userHome = System.getProperty('user.home')
-            def exactPath = new File("${userHome}/.gradle/caches/8.14.3/transforms/71b76531728f3a9bc715d06df4c2f009/transformed/react-android-0.81.4-debug/prefab/modules/reactnative/include/react/renderer/core/graphicsConversions.h")
-            
-            if (exactPath.exists()) {
-                def content = exactPath.text
-                if (content.contains('std::format("{}%", dimension.value)')) {
-                    println "🔧 Patching React Native prefab header: ${exactPath}"
-                    exactPath.text = content.replace(
-                        'return std::format("{}%", dimension.value);',
-                        'return std::to_string(dimension.value) + "%";'
-                    )
-                    println "✅ Patched successfully"
-                } else {
-                    println "ℹ️  File already patched or doesn't need patching"
-                }
-            } else {
-                println "⚠️  Could not find graphicsConversions.h at expected path"
-                println "   Path: ${exactPath}"
-            }
-        }
-    }
-}
-
-// Run patch task after prefab extraction but before CMake build
-afterEvaluate {
-    // Patch after prefab package directory is created
-    tasks.matching { 
-        it.name.contains('extract') && it.name.contains('Prefab')
-    }.configureEach {
-        it.finalizedBy patchReactNativePrefab
-    }
-    
-    // Also patch before CMake configuration (in case prefab extraction already happened)
-    tasks.matching { 
-        it.name.contains('configureCMake') || 
-        it.name.contains('buildCMake')
-    }.configureEach {
-        it.dependsOn patchReactNativePrefab
     }
 }
 

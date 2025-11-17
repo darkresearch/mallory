@@ -19,24 +19,11 @@ ext {
   kotlinVersion = '2.0.21'
   
   // Android SDK versions - these may be overridden by Expo/React Native plugins
-  // but we define defaults here to prevent errors in node_modules
   minSdkVersion = 24
   compileSdkVersion = 35
   targetSdkVersion = 35
   buildToolsVersion = '35.0.0'
-  // NOTE: React Native 0.81.4 has C++20 compatibility issues with Android NDK
-  // The build uses C++20 features (std::regular, std::identity, concepts) that aren't
-  // fully supported in Android NDK's libc++. This is a known React Native/Expo issue.
-  // NDK 26.1.10909125 is the recommended version for Expo SDK 54
   ndkVersion = '26.1.10909125'
-  
-  // Help node_modules libraries resolve React Native location
-  // This prevents "duplicate project android" errors in IDE
-  def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
-  def reactNativePackage = new File(projectRoot, 'node_modules/react-native')
-  if (reactNativePackage.exists()) {
-    REACT_NATIVE_NODE_MODULES_DIR = reactNativePackage.absolutePath
-  }
 }
 
 allprojects {

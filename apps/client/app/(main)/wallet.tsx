@@ -84,7 +84,7 @@ export default function WalletScreen() {
       const checkGridAccount = async () => {
         try {
           const account = await gridClientService.getAccount();
-          if (!account) {
+          if (!account && user?.email) {
             console.log('🏠 [WalletScreen] No Grid account found, triggering Grid sign-in');
             hasAttemptedGridSignIn.current = true;
             
