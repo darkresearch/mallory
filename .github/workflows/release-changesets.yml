@@ -14,8 +14,10 @@ permissions:
 
 jobs:
   release:
-    # Only run if the commit message indicates a version bump from changesets
-    if: startsWith(github.event.head_commit.message, 'Version Packages')
+    # Only run if this is from changesets version bump
+    # Works with merge commits (default GitHub merge strategy): "Merge pull request #N ... Version Packages"
+    # Works with direct commits from changesets: message starts with "Version Packages"
+    if: contains(github.event.head_commit.message, 'Version Packages')
     
     runs-on: ubuntu-latest
     

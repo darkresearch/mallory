@@ -124,24 +124,32 @@ jobs:
               issue_number: context.issue.number,
             });
             
-            const botComment = comments.find(comment => 
+            const warningComment = comments.find(comment => 
               comment.user.type === 'Bot' && 
               comment.body.includes('Missing Changeset')
             );
             
-            if (botComment) {
+            if (warningComment) {
               await github.rest.issues.deleteComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                comment_id: botComment.id
+                comment_id: warningComment.id
               });
             }
             
-            // Add success comment
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: '## ✅ Changeset Detected\n\nThanks for adding a changeset! This change will be included in the next release.'
-            });
+            // Check if success comment already exists
+            const successComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Changeset Detected')
+            );
+            
+            // Only create success comment if it doesn't exist
+            if (!successComment) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '## ✅ Changeset Detected\n\nThanks for adding a changeset! This change will be included in the next release.'
+              });
+            }
 
