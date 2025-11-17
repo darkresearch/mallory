@@ -4,6 +4,7 @@ import { router, usePathname } from 'expo-router';
 import { supabase, storage, config, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../lib';
 import { configureGoogleSignIn, signInWithGoogle, signOutFromGoogle } from '../features/auth';
 import { walletDataService } from '../features/wallet';
+import { gridClientService } from '../features/grid';
 
 interface User {
   id: string;
@@ -186,28 +187,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       }
     } else {
-      // Authenticated and verified - only redirect from root or auth screens
-      // Do NOT redirect if user is on wallet, chat-history, or any other main screen
-      // EXCEPTION: Allow /verify-otp if Grid OTP session exists (Grid sign-in flow)
+      // Authenticated and verified - check if Grid sign-in is in progress
+      // If Grid OTP session exists, redirect to OTP screen (happens immediately after Google sign-in)
       const isOnVerifyOtp = currentPath.includes('/verify-otp');
       
-      // Check if user is completing Grid OTP verification (happens after Google auth)
+      // Check if user needs to complete Grid OTP (happens immediately after Google sign-in)
       // Use async function to check storage
       const checkAndRedirect = async () => {
         let hasGridOtpSession = false;
+        let shouldRedirectToOtp = false;
         
-        if (isOnVerifyOtp) {
-          try {
-            const gridOtpSession = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
-            hasGridOtpSession = !!gridOtpSession;
-            if (hasGridOtpSession) {
-              console.log('🔀 [AuthContext] User on /verify-otp with Grid OTP session - allowing Grid sign-in completion');
-            }
-          } catch (error) {
-            console.warn('🔀 [AuthContext] Failed to check Grid OTP session:', error);
+        try {
+          // Check if Grid OTP session exists (Grid sign-in in progress)
+          const gridOtpSession = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
+          hasGridOtpSession = !!gridOtpSession;
+          
+          // Check if Grid auto-initiate flag is set (Grid sign-in about to start)
+          const shouldAutoInitiate = await storage.session.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE) === 'true';
+          
+          // If Grid sign-in is in progress or about to start, redirect to OTP screen
+          if ((hasGridOtpSession || shouldAutoInitiate) && !isOnVerifyOtp) {
+            shouldRedirectToOtp = true;
+            console.log('🔀 [AuthContext] Grid sign-in in progress, redirecting to OTP screen');
           }
+        } catch (error) {
+          console.warn('🔀 [AuthContext] Failed to check Grid OTP session:', error);
         }
         
+        if (shouldRedirectToOtp) {
+          // Redirect to OTP screen with user's email
+          router.push({
+            pathname: '/(auth)/verify-otp',
+            params: {
+              email: user?.email || '',
+              backgroundColor: '#E67B25',
+              textColor: '#FFFFFF',
+              returnPath: '/(main)/chat'
+            }
+          });
+          return;
+        }
+        
+        // If already on OTP screen with session, stay there
+        if (isOnVerifyOtp && hasGridOtpSession) {
+          console.log('🔀 [AuthContext] User on /verify-otp with Grid OTP session - allowing Grid sign-in completion');
+          return;
+        }
+        
+        // Otherwise, normal navigation logic
         const isOnAuthScreen = currentPath.includes('/auth/') || currentPath === '/login' || (isOnVerifyOtp && !hasGridOtpSession);
         const isOnRootOnly = currentPath === '/' || currentPath === '/index';
         
@@ -217,8 +244,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           console.log('🔀 [AuthContext] User on main screen, staying at:', currentPath);
         }
-        // If user is on /(main)/wallet, /(main)/chat-history, etc - stay there
-        // If user is on /verify-otp with Grid OTP session - stay there to complete Grid sign-in
       };
       
       checkAndRedirect();
@@ -321,10 +346,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(user);
       console.log('✅ User set successfully');
       
-      // NOTE: We no longer auto-initiate Grid sign-in immediately after Google sign-in
-      // Grid sign-in will be triggered on-demand when user accesses wallet features
-      // This provides a better UX - users can use chat and other features without
-      // being forced to complete Grid OTP immediately after authentication
+      // Check if Grid account exists - if not, trigger Grid sign-in immediately
+      // This ensures wallet is ready when user accesses profile
+      const checkAndInitiateGrid = async () => {
+        try {
+          const existingAccount = await gridClientService.getAccount();
+          if (!existingAccount && user.email) {
+            console.log('🔐 [AuthContext] No Grid account found, initiating Grid sign-in immediately after Google sign-in');
+            // Set flag for GridContext to pick up, or trigger directly
+            // We'll use a flag approach to avoid circular dependencies
+            await storage.session.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE, 'true');
+            await storage.session.setItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL, user.email);
+            console.log('🔐 [AuthContext] Set Grid auto-initiate flag - GridContext will handle sign-in');
+          } else if (existingAccount) {
+            console.log('✅ [AuthContext] Grid account already exists, wallet will load in background');
+          }
+        } catch (error) {
+          console.error('❌ [AuthContext] Error checking Grid account:', error);
+        }
+      };
+      
+      // Trigger Grid sign-in check (non-blocking)
+      checkAndInitiateGrid();
       
       // Clear signing-in state - Grid flow is separate
       setIsSigningIn(false);

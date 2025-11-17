@@ -1,24 +1,25 @@
 import { Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
-import { v4 as uuidv4 } from 'uuid'; // Fallback for web or if expo-crypto fails
 
 /**
- * Generates a UUID using expo-crypto.randomUUID on native platforms
- * and uuidv4 from the 'uuid' library on web or as a fallback.
- *
- * This centralizes UUID generation and ensures compatibility across platforms.
+ * Generate UUID using platform-appropriate method
+ * - Native (Android/iOS): Uses expo-crypto.randomUUID() (faster, no polyfill needed)
+ * - Web: Falls back to uuid library (via crypto.getRandomValues polyfill)
  */
 export function generateUUID(): string {
   if (Platform.OS !== 'web') {
     try {
+      // Use expo-crypto.randomUUID() on native platforms
       return Crypto.randomUUID();
     } catch (error) {
-      // Fallback to uuid library if expo-crypto fails
-      console.warn('⚠️ expo-crypto.randomUUID() failed, falling back to uuid library');
-      return uuidv4();
+      console.warn('⚠️ expo-crypto.randomUUID() failed, falling back to uuid library:', error);
+      // Fall through to uuid library fallback
     }
   }
-  // On web, use uuid library
+
+  // Fallback: Use uuid library (works on web and as fallback on native)
+  // This uses crypto.getRandomValues() which is polyfilled in polyfills.js
+  const { v4: uuidv4 } = require('uuid');
   return uuidv4();
 }
 

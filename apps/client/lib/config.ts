@@ -34,9 +34,14 @@ const rawConfig = {
 };
 
 // Apply platform-aware URL transformation for backendApiUrl
+// Also handle dev mode default (localhost:3001)
+const processedBackendApiUrl = rawConfig.backendApiUrl 
+  ? getPlatformAwareUrl(rawConfig.backendApiUrl)
+  : (__DEV__ ? getPlatformAwareUrl('http://localhost:3001') : rawConfig.backendApiUrl);
+
 export const config = {
   ...rawConfig,
-  backendApiUrl: rawConfig.backendApiUrl ? getPlatformAwareUrl(rawConfig.backendApiUrl) : rawConfig.backendApiUrl,
+  backendApiUrl: processedBackendApiUrl,
 };
 
 // Debug log on load

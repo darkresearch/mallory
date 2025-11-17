@@ -63,6 +63,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           totalBalance: 0,
           holdings: [],
           smartAccountAddress: undefined,
+          lastUpdated: new Date().toISOString(),
         });
         setError(null); // Don't show error - wallet setup is optional
         return;
@@ -134,18 +135,26 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Load wallet data when user is available (background loading on app start)
   // Only load if Grid account exists - don't trigger Grid sign-in automatically
+  // Check secure storage directly to avoid race condition with GridContext loading
   useEffect(() => {
     if (user?.id && !isInitialized) {
-      // Check if Grid account exists before loading wallet data
-      // This prevents auto-triggering Grid sign-in immediately after Google sign-in
-      const hasGridAccount = gridAccount?.address || solanaAddress;
-      if (hasGridAccount) {
-        console.log('💰 [Context] Loading wallet data in background for user:', user.id);
-        loadWalletData();
-      } else {
-        console.log('💰 [Context] Skipping wallet data load - no Grid account yet (will load when user accesses wallet features)');
-        setIsInitialized(true); // Mark as initialized even without wallet data
-      }
+      const checkAndLoadWallet = async () => {
+        // Check secure storage directly (same source GridContext uses)
+        // This avoids race condition where GridContext hasn't finished loading yet
+        const account = await gridClientService.getAccount();
+        const hasGridAccount = account?.address || gridAccount?.address || solanaAddress;
+        
+        if (hasGridAccount) {
+          const walletAddress = account?.address || gridAccount?.address || solanaAddress;
+          console.log('💰 [Context] Grid account found, loading wallet data in background for user:', user.id, 'address:', walletAddress);
+          loadWalletData();
+        } else {
+          console.log('💰 [Context] No Grid account yet - wallet will load when user accesses wallet features or completes Grid sign-in');
+          setIsInitialized(true); // Mark as initialized even without wallet data
+        }
+      };
+      
+      checkAndLoadWallet();
     }
   }, [user?.id, isInitialized, loadWalletData, gridAccount?.address, solanaAddress]);
 

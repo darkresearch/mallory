@@ -22,6 +22,7 @@ import DepositModal from '../../components/wallet/DepositModal';
 import SendModal from '../../components/wallet/SendModal';
 import { sendToken } from '../../features/wallet';
 import { walletService } from '../../features/wallet';
+import { gridClientService } from '../../features/grid';
 import { SESSION_STORAGE_KEYS, storage, getAppVersion } from '../../lib';
 
 
@@ -69,28 +70,43 @@ export default function WalletScreen() {
   const hasAttemptedGridSignIn = useRef(false);
 
   // Trigger Grid sign-in when wallet screen is accessed without Grid account
+  // Only trigger if wallet doesn't exist - if it exists, it should already be loaded
   useEffect(() => {
-    // Only trigger if:
+    // Check if Grid account exists first (might be loading from background)
+    // Only trigger Grid sign-in if:
     // 1. User is authenticated
-    // 2. No Grid account exists
-    // 3. Not currently loading wallet data
-    // 4. Not already signing in to Grid
-    // 5. Haven't already attempted sign-in (prevents retry loops on errors)
+    // 2. No Grid account exists (and not currently loading)
+    // 3. Not already signing in to Grid
+    // 4. Haven't already attempted sign-in (prevents retry loops on errors)
+    // 5. Wallet data is not loading (give background load a chance)
     if (user?.email && !gridAccount && !isLoading && !isSigningInToGrid && !hasAttemptedGridSignIn.current) {
-      console.log('🏠 [WalletScreen] No Grid account found, triggering Grid sign-in');
-      hasAttemptedGridSignIn.current = true; // Mark as attempted to prevent retries
-      initiateGridSignIn(user.email, {
-        backgroundColor: '#FFEFE3',
-        textColor: '#000000',
-        returnPath: '/(main)/wallet'
-      }).catch(error => {
-        console.error('❌ [WalletScreen] Failed to initiate Grid sign-in:', error);
-        // Reset the flag after a delay to allow retry if user manually triggers it
-        // But prevent automatic retry loops
-        setTimeout(() => {
-          hasAttemptedGridSignIn.current = false;
-        }, 5000); // Allow retry after 5 seconds
-      });
+      // Double-check by checking secure storage directly (avoid race condition)
+      const checkGridAccount = async () => {
+        try {
+          const account = await gridClientService.getAccount();
+          if (!account) {
+            console.log('🏠 [WalletScreen] No Grid account found, triggering Grid sign-in');
+            hasAttemptedGridSignIn.current = true;
+            
+            initiateGridSignIn(user.email, {
+              backgroundColor: '#FFEFE3',
+              textColor: '#000000',
+              returnPath: '/(main)/wallet'
+            }).catch(error => {
+              console.error('❌ [WalletScreen] Failed to initiate Grid sign-in:', error);
+              setTimeout(() => {
+                hasAttemptedGridSignIn.current = false;
+              }, 5000);
+            });
+          } else {
+            console.log('✅ [WalletScreen] Grid account found in storage, wallet should load automatically');
+          }
+        } catch (error) {
+          console.error('❌ [WalletScreen] Error checking Grid account:', error);
+        }
+      };
+      
+      checkGridAccount();
     }
     
     // Reset the flag when Grid account becomes available (successful sign-in)
@@ -251,6 +267,16 @@ export default function WalletScreen() {
   // If no user, show nothing while AuthContext handles redirect
   if (!user) {
     return null;
+  }
+
+  // Show loading state if Grid sign-in is being initiated (prevents showing wallet screen before OTP)
+  if (!gridAccount && (isSigningInToGrid || hasAttemptedGridSignIn.current)) {
+    return (
+      <View style={[styles.outerContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#E67B25" />
+        <Text style={styles.loadingText}>Setting up wallet...</Text>
+      </View>
+    );
   }
 
   return (
