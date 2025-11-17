@@ -1,0 +1,81 @@
+name: Release (Changesets)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'package.json'
+      - 'apps/*/package.json'
+      - 'packages/*/package.json'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Only run if the commit message indicates a version bump from changesets
+    if: startsWith(github.event.head_commit.message, 'Version Packages')
+    
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+      
+      - name: Get version from package.json
+        id: get_version
+        run: |
+          VERSION=$(cat package.json | grep '"version"' | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' | tr -d '[[:space:]]')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "✅ Version: $VERSION"
+      
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Create and push tag
+        run: |
+          TAG="v${{ steps.get_version.outputs.version }}"
+          
+          # Check if tag already exists
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "⚠️  Tag $TAG already exists, skipping"
+            exit 0
+          fi
+          
+          git tag $TAG
+          git push origin $TAG
+          
+          echo "✅ Created and pushed tag: $TAG"
+          echo "🚀 This will trigger production deployment to Vercel"
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
+          body: |
+            ## What's Changed
+            
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Summary
+        run: |
+          echo "## 🎉 Release Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ steps.get_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag**: v${{ steps.get_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The tag will trigger Vercel production deployment automatically." >> $GITHUB_STEP_SUMMARY
