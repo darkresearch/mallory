@@ -22,6 +22,8 @@ vercel link
 
 This creates `.vercel/project.json` with your credentials.
 
+> **Note**: The `.vercel/` folder is in `.gitignore` - it stays local and never gets committed. Your credentials remain private! 🔒
+
 ### 2. Add GitHub Secrets
 
 Go to your GitHub repo → **Settings → Secrets and variables → Actions**
