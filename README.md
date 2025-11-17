@@ -88,6 +88,57 @@ OPENMEMORY_URL=http://localhost:8080
 OPENMEMORY_API_KEY=your-openmemory-key
 ```
 
+#### OpenMemory Setup (Optional)
+
+OpenMemory provides infinite context for AI conversations. The setup script handles everything automatically:
+
+**Run the setup script**:
+```bash
+chmod +x services/openmemory-setup.sh
+./services/openmemory-setup.sh
+```
+
+The setup script will:
+- **Automatically clone** the OpenMemory backend from [CaviraOSS/OpenMemory](https://github.com/CaviraOSS/OpenMemory) (if not already present)
+- **Remove the `.git` directory** from the cloned repo to avoid nested git repositories
+- **Create the `.env` file** with default configuration (Gemini embeddings, SQLite database)
+- **Install dependencies** using `bun install`
+- **Build the TypeScript backend** using `bun run build`
+
+**Configure OpenMemory**:
+
+After running the setup script, edit `services/openmemory/backend/.env` and fill in the required variables:
+
+```bash
+# Required: Embedding Provider API Key
+# For Gemini (free tier):
+OM_GEMINI_API_KEY=your-gemini-api-key
+
+# Or for OpenAI:
+# OM_EMBED_PROVIDER=openai
+# OM_OPENAI_API_KEY=your-openai-api-key
+
+# API Key for OpenMemory (used by Mallory server to authenticate)
+OM_API_KEY=your-secure-api-key-here
+```
+
+**Add to Server Environment**:
+
+Add these to your `apps/server/.env` file:
+
+```bash
+# OpenMemory Configuration
+OPENMEMORY_URL=http://localhost:8080
+OPENMEMORY_API_KEY=your-secure-api-key-here  # Must match OM_API_KEY above
+```
+
+**Start OpenMemory**:
+```bash
+cd services/openmemory/backend && bun start
+```
+
+> **Note**: OpenMemory is optional. Mallory works without it, but you'll get better context retention in long conversations if you use it. The backend is cloned from the [CaviraOSS/OpenMemory](https://github.com/CaviraOSS/OpenMemory) repository and is not included in this repo (see `.gitignore`).
+
 ### 3. Run Development Servers
 
 #### Option A: Run Both (Client + Server)
