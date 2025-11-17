@@ -8,7 +8,7 @@ import { buildStreamConfig } from './config/streamConfig.js';
 import { buildStreamResponse } from './config/streamResponse.js';
 import { logIncomingMessages, logConversationState, logModelConfiguration } from './debug.js';
 import type { ChatRequest } from '@darkresearch/mallory-shared';
-import { MALLORY_BASE_PROMPT, buildContextSection, buildVerbosityGuidelines, ONBOARDING_GUIDELINES, ONBOARDING_GREETING_SYSTEM_MESSAGE, ONBOARDING_OPENING_MESSAGE_TEMPLATE } from '../../../prompts/index.js';
+import { MALLORY_BASE_PROMPT, buildContextSection, buildVerbosityGuidelines, ONBOARDING_GUIDELINES, ONBOARDING_GREETING_SYSTEM_MESSAGE, ONBOARDING_OPENING_MESSAGE_TEMPLATE, CONVERSATION_MANAGEMENT_GUIDELINES } from '../../../prompts/index.js';
 import { buildComponentsGuidelines } from '../../../prompts/components.js';
 import { supabase } from '../../lib/supabase.js';
 import { saveUserMessage } from './persistence.js';
@@ -363,6 +363,9 @@ function buildSystemPrompt(
   
   // 1. Core Mallory identity and personality
   sections.push(MALLORY_BASE_PROMPT);
+  
+  // 1b. Conversation management (prevent duplicate responses)
+  sections.push(CONVERSATION_MANAGEMENT_GUIDELINES);
   
   // 2. Wallet funding requirements
   sections.push(`
