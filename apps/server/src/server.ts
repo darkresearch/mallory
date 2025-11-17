@@ -163,7 +163,7 @@ app.listen(PORT, async () => {
   console.log(`   POST /api/grid/init-account - Grid init (CORS proxy)`);
   console.log(`   POST /api/grid/verify-otp - Grid OTP verify (CORS proxy)`);
   console.log(`   POST /api/grid/send-tokens - Grid token transfer (CORS proxy)`);
-  console.log(`   GET  /api/gas-abstraction/balance - Gas credits balance`);
+  console.log(`   POST /api/gas-abstraction/balance - Gas credits balance`);
   console.log(`   GET  /api/gas-abstraction/topup/requirements - Top-up requirements`);
   console.log(`   POST /api/gas-abstraction/topup - Submit top-up payment`);
   console.log(`   POST /api/gas-abstraction/sponsor - Sponsor transaction`);

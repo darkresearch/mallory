@@ -30,15 +30,17 @@ try {
 }
 
 /**
- * GET /api/gas-abstraction/balance
+ * POST /api/gas-abstraction/balance
  * Returns user's gateway balance and transaction history
+ * 
+ * Note: Using POST instead of GET because Grid session data needs to be sent in body
  * 
  * Body: {
  *   gridSessionSecrets: object,
  *   gridSession: object
  * }
  */
-router.get('/balance', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/balance', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
   if (!gasService) {
     return res.status(503).json({
       error: 'Gas abstraction service not configured',
