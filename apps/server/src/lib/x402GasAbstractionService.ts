@@ -386,16 +386,18 @@ export class X402GasAbstractionService {
   /**
    * Submit top-up payment to gateway
    * 
-   * @param payment - x402 payment payload
+   * @param payment - x402 payment payload (base64-encoded string or X402Payment object)
    * @returns Top-up result
    * @throws GatewayError on API errors
    */
-  async submitTopup(payment: X402Payment): Promise<TopupResult> {
+  async submitTopup(payment: X402Payment | string): Promise<TopupResult> {
     const url = `${this.config.gatewayUrl}/topup`;
     
-    // Base64-encode the payment payload
-    const paymentJson = JSON.stringify(payment);
-    const paymentBase64 = Buffer.from(paymentJson).toString('base64');
+    // If payment is already base64-encoded string, use it directly
+    // Otherwise, encode the X402Payment object
+    const paymentBase64 = typeof payment === 'string' 
+      ? payment 
+      : Buffer.from(JSON.stringify(payment)).toString('base64');
     
     const response = await fetch(url, {
       method: 'POST',

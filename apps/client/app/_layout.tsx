@@ -10,6 +10,8 @@ import { AuthProvider } from '../contexts/AuthContext';
 import { GridProvider } from '../contexts/GridContext';
 import { WalletProvider } from '../contexts/WalletContext';
 import { ActiveConversationProvider } from '../contexts/ActiveConversationContext';
+import { GasAbstractionProvider } from '../contexts/GasAbstractionContext';
+import { isGasAbstractionEnabled } from '../lib/gasAbstraction';
 import { initializeComponentRegistry } from '../components/registry';
 import { DataPreloader } from '../components/DataPreloader';
 import { ChatManager } from '../components/chat/ChatManager';
@@ -64,9 +66,10 @@ export default function RootLayout() {
         <AuthProvider>
           <GridProvider>
             <WalletProvider>
-              <ActiveConversationProvider>
-                <DataPreloader />
-                <ChatManager />
+              <GasAbstractionProvider enabled={isGasAbstractionEnabled()}>
+                <ActiveConversationProvider>
+                  <DataPreloader />
+                  <ChatManager />
                 <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any, overflow: 'hidden' }}>
                   <Stack
                     screenOptions={{
@@ -82,7 +85,8 @@ export default function RootLayout() {
                     </>
                   )}
                 </View>
-              </ActiveConversationProvider>
+                </ActiveConversationProvider>
+              </GasAbstractionProvider>
             </WalletProvider>
           </GridProvider>
         </AuthProvider>

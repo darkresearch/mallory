@@ -135,7 +135,9 @@ router.get('/topup/requirements', authenticateUser, async (req: AuthenticatedReq
  * Submit USDC payment to credit balance
  * 
  * Body: {
- *   payment: X402Payment
+ *   payment: X402Payment (base64) - OR -
+ *   transaction: string (base64 unsigned), publicKey: string, amountBaseUnits: number,
+ *   gridSessionSecrets: object, gridSession: object
  * }
  */
 router.post('/topup', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
@@ -152,10 +154,83 @@ router.post('/topup', authenticateUser, async (req: AuthenticatedRequest, res: R
     // Log top-up start
     gasTelemetry.topupStart(walletAddress);
     
-    // Validate x402 payment payload
-    const { payment } = req.body;
-    if (!payment) {
-      return res.status(400).json({ error: 'Payment payload required' });
+    let payment: string;
+    
+    // Check if payment payload is provided directly, or if we need to construct it
+    if (req.body.payment) {
+      // Direct payment payload (legacy format)
+      payment = req.body.payment;
+    } else if (req.body.transaction && req.body.publicKey && req.body.gridSessionSecrets && req.body.gridSession) {
+      // New format: unsigned transaction + Grid session
+      // Sign transaction using Grid, then construct x402 payment payload
+      const { transaction: serializedTx, publicKey, amountBaseUnits, gridSessionSecrets, gridSession } = req.body;
+      
+      // Import Grid client
+      const { createGridClient } = await import('../lib/gridClient.js');
+      const gridClient = createGridClient();
+      
+      // Prepare transaction with Grid
+      const transactionPayload = await gridClient.prepareArbitraryTransaction(
+        gridSession.address,
+        {
+          transaction: serializedTx,
+          fee_config: {
+            currency: 'sol',
+            payer_address: gridSession.address,
+            self_managed_fees: false
+          }
+        }
+      );
+      
+      if (!transactionPayload || !transactionPayload.data) {
+        throw new Error('Failed to prepare transaction with Grid');
+      }
+      
+      // Sign transaction using Grid
+      // Note: Grid's signAndSend sends the transaction, but for top-up we need the signed tx
+      // We'll use a workaround: prepare the transaction and extract the signed version
+      // However, Grid doesn't expose the signed transaction directly.
+      // 
+      // For now, we'll accept that the transaction needs to be sent to Solana first,
+      // then the x402 gateway will verify it on-chain. This is acceptable for top-up flows.
+      //
+      // Alternative: Use the prepared transaction payload which may contain signing info
+      // But Grid's API doesn't expose this.
+      //
+      // For now, we'll construct the payment payload with the unsigned transaction
+      // and let the x402 gateway handle verification. The user will need to sign and send
+      // the transaction separately, or we can use a different flow.
+      
+      // Get top-up requirements to construct payment payload
+      const requirements = await gasService.getTopupRequirements();
+      const config = await import('../lib/gasAbstractionConfig.js').then(m => m.loadGasAbstractionConfig());
+      
+      // Construct x402 payment payload
+      // Note: The x402 gateway expects a signed transaction in the payload.
+      // Since Grid SDK doesn't support sign-only, we'll need to use a workaround.
+      // For now, we'll construct the payment payload with the unsigned transaction
+      // and the gateway may handle it differently, or we'll need to implement
+      // a client-side signing flow using Grid's prepareArbitraryTransaction.
+      //
+      // TODO: Implement proper transaction signing flow
+      const paymentPayload = {
+        x402Version: requirements.x402Version,
+        scheme: 'solana',
+        network: 'solana-mainnet-beta',
+        asset: config.usdcMint,
+        payload: {
+          transaction: serializedTx, // TODO: Should be signed transaction
+          publicKey: publicKey,
+        },
+      };
+      
+      // Convert to base64 for submission
+      payment = Buffer.from(JSON.stringify(paymentPayload)).toString('base64');
+    } else {
+      return res.status(400).json({ 
+        error: 'Payment payload or transaction data required',
+        message: 'Provide either "payment" (base64 x402 payload) or "transaction", "publicKey", "amountBaseUnits", "gridSessionSecrets", and "gridSession"'
+      });
     }
     
     // Submit to gateway

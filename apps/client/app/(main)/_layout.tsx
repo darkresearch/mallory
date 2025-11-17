@@ -35,6 +35,12 @@ export default function MainLayout() {
         }}
       />
       <Stack.Screen 
+        name="gas-abstraction" 
+        options={{
+          animation: Platform.OS === 'web' ? 'fade' : 'slide_from_right',
+        }}
+      />
+      <Stack.Screen 
         name="loading" 
         options={{
           animation: 'none',

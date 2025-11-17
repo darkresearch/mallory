@@ -679,5 +679,85 @@ router.post('/send-tokens', authenticateUser, async (req: AuthenticatedRequest, 
   }
 });
 
+/**
+ * POST /api/grid/sign-transaction
+ * 
+ * Sign a Solana transaction using Grid SDK without sending it.
+ * Used for top-up flows where the signed transaction needs to be submitted elsewhere.
+ * 
+ * Body: {
+ *   transaction: string (base64-encoded unsigned VersionedTransaction),
+ *   sessionSecrets: object,
+ *   session: object,
+ *   address: string
+ * }
+ * Returns: { success: boolean, signedTransaction?: string (base64), error?: string }
+ */
+router.post('/sign-transaction', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+  // Create fresh GridClient instance for this request (GridClient is stateful)
+  const gridClient = createGridClient();
+  
+  try {
+    const { transaction: serializedTx, sessionSecrets, session, address } = req.body;
+    
+    if (!serializedTx || !sessionSecrets || !session || !address) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required fields: transaction, sessionSecrets, session, address' 
+      });
+    }
+    
+    console.log('✍️  [Grid Proxy] Signing transaction (not sending):', {
+      address,
+      txLength: serializedTx.length
+    });
+    
+    // Prepare transaction via Grid SDK
+    const transactionPayload = await gridClient.prepareArbitraryTransaction(
+      address,
+      {
+        transaction: serializedTx,
+        fee_config: {
+          currency: 'sol',
+          payer_address: address,
+          self_managed_fees: false
+        }
+      }
+    );
+
+    if (!transactionPayload || !transactionPayload.data) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to prepare transaction - Grid returned no data'
+      });
+    }
+
+    // Note: Grid SDK's signAndSend always sends the transaction.
+    // For top-up, we need the signed transaction but not to send it.
+    // We'll need to use a workaround: prepare the transaction and return the prepared payload
+    // The client can then extract the signed transaction from the prepared payload.
+    // However, Grid's API doesn't expose the signed transaction directly.
+    // 
+    // Alternative: Use Grid's internal signing if available, or accept that we need to
+    // send the transaction and then the x402 gateway will handle it.
+    //
+    // For now, we'll return an error indicating this needs to be handled differently.
+    // The top-up flow should be handled server-side where we can use Grid's signing
+    // and then submit to x402 gateway.
+    
+    return res.status(501).json({
+      success: false,
+      error: 'Sign-only not supported by Grid SDK. Use server-side top-up flow instead.'
+    });
+    
+  } catch (error) {
+    console.error('❌ [Grid Proxy] Sign transaction error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Internal server error'
+    });
+  }
+});
+
 export default router;
 
