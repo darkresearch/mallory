@@ -5,6 +5,7 @@ import { chatRouter } from './routes/chat/index.js';
 import { holdingsRouter } from './routes/wallet/holdings.js';
 import gridRouter from './routes/grid.js';
 import authRouter from './routes/auth.js';
+import gasAbstractionRouter from './routes/gasAbstraction.js';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -95,6 +96,7 @@ app.use('/api/chat', chatRouter);
 app.use('/api/wallet/holdings', holdingsRouter);
 app.use('/api/grid', gridRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/gas-abstraction', gasAbstractionRouter);
 
 // 404 handler
 app.use((req, res) => {
@@ -161,6 +163,10 @@ app.listen(PORT, async () => {
   console.log(`   POST /api/grid/init-account - Grid init (CORS proxy)`);
   console.log(`   POST /api/grid/verify-otp - Grid OTP verify (CORS proxy)`);
   console.log(`   POST /api/grid/send-tokens - Grid token transfer (CORS proxy)`);
+  console.log(`   GET  /api/gas-abstraction/balance - Gas credits balance`);
+  console.log(`   GET  /api/gas-abstraction/topup/requirements - Top-up requirements`);
+  console.log(`   POST /api/gas-abstraction/topup - Submit top-up payment`);
+  console.log(`   POST /api/gas-abstraction/sponsor - Sponsor transaction`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('');
   
