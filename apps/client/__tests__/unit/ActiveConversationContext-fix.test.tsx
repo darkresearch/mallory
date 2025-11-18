@@ -1,13 +1,11 @@
 // @ts-nocheck - Bun-specific test with advanced mocking features
 /**
- * Unit Tests for ActiveConversationContext Fix (PR #92)
+ * Unit Tests for ActiveConversationContext
  * 
- * Tests Fix #4: Storage Persistence During Navigation
- * 
- * These tests verify that storage is NOT cleared when conversationId becomes null
- * during navigation transitions.
- * 
- * Should FAIL on main branch (clears storage), PASS on fix branch (preserves storage).
+ * Tests storage persistence during navigation:
+ * - Verifies storage is NOT cleared when conversationId becomes null during transitions
+ * - Ensures conversation context persists across navigation
+ * - Tests storage updates work correctly for new conversation values
  */
 
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
@@ -59,7 +57,7 @@ const {
   useActiveConversationContext,
 } = await import('@/contexts/ActiveConversationContext');
 
-describe('ActiveConversationContext - Fix #4 (PR #92)', () => {
+describe('ActiveConversationContext - Storage Persistence', () => {
   beforeEach(() => {
     mockStorageSetItem.mockClear();
     mockStorageGetItem.mockClear();
@@ -69,7 +67,7 @@ describe('ActiveConversationContext - Fix #4 (PR #92)', () => {
     mockStorageGetItem.mockResolvedValue(null);
   });
 
-  describe('FIX: Storage persistence during navigation', () => {
+  describe('Storage persistence during navigation', () => {
     test('does NOT clear storage when conversationId becomes null', async () => {
       // Setup
       const { result } = renderHook(() => useActiveConversationContext(), {
@@ -103,9 +101,8 @@ describe('ActiveConversationContext - Fix #4 (PR #92)', () => {
       // Wait a bit for any potential storage operations
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      // **CRITICAL ASSERTION**: Storage should NOT be cleared
-      // This will FAIL on main branch (which clears storage)
-      // This will PASS on fix branch (which preserves storage)
+      // CRITICAL: Storage should NOT be cleared when conversationId becomes null
+      // This ensures the active conversation persists during navigation transitions
       expect(mockStorageRemoveItem).not.toHaveBeenCalled();
       expect(mockStorageSetItem).not.toHaveBeenCalled();
     });

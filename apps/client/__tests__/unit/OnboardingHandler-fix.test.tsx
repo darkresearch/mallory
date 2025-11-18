@@ -1,14 +1,11 @@
 // @ts-nocheck - Bun-specific test with advanced mocking features
 /**
- * Unit Tests for OnboardingConversationHandler Fix (PR #92)
+ * Unit Tests for OnboardingConversationHandler
  * 
- * Tests Fix #3: OnboardingHandler Race Condition
- * 
- * These tests verify the ACTUAL component behavior, not simulated logic.
- * They should FAIL on main branch and PASS on fix branch.
- * 
- * The fix adds checking for URL params before creating onboarding conversations,
- * preventing duplicates when users navigate back from chat history.
+ * Tests race condition prevention:
+ * - Verifies handler checks URL params before creating onboarding conversations
+ * - Prevents duplicate conversations when users navigate back from chat history
+ * - Ensures handler respects existing conversation state from props and URL
  */
 
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
@@ -44,13 +41,13 @@ const { OnboardingConversationHandler } = await import(
   '@/components/chat/OnboardingConversationHandler'
 );
 
-describe('OnboardingConversationHandler - Fix #3 (PR #92)', () => {
+describe('OnboardingConversationHandler - Race Condition Prevention', () => {
   beforeEach(() => {
     mockCreateOnboardingConversation.mockClear();
     mockLocalSearchParams.conversationId = undefined;
   });
 
-  describe('FIX: Checks URL params before creating onboarding', () => {
+  describe('Checks URL params before creating onboarding', () => {
     test('does NOT create onboarding when URL has conversationId', async () => {
       // Setup - URL has conversationId (user navigating to existing conversation)
       mockLocalSearchParams.conversationId = 'existing-from-url-123';
@@ -158,7 +155,7 @@ describe('OnboardingConversationHandler - Fix #3 (PR #92)', () => {
     });
   });
 
-  describe('FIX: Effect dependencies include URL params', () => {
+  describe('Effect dependencies include URL params', () => {
     test('re-evaluates when currentConversationId prop changes', async () => {
       // Setup
       mockLocalSearchParams.conversationId = undefined;
