@@ -145,6 +145,9 @@ router.get('/topup/requirements', authenticateUser, async (req: AuthenticatedReq
   try {
     const requirements = await gasService.getTopupRequirements();
     
+    // Log full response from gateway for debugging
+    console.log('📋 [Gateway] Raw top-up requirements response:', JSON.stringify(requirements, null, 2));
+    
     // Normalize response: if top-level fields are missing, extract from accepts array
     if (!requirements.network || !requirements.asset || !requirements.scheme) {
       if (requirements.accepts && requirements.accepts.length > 0) {
@@ -155,12 +158,26 @@ router.get('/topup/requirements', authenticateUser, async (req: AuthenticatedReq
       }
     }
     
+    // Validate required fields (this should already be done in service, but double-check)
+    if (!requirements.payTo) {
+      console.error('❌ [Gateway] Missing payTo field in requirements after normalization:', requirements);
+      console.error('   Available fields:', Object.keys(requirements || {}));
+      return res.status(502).json({
+        error: 'Invalid gateway response',
+        message: 'Gateway did not provide payment address (payTo field missing)',
+        details: 'The gas abstraction gateway returned an incomplete response. Please try again or contact support.',
+        receivedFields: Object.keys(requirements || {})
+      });
+    }
+    
     // Log what we received from gateway for debugging
-    console.log('📋 Gateway top-up requirements:', {
+    console.log('📋 [Gateway] Processed top-up requirements:', {
       network: requirements.network,
       asset: requirements.asset,
       scheme: requirements.scheme,
-      x402Version: requirements.x402Version
+      x402Version: requirements.x402Version,
+      hasPayTo: !!requirements.payTo,
+      payToLength: requirements.payTo?.length
     });
     
     // Validate network and asset match config

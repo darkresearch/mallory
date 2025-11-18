@@ -43,6 +43,53 @@ import { gasTelemetry } from '../../lib/telemetry';
 
 const SOLANA_EXPLORER_BASE = 'https://solscan.io/tx/';
 
+// RPC fallback endpoints - try primary, then fallback to Alchemy endpoints
+const RPC_ENDPOINTS = [
+  config.solanaRpcUrl || 'https://api.mainnet-beta.solana.com',
+  'https://solana-mainnet.g.alchemy.com/v2/80TPIXr5ixeNieu5Vronk8yeKyoGuYbF',
+  'https://solana-mainnet.g.alchemy.com/v2/dQUc3lgpoJrVS1Ku7xGeNvKua8iRy1n5',
+  'https://solana-mainnet.g.alchemy.com/v2/jFEGN5fSDKXsyGO-j-mkQZ8Z_vfc0GBM',
+];
+
+/**
+ * Create Solana connection with fallback RPC endpoints
+ * Tries each endpoint in order until one succeeds
+ */
+async function createConnectionWithFallback(): Promise<Connection> {
+  let lastError: Error | null = null;
+  
+  for (const endpoint of RPC_ENDPOINTS) {
+    if (!endpoint || typeof endpoint !== 'string') {
+      console.warn(`⚠️ [GasAbstraction] Invalid RPC endpoint, skipping`);
+      continue;
+    }
+    
+    try {
+      const connection = new Connection(endpoint, 'confirmed');
+      // Test connection by getting slot (with timeout)
+      const slotPromise = connection.getSlot();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('RPC connection timeout')), 5000)
+      );
+      
+      await Promise.race([slotPromise, timeoutPromise]);
+      console.log(`✅ [GasAbstraction] Connected to RPC: ${endpoint.substring(0, 50)}...`);
+      return connection;
+    } catch (error) {
+      console.warn(`⚠️ [GasAbstraction] RPC endpoint failed: ${endpoint.substring(0, 50)}...`, error);
+      lastError = error instanceof Error ? error : new Error(String(error));
+      continue;
+    }
+  }
+  
+  // If all fail, throw error instead of returning invalid connection
+  const errorMessage = lastError 
+    ? `All RPC endpoints failed. Last error: ${lastError.message}`
+    : 'All RPC endpoints failed';
+  console.error(`❌ [GasAbstraction] ${errorMessage}`);
+  throw new Error(errorMessage);
+}
+
 export default function GasAbstractionScreen() {
   const router = useRouter();
   const { gridAccount } = useGrid();
@@ -116,10 +163,36 @@ export default function GasAbstractionScreen() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch top-up requirements');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || 'Failed to fetch top-up requirements');
       }
 
       const requirements = await response.json();
+      
+      // Log received requirements for debugging
+      console.log('📋 [GasAbstraction] Received top-up requirements:', {
+        hasPayTo: !!requirements.payTo,
+        payTo: requirements.payTo,
+        network: requirements.network,
+        asset: requirements.asset,
+        maxAmountRequired: requirements.maxAmountRequired,
+        keys: Object.keys(requirements)
+      });
+      
+      // Validate required fields
+      if (!requirements.payTo) {
+        console.error('❌ [GasAbstraction] Missing payTo in requirements:', requirements);
+        throw new Error('Gateway did not provide payment address. Please contact support or try again later.');
+      }
+      
+      if (!requirements.network) {
+        throw new Error('Gateway did not provide network information');
+      }
+      
+      if (!requirements.asset) {
+        throw new Error('Gateway did not provide asset information');
+      }
+      
       setTopupRequirements(requirements);
       
       // Set default amount from maxAmountRequired
@@ -130,7 +203,7 @@ export default function GasAbstractionScreen() {
         setTopupAmount(getSuggestedTopupAmount().toFixed(2));
       }
     } catch (error) {
-      console.error('Failed to fetch top-up requirements:', error);
+      console.error('❌ [GasAbstraction] Failed to fetch top-up requirements:', error);
       setTopupError(error instanceof Error ? error.message : 'Failed to load top-up requirements');
     }
   };
@@ -151,9 +224,19 @@ export default function GasAbstractionScreen() {
     setTopupError(null);
 
     try {
+      // Validate gridAccount is available
+      if (!gridAccount?.address) {
+        throw new Error('Grid wallet not connected');
+      }
+
       // Validate network and asset match
       if (topupRequirements.network !== 'solana-mainnet-beta') {
         throw new Error('Network mismatch. Expected solana-mainnet-beta');
+      }
+
+      // Validate payTo address is present
+      if (!topupRequirements.payTo) {
+        throw new Error('Payment address not provided by gateway');
       }
 
       // Get USDC mint from config
@@ -162,42 +245,129 @@ export default function GasAbstractionScreen() {
         throw new Error('Asset mismatch. Expected USDC');
       }
 
-      // Create USDC transfer transaction
-      const connection = new Connection(config.solanaRpcUrl, 'confirmed');
-      const { blockhash } = await connection.getLatestBlockhash('confirmed');
+      // Create USDC transfer transaction with RPC fallback
+      const connection = await createConnectionWithFallback();
+      const blockhashResult = await connection.getLatestBlockhash('confirmed');
+      
+      if (!blockhashResult?.blockhash) {
+        throw new Error('Failed to fetch blockhash from Solana network');
+      }
+      
+      const { blockhash } = blockhashResult;
 
-      const userPubkey = new PublicKey(gridAccount!.address);
-      const payToPubkey = new PublicKey(topupRequirements.payTo);
+      // Validate addresses before creating PublicKey objects
+      if (!gridAccount.address || typeof gridAccount.address !== 'string') {
+        throw new Error('Invalid user wallet address');
+      }
+      
+      if (!topupRequirements.payTo || typeof topupRequirements.payTo !== 'string') {
+        throw new Error('Invalid payment address');
+      }
 
-      const userTokenAccount = await getAssociatedTokenAddress(
-        new PublicKey(usdcMint),
-        userPubkey
-      );
+      // Create PublicKey objects with error handling
+      let userPubkey: PublicKey;
+      let payToPubkey: PublicKey;
+      let usdcMintPubkey: PublicKey;
+      
+      try {
+        userPubkey = new PublicKey(gridAccount.address);
+        payToPubkey = new PublicKey(topupRequirements.payTo);
+        usdcMintPubkey = new PublicKey(usdcMint);
+      } catch (error) {
+        throw new Error(`Invalid address format: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
 
-      const payToTokenAccount = await getAssociatedTokenAddress(
-        new PublicKey(usdcMint),
-        payToPubkey,
-        true // allowOwnerOffCurve
-      );
+      // Get token accounts
+      // Note: getAssociatedTokenAddress returns a Promise<PublicKey>
+      let userTokenAccount: PublicKey;
+      let payToTokenAccount: PublicKey;
+      
+      try {
+        console.log('🔍 [GasAbstraction] Getting token accounts:', {
+          usdcMint: usdcMintPubkey.toBase58(),
+          userPubkey: userPubkey.toBase58(),
+          payToPubkey: payToPubkey.toBase58()
+        });
+        
+        // Get user's associated token account
+        // Note: Grid wallets are PDAs (off-curve), so we need allowOwnerOffCurve: true
+        try {
+          userTokenAccount = await getAssociatedTokenAddress(
+            usdcMintPubkey,
+            userPubkey,
+            true // allowOwnerOffCurve = true for Grid PDA wallets
+          );
+          console.log('✅ [GasAbstraction] User token account:', userTokenAccount.toBase58());
+        } catch (error) {
+          console.error('❌ [GasAbstraction] Error getting user token account:', error);
+          throw new Error(`Failed to get user token account: ${error instanceof Error ? (error.message || error.name || 'Unknown error') : String(error)}`);
+        }
+
+        // Get payTo's associated token account (with allowOwnerOffCurve for PDA)
+        try {
+          payToTokenAccount = await getAssociatedTokenAddress(
+            usdcMintPubkey,
+            payToPubkey,
+            true // allowOwnerOffCurve
+          );
+          console.log('✅ [GasAbstraction] PayTo token account:', payToTokenAccount.toBase58());
+        } catch (error) {
+          console.error('❌ [GasAbstraction] Error getting payTo token account:', error);
+          throw new Error(`Failed to get payment recipient token account: ${error instanceof Error ? (error.message || error.name || 'Unknown error') : String(error)}`);
+        }
+      } catch (error) {
+        // Re-throw if it's already our formatted error
+        if (error instanceof Error && error.message.includes('Failed to get')) {
+          throw error;
+        }
+        // Otherwise, format the error
+        console.error('❌ [GasAbstraction] Unexpected error getting token accounts:', error);
+        const errorDetails = error instanceof Error 
+          ? (error.message || error.name || 'Unknown error')
+          : String(error || 'Unknown error');
+        throw new Error(`Failed to get token accounts: ${errorDetails}`);
+      }
 
       const amountBaseUnits = Math.floor(amount * 1_000_000);
+      
+      if (isNaN(amountBaseUnits) || amountBaseUnits <= 0) {
+        throw new Error('Invalid amount for transfer');
+      }
 
-      const transferInstruction = createTransferInstruction(
-        userTokenAccount,
-        payToTokenAccount,
-        userPubkey,
-        amountBaseUnits,
-        [],
-        TOKEN_PROGRAM_ID
-      );
+      // Create transfer instruction
+      let transferInstruction;
+      try {
+        transferInstruction = createTransferInstruction(
+          userTokenAccount,
+          payToTokenAccount,
+          userPubkey,
+          amountBaseUnits,
+          [],
+          TOKEN_PROGRAM_ID
+        );
+      } catch (error) {
+        throw new Error(`Failed to create transfer instruction: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
 
-      const message = new TransactionMessage({
-        payerKey: userPubkey,
-        recentBlockhash: blockhash,
-        instructions: [transferInstruction],
-      }).compileToV0Message();
+      // Create transaction message
+      let message;
+      try {
+        message = new TransactionMessage({
+          payerKey: userPubkey,
+          recentBlockhash: blockhash,
+          instructions: [transferInstruction],
+        }).compileToV0Message();
+      } catch (error) {
+        throw new Error(`Failed to create transaction message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
 
-      const transaction = new VersionedTransaction(message);
+      // Create versioned transaction
+      let transaction: VersionedTransaction;
+      try {
+        transaction = new VersionedTransaction(message);
+      } catch (error) {
+        throw new Error(`Failed to create transaction: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
 
       // Note: Grid SDK doesn't support sign-only operations.
       // For top-up, we need to use a different approach.
@@ -602,6 +772,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     backgroundColor: '#FFEFE3',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
   },
   backButton: {
     padding: 8,
@@ -628,13 +800,16 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#90CAF9',
   },
   infoText: {
     flex: 1,
     marginLeft: 8,
     fontSize: 14,
-    color: '#1976D2',
+    color: '#1565C0',
     lineHeight: 20,
+    fontWeight: '500',
   },
   warningBanner: {
     flexDirection: 'row',
@@ -644,11 +819,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
     gap: 8,
+    borderWidth: 1,
+    borderColor: '#FFB74D',
   },
   warningText: {
     flex: 1,
     fontSize: 14,
     color: '#E65100',
+    fontWeight: '500',
   },
   balanceCard: {
     backgroundColor: '#FFFFFF',
@@ -660,11 +838,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   balanceLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#666666',
     marginBottom: 8,
+    fontWeight: '500',
   },
   balanceValue: {
     fontSize: 32,
@@ -679,12 +860,13 @@ const styles = StyleSheet.create({
   },
   pendingLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#666666',
+    fontWeight: '500',
   },
   pendingValue: {
     fontSize: 14,
-    color: '#FFA500',
-    fontWeight: '500',
+    color: '#FF9800',
+    fontWeight: '600',
   },
   availableRow: {
     flexDirection: 'row',
@@ -693,26 +875,30 @@ const styles = StyleSheet.create({
   },
   availableLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#666666',
+    fontWeight: '500',
   },
   availableValue: {
     fontSize: 14,
-    color: '#00D4AA',
-    fontWeight: '500',
+    color: '#00C853',
+    fontWeight: '600',
   },
   errorBox: {
     backgroundColor: '#FFEBEE',
-    padding: 8,
+    padding: 12,
     borderRadius: 6,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#EF5350',
   },
   errorText: {
     fontSize: 12,
     color: '#C62828',
+    fontWeight: '500',
   },
   lastFetchedText: {
     fontSize: 11,
-    color: '#999',
+    color: '#757575',
     marginTop: 4,
   },
   balanceActions: {
@@ -728,6 +914,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   settingsTitle: {
     fontSize: 18,
@@ -752,7 +940,8 @@ const styles = StyleSheet.create({
   },
   toggleDescription: {
     fontSize: 12,
-    color: '#666',
+    color: '#666666',
+    lineHeight: 16,
   },
   toggle: {
     width: 50,
@@ -785,6 +974,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   historyTitle: {
     fontSize: 18,
@@ -797,9 +988,11 @@ const styles = StyleSheet.create({
   },
   historySectionTitle: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
+    fontWeight: '600',
+    color: '#424242',
     marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   historyItem: {
     flexDirection: 'row',
@@ -807,7 +1000,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#E0E0E0',
   },
   historyItemLeft: {
     flexDirection: 'row',
@@ -826,24 +1019,28 @@ const styles = StyleSheet.create({
   },
   historyItemDate: {
     fontSize: 12,
-    color: '#666',
+    color: '#757575',
   },
   emptyHistory: {
     fontSize: 14,
-    color: '#999',
+    color: '#9E9E9E',
     textAlign: 'center',
     paddingVertical: 20,
+    fontStyle: 'italic',
   },
   footnoteBox: {
     backgroundColor: '#F5F5F5',
     padding: 12,
     borderRadius: 8,
     marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   footnoteText: {
     fontSize: 12,
-    color: '#666',
+    color: '#616161',
     textAlign: 'center',
+    lineHeight: 16,
   },
   modalContainer: {
     flex: 1,
@@ -896,15 +1093,17 @@ const styles = StyleSheet.create({
   },
   amountInput: {
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: '#BDBDBD',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
     marginBottom: 8,
+    backgroundColor: '#FFFFFF',
+    color: '#212121',
   },
   amountHint: {
     fontSize: 12,
-    color: '#666',
+    color: '#757575',
     marginBottom: 16,
   },
   reviewBox: {
@@ -912,11 +1111,14 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#90CAF9',
   },
   reviewText: {
     fontSize: 14,
-    color: '#1976D2',
+    color: '#1565C0',
     lineHeight: 20,
+    fontWeight: '500',
   },
 });
 

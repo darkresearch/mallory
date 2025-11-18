@@ -56,18 +56,32 @@ export interface UsageRecord {
  */
 export interface X402PaymentRequirement {
   x402Version: number;
-  resource: string;
+  resource?: string;
   accepts: Array<{
     scheme: string;
     network: string;
     asset: string;
+    payTo?: string;
+    maxAmountRequired?: string | number;
+    description?: string;
+    resource?: string;
+    extra?: {
+      feePayer?: string;
+      decimals?: number;
+      recentBlockhash?: string;
+    };
   }>;
   scheme: string;
   network: string;
   asset: string;
   maxAmountRequired: number;
   payTo: string;
-  description: string;
+  description?: string;
+  extra?: {
+    feePayer?: string;
+    decimals?: number;
+    recentBlockhash?: string;
+  };
 }
 
 /**
@@ -388,22 +402,198 @@ export class X402GasAbstractionService {
    * @throws GatewayError on API errors
    */
   async getTopupRequirements(): Promise<X402PaymentRequirement> {
-    const requirements = await this.makeAuthenticatedRequest<X402PaymentRequirement>(
-      '/topup/requirements',
-      'GET'
-    );
-    
-    // Normalize response: if top-level fields are missing, extract from accepts array
-    if (!requirements.network || !requirements.asset || !requirements.scheme) {
-      if (requirements.accepts && requirements.accepts.length > 0) {
-        const firstAccept = requirements.accepts[0];
-        requirements.network = requirements.network || firstAccept.network;
-        requirements.asset = requirements.asset || firstAccept.asset;
-        requirements.scheme = requirements.scheme || firstAccept.scheme;
+    try {
+      // Use makeRequest instead of makeAuthenticatedRequest since gateway doesn't require auth for this endpoint
+      const requirements = await this.makeRequest<any>(
+        '/topup/requirements',
+        'GET'
+      );
+      
+      // Log raw response for debugging
+      console.log('📋 [Service] Raw gateway requirements:', JSON.stringify(requirements, null, 2));
+      console.log('📋 [Service] Requirements keys:', Object.keys(requirements || {}));
+      
+      // Check if response is wrapped in a data field
+      let actualRequirements = requirements;
+      if (requirements.data && typeof requirements.data === 'object') {
+        console.log('⚠️ [Service] Requirements wrapped in data field, unwrapping');
+        actualRequirements = requirements.data;
       }
+      
+      // Extract fields from accepts array if they're not at top level
+      // The gateway returns payTo, maxAmountRequired, description, etc. inside the accepts array
+      if (actualRequirements.accepts && actualRequirements.accepts.length > 0) {
+        const firstAccept = actualRequirements.accepts[0];
+        
+        // Extract network, asset, scheme from accepts array if missing at top level
+        actualRequirements.network = actualRequirements.network || firstAccept.network;
+        actualRequirements.asset = actualRequirements.asset || firstAccept.asset;
+        actualRequirements.scheme = actualRequirements.scheme || firstAccept.scheme;
+        
+        // Extract payTo from accepts array (this is where the gateway puts it)
+        if (!actualRequirements.payTo && firstAccept.payTo) {
+          console.log('📋 [Service] Extracting payTo from accepts array');
+          actualRequirements.payTo = firstAccept.payTo;
+        }
+        
+        // Extract maxAmountRequired from accepts array (may be string, convert to number)
+        if (!actualRequirements.maxAmountRequired && firstAccept.maxAmountRequired) {
+          const maxAmount = typeof firstAccept.maxAmountRequired === 'string' 
+            ? parseInt(firstAccept.maxAmountRequired, 10)
+            : firstAccept.maxAmountRequired;
+          actualRequirements.maxAmountRequired = maxAmount;
+        }
+        
+        // Extract description from accepts array
+        if (!actualRequirements.description && firstAccept.description) {
+          actualRequirements.description = firstAccept.description;
+        }
+        
+        // Extract resource from accepts array
+        if (!actualRequirements.resource && firstAccept.resource) {
+          actualRequirements.resource = firstAccept.resource;
+        }
+        
+        // Extract extra fields (feePayer, decimals, recentBlockhash) if needed
+        if (firstAccept.extra) {
+          actualRequirements.extra = firstAccept.extra;
+        }
+      }
+      
+      // Check for alternative field names for payTo (fallback)
+      if (!actualRequirements.payTo) {
+        // Try alternative field names at top level
+        const payTo = (actualRequirements as any).pay_to || 
+                      (actualRequirements as any).paymentAddress || 
+                      (actualRequirements as any).payment_address ||
+                      (actualRequirements as any).payToAddress ||
+                      (actualRequirements as any).payment_to ||
+                      (actualRequirements as any).recipient ||
+                      (actualRequirements as any).recipientAddress;
+        
+        if (payTo) {
+          console.log('⚠️ [Service] Found payTo with alternative field name, normalizing to payTo');
+          actualRequirements.payTo = payTo;
+        } else {
+          console.error('❌ [Service] payTo field missing and no alternatives found');
+          console.error('   Available keys:', Object.keys(actualRequirements || {}));
+          console.error('   Full response:', JSON.stringify(actualRequirements, null, 2));
+          throw new GatewayError(
+            'Gateway response missing required field: payTo',
+            502,
+            { receivedFields: Object.keys(actualRequirements || {}), fullResponse: actualRequirements }
+          );
+        }
+      }
+      
+      // Ensure maxAmountRequired is a number
+      if (actualRequirements.maxAmountRequired && typeof actualRequirements.maxAmountRequired === 'string') {
+        actualRequirements.maxAmountRequired = parseInt(actualRequirements.maxAmountRequired, 10);
+      }
+      
+      return actualRequirements as X402PaymentRequirement;
+    } catch (error) {
+      if (error instanceof GatewayError) {
+        throw error;
+      }
+      console.error('❌ [Service] Unexpected error in getTopupRequirements:', error);
+      throw new GatewayError(
+        error instanceof Error ? error.message : 'Failed to get top-up requirements',
+        500
+      );
     }
+  }
+  
+  /**
+   * Make unauthenticated request to gateway
+   * Used for endpoints that don't require wallet authentication
+   */
+  private async makeRequest<T>(
+    path: string,
+    method: string,
+    body?: any
+  ): Promise<T> {
+    const url = `${this.config.gatewayUrl}${path}`;
     
-    return requirements;
+    console.log(`🌐 [Service] Making request to gateway: ${method} ${url}`);
+    
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    const requestOptions: RequestInit = {
+      method,
+      headers,
+    };
+
+    if (body) {
+      requestOptions.body = JSON.stringify(body);
+    }
+
+    // Add timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    requestOptions.signal = controller.signal;
+
+    try {
+      const response = await fetch(url, requestOptions);
+      clearTimeout(timeoutId);
+
+      // Get response text first to log it
+      const responseText = await response.text();
+      console.log(`📥 [Service] Gateway response (${response.status}):`, responseText.substring(0, 500));
+
+      // Try to parse as JSON
+      let responseData: any;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ [Service] Failed to parse gateway response as JSON:', responseText);
+        throw new GatewayError(
+          `Gateway returned invalid JSON: ${responseText.substring(0, 100)}`,
+          response.status,
+          { rawResponse: responseText }
+        );
+      }
+
+      // Handle error responses
+      if (!response.ok) {
+        const errorMessage = responseData.error || responseData.message || `Gateway returned ${response.status}`;
+        console.error(`❌ [Service] Gateway error (${response.status}):`, errorMessage);
+        throw new GatewayError(
+          errorMessage,
+          response.status,
+          responseData
+        );
+      }
+
+      // Check if response has error field even with 200 status
+      if (responseData.error) {
+        console.error('❌ [Service] Gateway returned error in 200 response:', responseData.error);
+        throw new GatewayError(
+          responseData.error || responseData.message || 'Gateway returned an error',
+          responseData.status || 500,
+          responseData
+        );
+      }
+
+      return responseData as T;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      
+      if (error instanceof GatewayError) {
+        throw error;
+      }
+      
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new GatewayError('Request timeout', 504);
+      }
+      
+      throw new GatewayError(
+        error instanceof Error ? error.message : 'Network error',
+        500
+      );
+    }
   }
 
   /**
