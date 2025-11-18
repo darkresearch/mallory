@@ -15,8 +15,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PressableButton } from '../ui/PressableButton';
-import { useGasAbstraction } from '../../contexts/GasAbstractionContext';
+import { useGasAbstraction, InsufficientBalanceError } from '../../contexts/GasAbstractionContext';
 import { isGasAbstractionEnabled } from '../../lib/gasAbstraction';
+import { gasTelemetry } from '../../lib/telemetry';
+import { useRouter } from 'expo-router';
 
 interface TokenHolding {
   tokenAddress: string;
@@ -59,6 +61,11 @@ export default function SendModal({
   const gasAbstraction = useGasAbstraction();
   const [useGasless, setUseGasless] = useState(false);
   const [estimatedCost, setEstimatedCost] = useState<{ usdc?: number; sol?: number } | null>(null);
+  
+  // Error state for specific error types (Task 12.4)
+  const [errorType, setErrorType] = useState<'insufficient_balance' | 'service_unavailable' | 'prohibited' | 'validation' | null>(null);
+  const [errorDetails, setErrorDetails] = useState<{ required?: number; available?: number } | null>(null);
+  const router = useRouter();
 
   // Set initial token when modal opens or holdings change
   useEffect(() => {
@@ -71,6 +78,12 @@ export default function SendModal({
   useEffect(() => {
     if (visible && gasAbstractionEnabled && gasAbstraction) {
       setUseGasless(gasAbstraction.gaslessEnabled);
+    }
+    // Clear error state when modal opens
+    if (visible) {
+      setError('');
+      setErrorType(null);
+      setErrorDetails(null);
     }
   }, [visible, gasAbstractionEnabled, gasAbstraction]);
   
@@ -206,22 +219,45 @@ export default function SendModal({
         const result = await response.json();
         
         if (!result.success) {
-          // Handle specific error types
+          // Handle specific error types with detailed UI (Task 12.4)
           if (response.status === 402) {
-            const required = result.data?.required || 0;
-            const available = result.data?.available || 0;
-            throw new Error(`Insufficient gas credits. Available: ${(available / 1_000_000).toFixed(6)} USDC, Required: ${(required / 1_000_000).toFixed(6)} USDC. Please top up.`);
+            const required = result.data?.required || result.required || 0;
+            const available = result.data?.available || result.available || 0;
+            
+            // Set error state for UI display
+            setErrorType('insufficient_balance');
+            setErrorDetails({ 
+              required: required / 1_000_000, // Convert to USDC
+              available: available / 1_000_000 
+            });
+            setError(`Insufficient gas credits. Available: ${(available / 1_000_000).toFixed(6)} USDC, Required: ${(required / 1_000_000).toFixed(6)} USDC.`);
+            setIsSending(false);
+            return;
           }
           
-          if (response.status === 400 && result.error?.includes('prohibited')) {
-            throw new Error('This operation is not supported by gas sponsorship.');
+          if (response.status === 400 && (
+            result.error?.toLowerCase().includes('prohibited') ||
+            result.error?.toLowerCase().includes('closeaccount') ||
+            result.error?.toLowerCase().includes('setauthority')
+          )) {
+            setErrorType('prohibited');
+            setError('This operation is not supported by gas sponsorship.');
+            setIsSending(false);
+            return;
           }
           
           if (response.status === 503) {
-            throw new Error('Gas sponsorship unavailable, please retry or use SOL');
+            setErrorType('service_unavailable');
+            setError('Gas sponsorship temporarily unavailable. Please retry or use SOL gas.');
+            setIsSending(false);
+            return;
           }
           
-          throw new Error(result.error || 'Gasless transaction failed');
+          // Other validation errors
+          setErrorType('validation');
+          setError(result.error || 'Gasless transaction failed');
+          setIsSending(false);
+          return;
         }
         
         console.log('✅ [SendModal] Gasless send successful:', result.signature);
@@ -241,11 +277,48 @@ export default function SendModal({
       // Reset form on success
       setRecipientAddress('');
       setAmount('');
+      setError('');
+      setErrorType(null);
+      setErrorDetails(null);
       onClose();
     } catch (error) {
       console.error('❌ [SendModal] Send failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to send transaction';
-      setError(errorMessage);
+      
+      // Handle specific error types (Task 12.4)
+      if (error instanceof InsufficientBalanceError) {
+        setErrorType('insufficient_balance');
+        setErrorDetails({
+          required: error.required / 1_000_000,
+          available: error.available / 1_000_000
+        });
+        setError(`Insufficient gas credits. Available: ${(error.available / 1_000_000).toFixed(6)} USDC, Required: ${(error.required / 1_000_000).toFixed(6)} USDC.`);
+      } else if (error instanceof Error) {
+        const errorMessage = error.message;
+        
+        // Check for service unavailable error
+        if ((error as any).isServiceUnavailable || errorMessage.includes('unavailable')) {
+          setErrorType('service_unavailable');
+          setError('Gas sponsorship temporarily unavailable. Please retry or use SOL gas.');
+        } 
+        // Check for prohibited instruction error
+        else if (errorMessage.includes('not supported') || errorMessage.includes('prohibited')) {
+          setErrorType('prohibited');
+          setError('This operation is not supported by gas sponsorship.');
+        }
+        // Check for blockhash error
+        else if ((error as any).isBlockhashError || errorMessage.includes('blockhash')) {
+          setErrorType('validation');
+          setError('Transaction blockhash expired. Please try again.');
+        }
+        // Other validation errors
+        else {
+          setErrorType('validation');
+          setError(errorMessage);
+        }
+      } else {
+        setErrorType('validation');
+        setError('Failed to send transaction');
+      }
       
       // If gasless failed, offer fallback to SOL
       if (useGasless && gasAbstractionEnabled) {
@@ -261,6 +334,8 @@ export default function SendModal({
       setRecipientAddress('');
       setAmount('');
       setError('');
+      setErrorType(null);
+      setErrorDetails(null);
       setShowTokenPicker(false);
       onClose();
     }
@@ -435,9 +510,150 @@ export default function SendModal({
             </View>
           )}
 
-          {error ? (
-            <Text style={styles.error}>{error}</Text>
-          ) : null}
+          {/* Enhanced error handling UI (Task 12.4) */}
+          {error && errorType && (
+            <View style={styles.errorContainer}>
+              <View style={styles.errorHeader}>
+                <Ionicons name="alert-circle" size={20} color="#FF6B6B" />
+                <Text style={styles.errorTitle}>
+                  {errorType === 'insufficient_balance' && 'Insufficient Gas Credits'}
+                  {errorType === 'service_unavailable' && 'Service Unavailable'}
+                  {errorType === 'prohibited' && 'Operation Not Supported'}
+                  {errorType === 'validation' && 'Transaction Error'}
+                </Text>
+              </View>
+              
+              <Text style={styles.error}>{error}</Text>
+              
+              {/* Insufficient balance: Show details and top-up button */}
+              {errorType === 'insufficient_balance' && errorDetails && (
+                <View style={styles.errorActions}>
+                  <View style={styles.balanceDetails}>
+                    <Text style={styles.balanceText}>
+                      Current Balance: {errorDetails.available?.toFixed(6) || '0.000000'} USDC
+                    </Text>
+                    <Text style={styles.balanceText}>
+                      Required: {errorDetails.required?.toFixed(6) || '0.000000'} USDC
+                    </Text>
+                  </View>
+                  <PressableButton
+                    variant="secondary"
+                    onPress={() => {
+                      onClose();
+                      router.push('/(main)/gas-abstraction');
+                    }}
+                    style={styles.topupButton}
+                  >
+                    Top Up Gas Credits
+                  </PressableButton>
+                  <PressableButton
+                    variant="secondary"
+                    onPress={async () => {
+                      // Log fallback to SOL
+                      if (gasAbstraction) {
+                        const { gridClientService } = await import('../../features/grid');
+                        const account = await gridClientService.getAccount();
+                        if (account?.address) {
+                          await gasTelemetry.sponsorFallbackToSol(account.address);
+                        }
+                      }
+                      // Retry with SOL gas
+                      setUseGasless(false);
+                      setError('');
+                      setErrorType(null);
+                      setErrorDetails(null);
+                      // Retry send with SOL
+                      handleSend();
+                    }}
+                    style={styles.fallbackButton}
+                  >
+                    Use SOL Instead
+                  </PressableButton>
+                </View>
+              )}
+              
+              {/* Service unavailable: Show retry and fallback options */}
+              {errorType === 'service_unavailable' && (
+                <View style={styles.errorActions}>
+                  <PressableButton
+                    variant="secondary"
+                    onPress={() => {
+                      setError('');
+                      setErrorType(null);
+                      handleSend();
+                    }}
+                    style={styles.retryButton}
+                  >
+                    Retry
+                  </PressableButton>
+                  <PressableButton
+                    variant="secondary"
+                    onPress={async () => {
+                      // Log fallback to SOL
+                      if (gasAbstraction) {
+                        const { gridClientService } = await import('../../features/grid');
+                        const account = await gridClientService.getAccount();
+                        if (account?.address) {
+                          await gasTelemetry.sponsorFallbackToSol(account.address);
+                        }
+                      }
+                      // Retry with SOL gas
+                      setUseGasless(false);
+                      setError('');
+                      setErrorType(null);
+                      handleSend();
+                    }}
+                    style={styles.fallbackButton}
+                  >
+                    Use SOL Instead
+                  </PressableButton>
+                </View>
+              )}
+              
+              {/* Prohibited instruction: Show fallback option */}
+              {errorType === 'prohibited' && (
+                <View style={styles.errorActions}>
+                  <PressableButton
+                    variant="secondary"
+                    onPress={async () => {
+                      // Log fallback to SOL
+                      if (gasAbstraction) {
+                        const { gridClientService } = await import('../../features/grid');
+                        const account = await gridClientService.getAccount();
+                        if (account?.address) {
+                          await gasTelemetry.sponsorFallbackToSol(account.address);
+                        }
+                      }
+                      // Retry with SOL gas
+                      setUseGasless(false);
+                      setError('');
+                      setErrorType(null);
+                      handleSend();
+                    }}
+                    style={styles.fallbackButton}
+                  >
+                    Use SOL Instead
+                  </PressableButton>
+                </View>
+              )}
+              
+              {/* Validation errors: Show retry option */}
+              {errorType === 'validation' && (
+                <View style={styles.errorActions}>
+                  <PressableButton
+                    variant="secondary"
+                    onPress={() => {
+                      setError('');
+                      setErrorType(null);
+                    }}
+                    style={styles.retryButton}
+                  >
+                    Dismiss
+                  </PressableButton>
+                </View>
+              )}
+            </View>
+          )}
 
           <PressableButton
             fullWidth
@@ -572,6 +788,50 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontSize: 14,
     marginBottom: 16,
+  },
+  // Enhanced error handling UI styles (Task 12.4)
+  errorContainer: {
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: '#2a1a1a',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FF6B6B',
+  },
+  errorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF6B6B',
+  },
+  errorActions: {
+    marginTop: 12,
+    gap: 8,
+  },
+  balanceDetails: {
+    marginBottom: 8,
+    padding: 8,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+  },
+  balanceText: {
+    fontSize: 13,
+    color: '#8E8E93',
+    marginBottom: 4,
+  },
+  topupButton: {
+    marginTop: 4,
+  },
+  retryButton: {
+    marginTop: 4,
+  },
+  fallbackButton: {
+    marginTop: 4,
   },
   sendButton: {
     backgroundColor: '#4A9EFF',
