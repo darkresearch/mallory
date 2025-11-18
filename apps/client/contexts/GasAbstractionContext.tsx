@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateAPIUrl } from '../lib/api/client';
 import { storage, SECURE_STORAGE_KEYS } from '../lib/storage';
 import { isGasAbstractionEnabled, getLowBalanceThreshold } from '../lib/gasAbstraction';
+import { gasTelemetry } from '../lib/telemetry';
 import { useAuth } from './AuthContext';
 import { useGrid } from './GridContext';
 import { gridClientService } from '../features/grid';
@@ -274,13 +275,18 @@ export function GasAbstractionProvider({ children, enabled }: GasAbstractionProv
       throw new Error('Gas abstraction not enabled');
     }
     
+    // Log top-up start
+    if (gridAccount?.address) {
+      await gasTelemetry.topupStart(gridAccount.address);
+    }
+    
     // This will be implemented in the top-up UI component
     // For now, just log that it was called
     console.log('💰 [GasAbstraction] Top-up initiated:', { amount });
     
     // After top-up completes, refresh balance
     await refreshBalance();
-  }, [enabled, refreshBalance]);
+  }, [enabled, refreshBalance, gridAccount]);
   
   /**
    * Sponsor a transaction
@@ -294,6 +300,11 @@ export function GasAbstractionProvider({ children, enabled }: GasAbstractionProv
     if (!gridAccount?.address) {
       throw new Error('Grid wallet not connected');
     }
+    
+    const walletAddress = gridAccount.address;
+    
+    // Log sponsorship start
+    await gasTelemetry.sponsorStart(walletAddress);
     
     // Refresh balance if stale
     if (isBalanceStale()) {
@@ -345,18 +356,40 @@ export function GasAbstractionProvider({ children, enabled }: GasAbstractionProv
         if (response.status === 402) {
           const required = errorData.data?.required || errorData.required;
           const available = errorData.data?.available || errorData.available;
+          
+          // Log insufficient balance
+          await gasTelemetry.sponsorInsufficientBalance(walletAddress, required, available);
+          
           throw new InsufficientBalanceError(required, available);
         }
+        
+        // Log other errors
+        await gasTelemetry.sponsorError(walletAddress, response.status);
         
         throw new Error(errorData.error || `Sponsorship failed: ${response.status}`);
       }
       
       const result = await response.json();
       
+      // Log success with billed amount
+      if (result.billedBaseUnits !== undefined) {
+        await gasTelemetry.sponsorSuccess(walletAddress, result.billedBaseUnits);
+      }
+      
       // Return sponsored transaction (base64)
       return result.transaction;
     } catch (error) {
       console.error('❌ [GasAbstraction] Sponsorship failed:', error);
+      
+      // If error wasn't already logged (e.g., network error), log it
+      if (!(error instanceof InsufficientBalanceError)) {
+        // Try to extract error code from error message or default to 500
+        const errorCode = error instanceof Error && error.message.includes('status') 
+          ? parseInt(error.message.match(/status[:\s]+(\d+)/)?.[1] || '500')
+          : 500;
+        await gasTelemetry.sponsorError(walletAddress, errorCode);
+      }
+      
       throw error;
     }
   }, [enabled, gridAccount, isBalanceStale, refreshBalance]);

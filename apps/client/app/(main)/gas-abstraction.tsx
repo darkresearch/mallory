@@ -39,6 +39,7 @@ import { Connection, PublicKey, TransactionMessage, VersionedTransaction } from 
 import { getAssociatedTokenAddress, createTransferInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { config } from '../../lib/config';
 import { gridClientService } from '../../features/grid';
+import { gasTelemetry } from '../../lib/telemetry';
 
 const SOLANA_EXPLORER_BASE = 'https://solscan.io/tx/';
 
@@ -247,13 +248,20 @@ export default function GasAbstractionScreen() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        const error = new Error(errorData.error || 'Top-up failed');
+        (error as any).status = response.status; // Attach status for telemetry
         if (response.status === 402) {
           throw new Error('Payment missing or invalid. Please retry.');
         }
-        throw new Error(errorData.error || 'Top-up failed');
+        throw error;
       }
 
       const result = await response.json();
+      
+      // Log top-up success
+      if (gridAccount?.address && result.amountBaseUnits !== undefined) {
+        await gasTelemetry.topupSuccess(gridAccount.address, result.amountBaseUnits);
+      }
       
       Alert.alert(
         'Top-up Successful',
@@ -270,6 +278,16 @@ export default function GasAbstractionScreen() {
       );
     } catch (error) {
       console.error('Top-up failed:', error);
+      
+      // Log top-up failure
+      if (gridAccount?.address) {
+        const errorCode = (error as any)?.status || 
+          (error instanceof Error && error.message.includes('status')
+            ? parseInt(error.message.match(/status[:\s]+(\d+)/)?.[1] || '500')
+            : 500);
+        await gasTelemetry.topupFailure(gridAccount.address, errorCode);
+      }
+      
       setTopupError(error instanceof Error ? error.message : 'Top-up failed, please try again later');
     } finally {
       setTopupLoading(false);
