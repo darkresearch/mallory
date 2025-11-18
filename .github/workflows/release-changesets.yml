@@ -38,8 +38,9 @@ jobs:
       - name: Create tag and trigger deployment
         if: steps.changesets.outputs.published == 'true'
         run: |
-          # Get the version from package.json
-          VERSION=$(cat package.json | grep '"version"' | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' | tr -d '[[:space:]]')
+          # Get the version from one of the scoped packages in the fixed group
+          # (root package.json is not managed by changesets and stays at 0.1.0)
+          VERSION=$(cat apps/client/package.json | grep '"version"' | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' | tr -d '[[:space:]]')
           TAG="v$VERSION"
           
           # Configure git
