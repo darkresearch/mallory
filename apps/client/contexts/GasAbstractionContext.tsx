@@ -421,11 +421,9 @@ export function GasAbstractionProvider({ children, enabled }: GasAbstractionProv
   );
 }
 
-export function useGasAbstraction() {
+export function useGasAbstraction(): GasAbstractionContextType | null {
   const context = useContext(GasAbstractionContext);
-  if (!context) {
-    throw new Error('useGasAbstraction must be used within GasAbstractionProvider');
-  }
-  return context;
+  // Return null instead of throwing - allows conditional usage
+  return context || null;
 }
 

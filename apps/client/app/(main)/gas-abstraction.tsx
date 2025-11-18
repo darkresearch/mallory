@@ -60,7 +60,26 @@ export default function GasAbstractionScreen() {
     isLowBalance,
     refreshBalance,
     toggleGaslessMode,
-  } = useGasAbstraction();
+  } = useGasAbstraction() || {
+    balance: null,
+    balanceBaseUnits: null,
+    balanceLoading: false,
+    balanceError: null,
+    balanceLastFetched: null,
+    pendingAmount: 0,
+    availableBalance: 0,
+    topups: [],
+    usages: [],
+    gaslessEnabled: false,
+    lowBalanceThreshold: 0.1,
+    isLowBalance: false,
+    refreshBalance: async () => {},
+    initiateTopup: async () => {},
+    sponsorTransaction: async () => { throw new Error('Not available'); },
+    toggleGaslessMode: () => {},
+    isBalanceStale: () => true,
+    hasInsufficientBalance: () => false,
+  };
 
   const [showTopupModal, setShowTopupModal] = useState(false);
   const [topupAmount, setTopupAmount] = useState<string>('');

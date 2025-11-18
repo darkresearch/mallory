@@ -10,10 +10,13 @@ import {
   Platform,
   Alert,
   ScrollView,
-  Image
+  Image,
+  Switch
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PressableButton } from '../ui/PressableButton';
+import { useGasAbstraction } from '../../contexts/GasAbstractionContext';
+import { isGasAbstractionEnabled } from '../../lib/gasAbstraction';
 
 interface TokenHolding {
   tokenAddress: string;
@@ -49,6 +52,13 @@ export default function SendModal({
   const [amount, setAmount] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
+  
+  // Gas abstraction
+  const gasAbstractionEnabled = isGasAbstractionEnabled();
+  // Hook always called (returns null if context not available)
+  const gasAbstraction = useGasAbstraction();
+  const [useGasless, setUseGasless] = useState(false);
+  const [estimatedCost, setEstimatedCost] = useState<{ usdc?: number; sol?: number } | null>(null);
 
   // Set initial token when modal opens or holdings change
   useEffect(() => {
@@ -56,6 +66,32 @@ export default function SendModal({
       setSelectedToken(availableTokens[0]);
     }
   }, [availableTokens.length, visible]);
+  
+  // Initialize gasless mode from context when modal opens
+  useEffect(() => {
+    if (visible && gasAbstractionEnabled && gasAbstraction) {
+      setUseGasless(gasAbstraction.gaslessEnabled);
+    }
+  }, [visible, gasAbstractionEnabled, gasAbstraction]);
+  
+  // Fetch estimated cost when amount or mode changes
+  useEffect(() => {
+    if (!visible || !amount || !selectedToken) {
+      setEstimatedCost(null);
+      return;
+    }
+    
+    // For now, use fixed estimates
+    // TODO: Fetch actual estimates from backend
+    if (useGasless && gasAbstractionEnabled) {
+      // Typical Solana transaction fee is ~0.000005 SOL = ~$0.0001 USDC
+      // For gasless, estimate ~0.0001 USDC
+      setEstimatedCost({ usdc: 0.0001 });
+    } else {
+      // SOL fee estimate: ~0.000005 SOL
+      setEstimatedCost({ sol: 0.000005 });
+    }
+  }, [amount, useGasless, selectedToken, visible, gasAbstractionEnabled]);
 
   const validateSolanaAddress = (address: string): boolean => {
     // Basic Solana address validation - should be 32-44 characters, base58 encoded
@@ -70,7 +106,7 @@ export default function SendModal({
   };
 
   const handleSend = async () => {
-    console.log('💸 [SendModal] handleSend called', { recipientAddress, amount, selectedToken: selectedToken?.tokenSymbol });
+    console.log('💸 [SendModal] handleSend called', { recipientAddress, amount, selectedToken: selectedToken?.tokenSymbol, useGasless });
     setError('');
 
     if (!selectedToken) {
@@ -103,19 +139,103 @@ export default function SendModal({
       return;
     }
 
+    // Check gasless mode balance if enabled
+    if (useGasless && gasAbstractionEnabled && gasAbstraction) {
+      if (gasAbstraction.availableBalance < 0.0001) {
+        setError('Insufficient gas credits. Please top up first.');
+        return;
+      }
+    }
+
     console.log('✅ [SendModal] Validation passed, executing send');
     
-    // No confirmation alert - Grid auto-signs transactions
     setIsSending(true);
     try {
       // For SOL, pass undefined; for SPL tokens, pass token address
       const tokenAddress = selectedToken.tokenSymbol === 'SOL' ? undefined : selectedToken.tokenAddress;
-      console.log('💸 [SendModal] Calling onSend:', { 
-        recipientAddress: recipientAddress.trim(), 
-        amount,
-        tokenAddress 
-      });
-      await onSend(recipientAddress.trim(), amount, tokenAddress);
+      
+      // Use gasless endpoint if enabled
+      if (useGasless && gasAbstractionEnabled && gasAbstraction) {
+        console.log('💸 [SendModal] Using gasless transaction flow');
+        
+        // Import required modules
+        const { generateAPIUrl } = await import('../../lib/api/client');
+        const { storage, SECURE_STORAGE_KEYS } = await import('../../lib/storage');
+        const { gridClientService } = await import('../../features/grid');
+        
+        // Get auth token and Grid account
+        const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
+        if (!token) {
+          throw new Error('Not authenticated');
+        }
+        
+        const account = await gridClientService.getAccount();
+        if (!account) {
+          throw new Error('Grid wallet not connected');
+        }
+        
+        const sessionSecretsJson = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
+        if (!sessionSecretsJson) {
+          throw new Error('Grid session secrets not available');
+        }
+        
+        const sessionSecrets = JSON.parse(sessionSecretsJson);
+        const session = {
+          authentication: account.authentication || account,
+          address: account.address
+        };
+        
+        // Call gasless endpoint
+        const url = generateAPIUrl('/api/grid/send-tokens-gasless');
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            recipient: recipientAddress.trim(),
+            amount,
+            tokenMint: tokenAddress,
+            sessionSecrets,
+            session,
+            address: account.address
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+          // Handle specific error types
+          if (response.status === 402) {
+            const required = result.data?.required || 0;
+            const available = result.data?.available || 0;
+            throw new Error(`Insufficient gas credits. Available: ${(available / 1_000_000).toFixed(6)} USDC, Required: ${(required / 1_000_000).toFixed(6)} USDC. Please top up.`);
+          }
+          
+          if (response.status === 400 && result.error?.includes('prohibited')) {
+            throw new Error('This operation is not supported by gas sponsorship.');
+          }
+          
+          if (response.status === 503) {
+            throw new Error('Gas sponsorship unavailable, please retry or use SOL');
+          }
+          
+          throw new Error(result.error || 'Gasless transaction failed');
+        }
+        
+        console.log('✅ [SendModal] Gasless send successful:', result.signature);
+        
+        // Refresh balance after successful transaction
+        if (gasAbstraction) {
+          await gasAbstraction.refreshBalance();
+        }
+      } else {
+        // Use regular send flow
+        console.log('💸 [SendModal] Using regular transaction flow');
+        await onSend(recipientAddress.trim(), amount, tokenAddress);
+      }
+      
       console.log('✅ [SendModal] Send successful');
       
       // Reset form on success
@@ -124,7 +244,13 @@ export default function SendModal({
       onClose();
     } catch (error) {
       console.error('❌ [SendModal] Send failed:', error);
-      setError(error instanceof Error ? error.message : 'Failed to send transaction');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send transaction';
+      setError(errorMessage);
+      
+      // If gasless failed, offer fallback to SOL
+      if (useGasless && gasAbstractionEnabled) {
+        // Error message already set, user can retry with SOL by disabling gasless mode
+      }
     } finally {
       setIsSending(false);
     }
@@ -270,6 +396,44 @@ export default function SendModal({
               editable={!isSending}
             />
           </View>
+
+          {/* Gasless Mode Toggle */}
+          {gasAbstractionEnabled && gasAbstraction && (
+            <View style={styles.gaslessContainer}>
+              <View style={styles.gaslessRow}>
+                <View style={styles.gaslessInfo}>
+                  <Text style={styles.gaslessLabel}>Use Gas Credits</Text>
+                  <Text style={styles.gaslessDescription}>
+                    Pay transaction fees with USDC instead of SOL
+                  </Text>
+                </View>
+                <Switch
+                  value={useGasless && (gasAbstraction.availableBalance >= 0.0001)}
+                  onValueChange={(value) => {
+                    if (value && gasAbstraction.availableBalance < 0.0001) {
+                      setError('Insufficient gas credits. Please top up first.');
+                      return;
+                    }
+                    setUseGasless(value);
+                    setError('');
+                  }}
+                  disabled={isSending || gasAbstraction.availableBalance < 0.0001}
+                  trackColor={{ false: '#3a3a3a', true: '#4A9EFF' }}
+                  thumbColor={useGasless ? '#fff' : '#f4f3f4'}
+                />
+              </View>
+              {useGasless && (
+                <Text style={styles.gaslessNote}>
+                  This transaction's gas fee will be paid using your gas credits. You will be charged ~{estimatedCost?.usdc?.toFixed(6) || '0.0001'} USDC.
+                </Text>
+              )}
+              {!useGasless && estimatedCost && (
+                <Text style={styles.gaslessNote}>
+                  Estimated SOL fee: ~{estimatedCost.sol?.toFixed(9) || '0.000005'} SOL
+                </Text>
+              )}
+            </View>
+          )}
 
           {error ? (
             <Text style={styles.error}>{error}</Text>
@@ -495,5 +659,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8E8E93',
     marginTop: 2,
+  },
+  // Gasless mode styles
+  gaslessContainer: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#2a2a2a',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#3a3a3a',
+  },
+  gaslessRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  gaslessInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  gaslessLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#DCE9FF',
+    marginBottom: 4,
+  },
+  gaslessDescription: {
+    fontSize: 12,
+    color: '#8E8E93',
+  },
+  gaslessNote: {
+    fontSize: 12,
+    color: '#8E8E93',
+    fontStyle: 'italic',
+    marginTop: 4,
   },
 });

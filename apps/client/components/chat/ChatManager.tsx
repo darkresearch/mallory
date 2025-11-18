@@ -20,6 +20,7 @@ import { updateChatCache, clearChatCache, isCacheForConversation } from '../../l
 import { useAuth } from '../../contexts/AuthContext';
 import { useWallet } from '../../contexts/WalletContext';
 import { useActiveConversationContext } from '../../contexts/ActiveConversationContext';
+import { useGasAbstraction } from '../../contexts/GasAbstractionContext';
 
 /**
  * ChatManager props
@@ -38,6 +39,10 @@ export function ChatManager({}: ChatManagerProps) {
   
   // Get conversationId from context instead of internal state
   const { conversationId: currentConversationId } = useActiveConversationContext();
+  
+  // Get gasless mode preference (hook always called, returns null if not available)
+  const gasAbstraction = useGasAbstraction();
+  const gaslessMode = gasAbstraction?.gaslessEnabled || false;
   
   const [initialMessages, setInitialMessages] = useState<any[]>([]);
   const [initialMessagesConversationId, setInitialMessagesConversationId] = useState<string | null>(null);
@@ -101,7 +106,8 @@ export function ChatManager({}: ChatManagerProps) {
         clientContext: buildClientContext({
           viewportWidth: viewportWidth || undefined,
           getDeviceInfo: () => getDeviceInfo(viewportWidth),
-          walletBalance: walletBalance
+          walletBalance: walletBalance,
+          gaslessMode: gaslessMode
         })
       },
     }),

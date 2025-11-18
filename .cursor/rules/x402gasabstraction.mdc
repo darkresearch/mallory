@@ -1,0 +1,89 @@
+---
+alwaysApply: true
+---
+# =========================================
+# CURSOR GLOBAL RULES — Mallory Gas Abstraction Development
+# =========================================
+
+# SOURCE OF TRUTH
+1. The following documents are the SINGLE authoritative specification:
+   - .kiro/specs/x402_gas_abstraction/requirements.md
+   - .kiro/specs/x402_gas_abstraction/design.md
+   - .kiro/specs/x402_gas_abstraction/tasks.md
+   Cursor must ALWAYS read these files before implementing anything.
+
+2. No deviation is allowed:
+   - Do not invent features.
+   - Do not simplify flows.
+   - Do not remove constraints, validations, retries, or error-handling steps
+     specified in requirements.md or design.md or tasks.md.
+   - If something is unclear, prefer the spec over assumptions.
+
+# WORKFLOW RULES
+3. Cursor must work IN SMALL TASK GROUPS (1–3 sub-tasks at a time).
+4. For each cycle:
+   - Identify the next tasks marked `[ ]` in tasks.md.
+   - Present a short plan for those tasks.
+   - Ask for approval before modifying code.
+   - After approval, implement changes with minimal diffs.
+   - Run typecheck, lint, tests.
+   - Propose a git commit.
+   - Update tasks.md by checking off completed items.
+
+5. ALWAYS maintain a buildable repo:
+   - Every commit must compile.
+   - Every commit must pass tests.
+   - Never leave failing or partial work uncommitted.
+
+# CODE QUALITY RULES
+6. Follow existing Mallory architecture and conventions:
+   - Use existing Solana helpers.
+   - Use existing Grid context helpers.
+   - Respect file naming.
+   - Respect folder structure.
+
+7. Keep code DRY and modular:
+   - Don’t duplicate logic that already exists elsewhere.
+   - Implement new modules (auth generator, abstraction service, context, screens)
+     only in designated directories.
+
+8. All TypeScript code must be fully typed.
+9. NEVER rewrite entire files if diff-based patching is possible.
+
+# FEATURE GUARANTEES
+10. Gas abstraction MUST:
+    - Support balance caching (10 sec)
+    - Support top-up via x402 payload
+    - Support sponsored tx flow
+    - Respect SOL fallback behavior
+    - Support telemetry logging
+    - Support error handling for:
+      - 402 insufficient balance
+      - 400 old blockhash
+      - 400 prohibited instruction
+      - 401 stale auth retry
+      - 503 temporary outage
+    - Integrate with agents (developer API)
+    - Provide UI screens
+    - Support low-balance banners
+    - Be disabled via feature flag
+
+# TESTING RULES
+11. Write tests for modules marked with `*` in tasks.md.
+12. Do not skip tests unless the spec explicitly allows it.
+13. When updating tasks.md, keep starred tasks clearly marked.
+
+# COMMITS
+14. Commit messages MUST be conventional:
+    - feat(gas): ...
+    - fix(gas): ...
+    - refactor(gas): ...
+    - chore(gas): ...
+    - docs(gas): ...
+
+15. Each commit must:
+    - Contain 1–3 completed tasks.
+    - Be atomic and revertible.
+    - Pass tests and linting.
+
+# END OF RULES

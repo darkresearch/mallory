@@ -7,7 +7,7 @@
  * Requirements: 1.5, 1.6, 8.2
  */
 
-import { FEATURES } from './config.js';
+import { FEATURES } from './config';
 
 /**
  * Check if gas abstraction is enabled

@@ -163,7 +163,11 @@ jobs:
       - name: Install client dependencies
         run: cd apps/client && bun install
         
+<<<<<<< HEAD
       - name: Run client unit tests
+=======
+      - name: Run unit tests
+>>>>>>> supabase-schema
         run: cd apps/client && bun run test:unit
         env:
           # Minimal env vars for unit tests (just checking they exist)
@@ -176,6 +180,7 @@ jobs:
           # NOTE: EXPO_PUBLIC_GRID_API_KEY is intentionally NOT set
           # Unit tests verify it's not exposed to client code
       
+<<<<<<< HEAD
       - name: Install server dependencies
         run: cd apps/server && bun install
         
@@ -184,6 +189,8 @@ jobs:
         env:
           NODE_ENV: test
       
+=======
+>>>>>>> supabase-schema
       - name: Run chat draft messages unit test
         run: cd apps/client && bun test __tests__/unit/draftMessages.test.ts
         continue-on-error: true
@@ -200,9 +207,13 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: unit-test-results
+<<<<<<< HEAD
           path: |
             apps/client/__tests__/results/
             apps/server/__tests__/results/
+=======
+          path: apps/client/__tests__/results/
+>>>>>>> supabase-schema
           if-no-files-found: ignore
 
   # Job 4: Integration tests (Supabase + Grid, requires backend for Grid setup)

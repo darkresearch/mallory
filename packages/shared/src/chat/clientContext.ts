@@ -12,6 +12,7 @@ export interface ClientContextOptions {
     usdc?: number;
     totalUsd?: number;
   };
+  gaslessMode?: boolean; // Gas abstraction preference
 }
 
 export interface ClientContext {
@@ -25,6 +26,7 @@ export interface ClientContext {
     usdc?: number;
     totalUsd?: number;
   };
+  gaslessMode?: boolean; // Gas abstraction preference
 }
 
 /**
@@ -61,6 +63,10 @@ export function buildClientContext(options?: ClientContextOptions): ClientContex
 
   if (options?.walletBalance) {
     context.walletBalance = options.walletBalance;
+  }
+
+  if (options?.gaslessMode !== undefined) {
+    context.gaslessMode = options.gaslessMode;
   }
 
   return context;

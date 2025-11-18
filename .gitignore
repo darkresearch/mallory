@@ -41,3 +41,7 @@ core
 
 # OpenMemory (installed via setup script, not committed)
 services/openmemory/
+
+# Project-specific directories (not committed)
+.kiro/
+supabase/

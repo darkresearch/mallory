@@ -759,5 +759,215 @@ router.post('/sign-transaction', authenticateUser, async (req: AuthenticatedRequ
   }
 });
 
+/**
+ * POST /api/grid/send-tokens-gasless
+ * 
+ * Send tokens using gas abstraction (sponsored transaction).
+ * Builds transaction, requests sponsorship, signs with Grid, and submits to Solana.
+ * 
+ * Body: { 
+ *   recipient: string, 
+ *   amount: string, 
+ *   tokenMint?: string,
+ *   sessionSecrets: object,
+ *   session: object,
+ *   address: string
+ * }
+ * Returns: { success: boolean, signature?: string, error?: string }
+ */
+router.post('/send-tokens-gasless', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+  // Create fresh GridClient instance for this request (GridClient is stateful)
+  const gridClient = createGridClient();
+  
+  try {
+    const { recipient, amount, tokenMint, sessionSecrets, session, address } = req.body;
+    
+    if (!recipient || !amount || !sessionSecrets || !session || !address) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required fields: recipient, amount, sessionSecrets, session, address' 
+      });
+    }
+    
+    console.log('💸 [Grid Proxy] Sending tokens with gas abstraction:', { recipient, amount, tokenMint: tokenMint || 'SOL' });
+    
+    // Import dependencies
+    const {
+      PublicKey,
+      SystemProgram,
+      TransactionMessage,
+      VersionedTransaction,
+      Connection,
+      LAMPORTS_PER_SOL
+    } = await import('@solana/web3.js');
+    
+    const {
+      createTransferInstruction,
+      getAssociatedTokenAddress,
+      createAssociatedTokenAccountInstruction,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    } = await import('@solana/spl-token');
+    
+    const connection = new Connection(
+      process.env.SOLANA_RPC_URL || process.env.EXPO_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
+      'confirmed'
+    );
+
+    // Build Solana transaction instructions
+    const instructions = [];
+    
+    if (tokenMint) {
+      // SPL Token transfer
+      const fromTokenAccount = await getAssociatedTokenAddress(
+        new PublicKey(tokenMint),
+        new PublicKey(address),
+        true  // allowOwnerOffCurve = true for Grid PDA wallets
+      );
+      
+      const toTokenAccount = await getAssociatedTokenAddress(
+        new PublicKey(tokenMint),
+        new PublicKey(recipient),
+        false
+      );
+
+      const toAccountInfo = await connection.getAccountInfo(toTokenAccount);
+      
+      if (!toAccountInfo) {
+        const createAtaIx = createAssociatedTokenAccountInstruction(
+          new PublicKey(address),
+          toTokenAccount,
+          new PublicKey(recipient),
+          new PublicKey(tokenMint),
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        );
+        instructions.push(createAtaIx);
+      }
+
+      const amountInSmallestUnit = Math.floor(parseFloat(amount) * 1000000); // USDC has 6 decimals
+
+      const transferIx = createTransferInstruction(
+        fromTokenAccount,
+        toTokenAccount,
+        new PublicKey(address),
+        amountInSmallestUnit,
+        [],
+        TOKEN_PROGRAM_ID
+      );
+      instructions.push(transferIx);
+    } else {
+      // SOL transfer
+      const amountInLamports = Math.floor(parseFloat(amount) * LAMPORTS_PER_SOL);
+      
+      const transferIx = SystemProgram.transfer({
+        fromPubkey: new PublicKey(address),
+        toPubkey: new PublicKey(recipient),
+        lamports: amountInLamports
+      });
+      instructions.push(transferIx);
+    }
+
+    // Get recent blockhash
+    const { blockhash } = await connection.getLatestBlockhash('confirmed');
+
+    // Build transaction message
+    const message = new TransactionMessage({
+      payerKey: new PublicKey(address),
+      recentBlockhash: blockhash,
+      instructions
+    }).compileToV0Message();
+
+    const transaction = new VersionedTransaction(message);
+    const serialized = Buffer.from(transaction.serialize()).toString('base64');
+
+    // Request sponsorship from gas abstraction service
+    console.log('   Requesting sponsorship...');
+    const gasService = await import('../lib/x402GasAbstractionService.js').then(m => m.createX402GasAbstractionService());
+    
+    const result = await gasService.sponsorTransaction(
+      serialized,
+      address,
+      session,
+      sessionSecrets
+    );
+    
+    // Deserialize sponsored transaction
+    const sponsoredTxBuffer = Buffer.from(result.transaction, 'base64');
+    const sponsoredTx = VersionedTransaction.deserialize(sponsoredTxBuffer);
+    
+    console.log('   Transaction sponsored, signing with Grid...');
+
+    // Prepare sponsored transaction via Grid SDK
+    const sponsoredSerialized = Buffer.from(sponsoredTx.serialize()).toString('base64');
+    const transactionPayload = await gridClient.prepareArbitraryTransaction(
+      address,
+      {
+        transaction: sponsoredSerialized,
+        fee_config: {
+          currency: 'sol',
+          payer_address: address,
+          self_managed_fees: false
+        }
+      }
+    );
+
+    if (!transactionPayload || !transactionPayload.data) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to prepare transaction - Grid returned no data'
+      });
+    }
+
+    // Sign and send using Grid SDK
+    const result = await gridClient.signAndSend({
+      sessionSecrets,
+      session,
+      transactionPayload: transactionPayload.data,
+      address
+    });
+
+    console.log('✅ [Grid Proxy] Tokens sent via gas abstraction');
+    
+    const signature = result.transaction_signature || 'success';
+    
+    res.json({
+      success: true,
+      signature
+    });
+    
+  } catch (error: any) {
+    console.error('❌ [Grid Proxy] Send tokens gasless error:', error);
+    
+    // Handle specific gas abstraction errors
+    if (error.status === 402) {
+      return res.status(402).json({
+        success: false,
+        error: 'Insufficient gas credits',
+        data: error.data
+      });
+    }
+    
+    if (error.status === 400 && error.message?.includes('prohibited')) {
+      return res.status(400).json({
+        success: false,
+        error: 'This operation is not supported by gas sponsorship.'
+      });
+    }
+    
+    if (error.status === 503) {
+      return res.status(503).json({
+        success: false,
+        error: 'Gas sponsorship unavailable, please retry'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Internal server error'
+    });
+  }
+});
+
 export default router;
 
