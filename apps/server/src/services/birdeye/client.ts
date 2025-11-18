@@ -75,44 +75,47 @@ export async function fetchBirdeyeMarketData(tokenAddresses: string[]): Promise<
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
       
-      const response = await fetch(url, { headers, signal: controller.signal });
-      clearTimeout(timeoutId);
+      try {
+        const response = await fetch(url, { headers, signal: controller.signal });
 
-      if (!response.ok) {
-        const errorBody = await response.text();
-        console.error('❌ [Birdeye] HTTP error for token', {
-          address: address.substring(0, 8) + '...',
-          status: response.status,
-          statusText: response.statusText,
-          body: errorBody.substring(0, 200)
-        });
-        
-        if (response.status === 401) {
-          console.error('❌ [Birdeye] 401 Unauthorized - API key is invalid');
-        } else if (response.status === 403) {
-          console.error('❌ [Birdeye] 403 Forbidden - Subscription tier insufficient');
-        } else if (response.status === 429) {
-          console.error('❌ [Birdeye] 429 Too Many Requests - Rate limit exceeded');
+        if (!response.ok) {
+          const errorBody = await response.text();
+          console.error('❌ [Birdeye] HTTP error for token', {
+            address: address.substring(0, 8) + '...',
+            status: response.status,
+            statusText: response.statusText,
+            body: errorBody.substring(0, 200)
+          });
+          
+          if (response.status === 401) {
+            console.error('❌ [Birdeye] 401 Unauthorized - API key is invalid');
+          } else if (response.status === 403) {
+            console.error('❌ [Birdeye] 403 Forbidden - Subscription tier insufficient');
+          } else if (response.status === 429) {
+            console.error('❌ [Birdeye] 429 Too Many Requests - Rate limit exceeded');
+          }
+          
+          return null;
         }
-        
-        return null;
-      }
 
-      const data = await response.json() as any;
-      
-      if (data.success && data.data) {
-        return {
-          address,
-          price: data.data.price || 0,
-          market_cap: data.data.marketCap || 0
-        };
-      } else {
-        console.warn('⚠️ [Birdeye] No data for token', {
-          address: address.substring(0, 8) + '...',
-          success: data.success,
-          hasData: !!data.data
-        });
-        return null;
+        const data = await response.json() as any;
+        
+        if (data.success && data.data) {
+          return {
+            address,
+            price: data.data.price || 0,
+            market_cap: data.data.marketCap || 0
+          };
+        } else {
+          console.warn('⚠️ [Birdeye] No data for token', {
+            address: address.substring(0, 8) + '...',
+            success: data.success,
+            hasData: !!data.data
+          });
+          return null;
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -202,46 +205,49 @@ export async function fetchBirdeyeMetadata(tokenAddresses: string[]): Promise<Ma
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
       
-      const response = await fetch(url, { headers, signal: controller.signal });
-      clearTimeout(timeoutId);
+      try {
+        const response = await fetch(url, { headers, signal: controller.signal });
 
-      if (!response.ok) {
-        const errorBody = await response.text();
-        console.error('❌ [Birdeye] HTTP error for token (metadata)', {
-          address: address.substring(0, 8) + '...',
-          status: response.status,
-          statusText: response.statusText,
-          body: errorBody.substring(0, 200)
-        });
-        
-        if (response.status === 401) {
-          console.error('❌ [Birdeye] 401 Unauthorized - API key is invalid');
-        } else if (response.status === 403) {
-          console.error('❌ [Birdeye] 403 Forbidden - Subscription tier insufficient');
-        } else if (response.status === 429) {
-          console.error('❌ [Birdeye] 429 Too Many Requests - Rate limit exceeded');
+        if (!response.ok) {
+          const errorBody = await response.text();
+          console.error('❌ [Birdeye] HTTP error for token (metadata)', {
+            address: address.substring(0, 8) + '...',
+            status: response.status,
+            statusText: response.statusText,
+            body: errorBody.substring(0, 200)
+          });
+          
+          if (response.status === 401) {
+            console.error('❌ [Birdeye] 401 Unauthorized - API key is invalid');
+          } else if (response.status === 403) {
+            console.error('❌ [Birdeye] 403 Forbidden - Subscription tier insufficient');
+          } else if (response.status === 429) {
+            console.error('❌ [Birdeye] 429 Too Many Requests - Rate limit exceeded');
+          }
+          
+          return null;
         }
-        
-        return null;
-      }
 
-      const data = await response.json() as any;
-      
-      if (data.success && data.data) {
-        return {
-          address,
-          symbol: data.data.symbol || 'UNKNOWN',
-          name: data.data.name || 'Unknown Token',
-          decimals: data.data.decimals || 9,
-          logo_uri: data.data.logoURI || ''
-        };
-      } else {
-        console.warn('⚠️ [Birdeye] No data for token (metadata)', {
-          address: address.substring(0, 8) + '...',
-          success: data.success,
-          hasData: !!data.data
-        });
-        return null;
+        const data = await response.json() as any;
+        
+        if (data.success && data.data) {
+          return {
+            address,
+            symbol: data.data.symbol || 'UNKNOWN',
+            name: data.data.name || 'Unknown Token',
+            decimals: data.data.decimals || 9,
+            logo_uri: data.data.logoURI || ''
+          };
+        } else {
+          console.warn('⚠️ [Birdeye] No data for token (metadata)', {
+            address: address.substring(0, 8) + '...',
+            success: data.success,
+            hasData: !!data.data
+          });
+          return null;
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
