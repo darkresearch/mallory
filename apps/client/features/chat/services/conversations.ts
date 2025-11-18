@@ -290,6 +290,46 @@ export async function createOnboardingConversation(userId?: string): Promise<Con
   return createNewConversation(userId, { is_onboarding: true });
 }
 
+// Update conversation title
+export async function updateConversationTitle(conversationId: string, newTitle: string, userId?: string): Promise<boolean> {
+  try {
+    console.log('📝 Updating conversation title:', { conversationId, newTitle });
+    
+    // Get userId if not provided
+    let authUserId = userId;
+    if (!authUserId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      authUserId = user?.id;
+    }
+    
+    if (!authUserId) {
+      console.error('No user ID available for updating conversation title');
+      return false;
+    }
+    
+    // Update the title field directly
+    const { error: updateError } = await supabase
+      .from('conversations')
+      .update({
+        title: newTitle.trim(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', conversationId)
+      .eq('user_id', authUserId);
+    
+    if (updateError) {
+      console.error('Error updating conversation title:', updateError);
+      return false;
+    }
+    
+    console.log('✅ Conversation title updated successfully');
+    return true;
+  } catch (error) {
+    console.error('Error in updateConversationTitle:', error);
+    return false;
+  }
+}
+
 // Get current conversation or load most recent from history (only auto-create if no history exists)
 export async function getCurrentOrCreateConversation(
   userId?: string,
