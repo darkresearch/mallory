@@ -17,7 +17,7 @@
  * @see https://github.com/darkresearch/mallory/pull/92
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { authenticateTestUser } from '../setup/test-helpers';
 import { supabase } from '../setup/supabase-test-client';
 import { v4 as uuidv4 } from 'uuid';
