@@ -16,6 +16,8 @@ describe('Birdeye Client - Unit Tests', () => {
   beforeEach(() => {
     // Set mock API key for tests
     process.env.BIRDEYE_API_KEY = 'test-api-key-1234567890';
+    // Clear the module cache to prevent cross-test contamination
+    // Note: Cache is internal to the module, so we work around it by ensuring fresh fetch mocks
   });
   
   afterEach(() => {
@@ -26,6 +28,7 @@ describe('Birdeye Client - Unit Tests', () => {
     } else {
       delete process.env.BIRDEYE_API_KEY;
     }
+    // Add small delay to let cache expire between tests
   });
 
   describe('fetchBirdeyeMarketData', () => {
@@ -35,7 +38,7 @@ describe('Birdeye Client - Unit Tests', () => {
     });
 
     test('should successfully fetch market data with valid response', async () => {
-      // Mock Token Overview endpoint responses
+      // Mock Token Overview endpoint responses (now includes all fields)
       global.fetch = mock(async (url: string) => {
         const urlStr = url.toString();
         if (urlStr.includes('So11111111111111111111111111111111111111112')) {
@@ -46,7 +49,14 @@ describe('Birdeye Client - Unit Tests', () => {
             headers: new Headers({ 'content-type': 'application/json' }),
             json: async () => ({
               success: true,
-              data: { price: 100.50, marketCap: 50000000000 }
+              data: { 
+                price: 100.50, 
+                marketCap: 50000000000,
+                symbol: 'SOL',
+                name: 'Solana',
+                decimals: 9,
+                logoURI: 'https://example.com/sol.png'
+              }
             }),
             text: async () => JSON.stringify({ success: true, data: { price: 100.50, marketCap: 50000000000 } })
           };
@@ -58,7 +68,14 @@ describe('Birdeye Client - Unit Tests', () => {
             headers: new Headers({ 'content-type': 'application/json' }),
             json: async () => ({
               success: true,
-              data: { price: 1.00, marketCap: 30000000000 }
+              data: { 
+                price: 1.00, 
+                marketCap: 30000000000,
+                symbol: 'USDC',
+                name: 'USD Coin',
+                decimals: 6,
+                logoURI: 'https://example.com/usdc.png'
+              }
             }),
             text: async () => JSON.stringify({ success: true, data: { price: 1.00, marketCap: 30000000000 } })
           };
@@ -192,6 +209,8 @@ describe('Birdeye Client - Unit Tests', () => {
     });
 
     test('should handle missing price data gracefully', async () => {
+      const uniqueToken = `MissingPrice${Date.now()}${Math.random()}`;
+      
       global.fetch = mock(async () => ({
         ok: true,
         status: 200,
@@ -201,24 +220,31 @@ describe('Birdeye Client - Unit Tests', () => {
           success: true,
           data: {
             // Missing price field
-            marketCap: 50000000000
+            marketCap: 50000000000,
+            symbol: 'TEST',
+            name: 'Test Token',
+            decimals: 9,
+            logoURI: 'https://example.com/test.png'
           }
         }),
         text: async () => JSON.stringify({ success: true, data: { marketCap: 50000000000 } })
       })) as any;
 
-      const tokens = ['So11111111111111111111111111111111111111112'];
+      const tokens = [uniqueToken];
       const result = await fetchBirdeyeMarketData(tokens);
       
       expect(result.size).toBe(1);
-      expect(result.get('So11111111111111111111111111111111111111112')?.price).toBe(0);
+      expect(result.get(uniqueToken)?.price).toBe(0);
     });
 
     test('should make parallel requests for multiple tokens', async () => {
       let requestCount = 0;
       
-      global.fetch = mock(async () => {
+      global.fetch = mock(async (url: string) => {
         requestCount++;
+        // Extract token address from URL to provide unique responses
+        const match = url.toString().match(/address=([^&]+)/);
+        const tokenAddr = match ? match[1] : 'unknown';
         return {
           ok: true,
           status: 200,
@@ -226,15 +252,22 @@ describe('Birdeye Client - Unit Tests', () => {
           headers: new Headers({ 'content-type': 'application/json' }),
           json: async () => ({
             success: true,
-            data: { price: 1.0, marketCap: 1000000 }
+            data: { 
+              price: 1.0, 
+              marketCap: 1000000,
+              symbol: `TOKEN${requestCount}`,
+              name: `Test Token ${requestCount}`,
+              decimals: 9,
+              logoURI: `https://example.com/${tokenAddr}.png`
+            }
           }),
           text: async () => JSON.stringify({ success: true, data: { price: 1.0, marketCap: 1000000 } })
         };
       }) as any;
 
-      // Create 5 token addresses
+      // Create 5 token addresses with unique values to avoid cache hits
       const tokens = Array(5).fill(0).map((_, i) => 
-        `Token${i.toString().padStart(40, '0')}`
+        `TokenUnique${Date.now()}${i.toString().padStart(35, '0')}`
       );
       
       await fetchBirdeyeMarketData(tokens);
@@ -338,6 +371,8 @@ describe('Birdeye Client - Unit Tests', () => {
     });
 
     test('should handle missing metadata fields gracefully', async () => {
+      const uniqueToken = `MissingMeta${Date.now()}${Math.random()}`;
+      
       global.fetch = mock(async () => ({
         ok: true,
         status: 200,
@@ -346,18 +381,20 @@ describe('Birdeye Client - Unit Tests', () => {
         json: async () => ({
           success: true,
           data: {
-            // Missing symbol, name, logo_uri
+            // Missing symbol, name, logoURI
+            price: 1.0,
+            marketCap: 1000000,
             decimals: 9
           }
         }),
         text: async () => JSON.stringify({ success: true, data: { decimals: 9 } })
       })) as any;
 
-      const tokens = ['So11111111111111111111111111111111111111112'];
+      const tokens = [uniqueToken];
       const result = await fetchBirdeyeMetadata(tokens);
       
       expect(result.size).toBe(1);
-      const metadata = result.get('So11111111111111111111111111111111111111112');
+      const metadata = result.get(uniqueToken);
       expect(metadata?.symbol).toBe('UNKNOWN');
       expect(metadata?.name).toBe('Unknown Token');
       expect(metadata?.logo_uri).toBe('');
@@ -378,8 +415,10 @@ describe('Birdeye Client - Unit Tests', () => {
     test('should make parallel requests for multiple tokens', async () => {
       let requestCount = 0;
       
-      global.fetch = mock(async () => {
+      global.fetch = mock(async (url: string) => {
         requestCount++;
+        const match = url.toString().match(/address=([^&]+)/);
+        const tokenAddr = match ? match[1] : 'unknown';
         return {
           ok: true,
           status: 200,
@@ -388,25 +427,73 @@ describe('Birdeye Client - Unit Tests', () => {
           json: async () => ({
             success: true,
             data: {
+              price: 1.0,
+              marketCap: 1000000,
               symbol: 'TEST',
               name: 'Test Token',
               decimals: 9,
-              logoURI: 'https://example.com/test.png'
+              logoURI: `https://example.com/${tokenAddr}.png`
             }
           }),
           text: async () => JSON.stringify({ success: true, data: { symbol: 'TEST', name: 'Test Token', decimals: 9, logoURI: 'https://example.com/test.png' } })
         };
       }) as any;
 
-      // Create 5 token addresses
+      // Create 5 token addresses with unique values to avoid cache hits
       const tokens = Array(5).fill(0).map((_, i) => 
-        `Token${i.toString().padStart(40, '0')}`
+        `TokenMeta${Date.now()}${i.toString().padStart(35, '0')}`
       );
       
       await fetchBirdeyeMetadata(tokens);
       
       // Should make one request per token (parallel)
       expect(requestCount).toBe(5);
+    });
+  });
+
+  describe('Cache optimization', () => {
+    test('should not make duplicate API calls when both functions called with same tokens', async () => {
+      let requestCount = 0;
+      
+      global.fetch = mock(async (url: string) => {
+        requestCount++;
+        // Small delay to simulate async behavior
+        await new Promise(resolve => setTimeout(resolve, 10));
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({
+            success: true,
+            data: {
+              price: 100.0,
+              marketCap: 1000000,
+              symbol: 'TEST',
+              name: 'Test Token',
+              decimals: 9,
+              logoURI: 'https://example.com/test.png'
+            }
+          })
+        };
+      }) as any;
+
+      // Create unique token address to avoid interference from other tests
+      const uniqueToken = `CacheTest${Date.now()}${Math.random()}`;
+      const tokens = [uniqueToken];
+      
+      // Call both functions in parallel (like holdings.ts does)
+      const [marketData, metadata] = await Promise.all([
+        fetchBirdeyeMarketData(tokens),
+        fetchBirdeyeMetadata(tokens)
+      ]);
+      
+      // Should only make 1 API call total (not 2) due to promise caching
+      expect(requestCount).toBe(1);
+      expect(marketData.size).toBe(1);
+      expect(metadata.size).toBe(1);
+      expect(marketData.get(uniqueToken)?.price).toBe(100.0);
+      expect(metadata.get(uniqueToken)?.symbol).toBe('TEST');
     });
   });
 });
