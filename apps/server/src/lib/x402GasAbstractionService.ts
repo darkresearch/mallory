@@ -169,6 +169,17 @@ export class X402GasAbstractionService {
     const networkMatch = requirements.network === this.config.gatewayNetwork;
     const assetMatch = requirements.asset === this.config.usdcMint;
     
+    if (!networkMatch || !assetMatch) {
+      console.warn('Network/Asset validation mismatch:', {
+        gatewayNetwork: requirements.network,
+        expectedNetwork: this.config.gatewayNetwork,
+        networkMatch,
+        gatewayAsset: requirements.asset,
+        expectedAsset: this.config.usdcMint,
+        assetMatch
+      });
+    }
+    
     return networkMatch && assetMatch;
   }
 

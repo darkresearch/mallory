@@ -217,7 +217,8 @@ describe.skipIf(!HAS_TEST_CREDENTIALS)('Gas Abstraction Top-Up Flow (Integration
       
       const token = testSession.accessToken;
       const gridSession = testSession.gridSession;
-      const gridSessionSecrets = await loadGridSession();
+      const gridSessionData = await loadGridSession();
+      const gridSessionSecrets = gridSessionData.sessionSecrets;
       const gridAddress = gridSession.address;
 
       // Get payment requirements
@@ -337,7 +338,8 @@ describe.skipIf(!HAS_TEST_CREDENTIALS)('Gas Abstraction Top-Up Flow (Integration
       
       const token = testSession.accessToken;
       const gridSession = testSession.gridSession;
-      const gridSessionSecrets = await loadGridSession();
+      const gridSessionData = await loadGridSession();
+      const gridSessionSecrets = gridSessionData.sessionSecrets;
 
       // Get initial balance
       const backendUrl = process.env.TEST_BACKEND_URL || 'http://localhost:3001';
@@ -401,7 +403,8 @@ describe.skipIf(!HAS_TEST_CREDENTIALS)('Gas Abstraction Top-Up Flow (Integration
     test('should handle invalid transaction in top-up submission', async () => {
       const token = testSession.accessToken;
       const gridSession = testSession.gridSession;
-      const gridSessionSecrets = await loadGridSession();
+      const gridSessionData = await loadGridSession();
+      const gridSessionSecrets = gridSessionData.sessionSecrets;
 
       const backendUrl = process.env.TEST_BACKEND_URL || 'http://localhost:3001';
       const topupUrl = `${backendUrl}/api/gas-abstraction/topup`;

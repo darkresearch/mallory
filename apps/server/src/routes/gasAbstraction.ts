@@ -49,7 +49,36 @@ router.post('/balance', authenticateUser, async (req: AuthenticatedRequest, res:
   }
 
   try {
-    const { gridSessionSecrets, gridSession } = req.body;
+    let { gridSessionSecrets, gridSession } = req.body;
+    
+    // Debug: Log what we received
+    console.log('🔍 [Balance] Received request body:', {
+      hasGridSessionSecrets: !!gridSessionSecrets,
+      hasGridSession: !!gridSession,
+      gridSessionSecretsType: typeof gridSessionSecrets,
+      gridSessionSecretsIsArray: Array.isArray(gridSessionSecrets),
+      gridSessionType: typeof gridSession
+    });
+    
+    // If gridSessionSecrets is a string (JSON), parse it
+    if (typeof gridSessionSecrets === 'string') {
+      try {
+        gridSessionSecrets = JSON.parse(gridSessionSecrets);
+        console.log('🔍 [Balance] Parsed gridSessionSecrets from string');
+      } catch (e) {
+        console.error('❌ [Balance] Failed to parse gridSessionSecrets:', e);
+      }
+    }
+    
+    // If gridSession is a string (JSON), parse it
+    if (typeof gridSession === 'string') {
+      try {
+        gridSession = JSON.parse(gridSession);
+        console.log('🔍 [Balance] Parsed gridSession from string');
+      } catch (e) {
+        console.error('❌ [Balance] Failed to parse gridSession:', e);
+      }
+    }
     
     if (!gridSessionSecrets || !gridSession) {
       return res.status(400).json({
@@ -108,15 +137,31 @@ router.get('/topup/requirements', authenticateUser, async (req: AuthenticatedReq
   try {
     const requirements = await gasService.getTopupRequirements();
     
+    // Log what we received from gateway for debugging
+    console.log('📋 Gateway top-up requirements:', {
+      network: requirements.network,
+      asset: requirements.asset,
+      scheme: requirements.scheme,
+      x402Version: requirements.x402Version
+    });
+    
     // Validate network and asset match config
     if (!gasService.validateNetworkAndAsset(requirements)) {
+      // Log detailed mismatch info
+      console.warn('⚠️  Network/Asset mismatch detected:', {
+        gatewayNetwork: requirements.network,
+        expectedNetwork: process.env.GAS_GATEWAY_NETWORK || 'solana-mainnet-beta',
+        gatewayAsset: requirements.asset,
+        expectedAsset: process.env.GAS_GATEWAY_USDC_MINT || 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+      });
+      
       return res.status(400).json({
         error: 'Network or asset mismatch',
         details: 'Gateway requirements do not match Mallory configuration',
         gatewayNetwork: requirements.network,
-        expectedNetwork: process.env.GAS_GATEWAY_NETWORK,
+        expectedNetwork: process.env.GAS_GATEWAY_NETWORK || 'solana-mainnet-beta',
         gatewayAsset: requirements.asset,
-        expectedAsset: process.env.GAS_GATEWAY_USDC_MINT
+        expectedAsset: process.env.GAS_GATEWAY_USDC_MINT || 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
       });
     }
     
@@ -165,25 +210,63 @@ router.post('/topup', authenticateUser, async (req: AuthenticatedRequest, res: R
       // Sign transaction using Grid, then construct x402 payment payload
       const { transaction: serializedTx, publicKey, amountBaseUnits, gridSessionSecrets, gridSession } = req.body;
       
+      // Validate transaction data format
+      if (typeof serializedTx !== 'string' || serializedTx.length === 0) {
+        return res.status(400).json({
+          error: 'Invalid transaction data',
+          message: 'Transaction must be a non-empty base64-encoded string'
+        });
+      }
+      
+      // Validate base64 format
+      try {
+        Buffer.from(serializedTx, 'base64');
+      } catch (error) {
+        return res.status(400).json({
+          error: 'Invalid transaction format',
+          message: 'Transaction must be valid base64-encoded data'
+        });
+      }
+      
+      // Validate Grid session data
+      if (!gridSession || !gridSession.address) {
+        return res.status(400).json({
+          error: 'Invalid Grid session',
+          message: 'Grid session must include address'
+        });
+      }
+      
       // Import Grid client
       const { createGridClient } = await import('../lib/gridClient.js');
       const gridClient = createGridClient();
       
       // Prepare transaction with Grid
-      const transactionPayload = await gridClient.prepareArbitraryTransaction(
-        gridSession.address,
-        {
-          transaction: serializedTx,
-          fee_config: {
-            currency: 'sol',
-            payer_address: gridSession.address,
-            self_managed_fees: false
+      let transactionPayload;
+      try {
+        transactionPayload = await gridClient.prepareArbitraryTransaction(
+          gridSession.address,
+          {
+            transaction: serializedTx,
+            fee_config: {
+              currency: 'sol',
+              payer_address: gridSession.address,
+              self_managed_fees: false
+            }
           }
-        }
-      );
+        );
+      } catch (error: any) {
+        // Grid preparation errors should return 400 (bad request)
+        return res.status(400).json({
+          error: 'Failed to prepare transaction',
+          message: error.message || 'Transaction data is invalid or cannot be processed by Grid'
+        });
+      }
       
       if (!transactionPayload || !transactionPayload.data) {
-        throw new Error('Failed to prepare transaction with Grid');
+        return res.status(400).json({
+          error: 'Failed to prepare transaction with Grid',
+          message: 'Grid returned no transaction data'
+        });
       }
       
       // Sign transaction using Grid

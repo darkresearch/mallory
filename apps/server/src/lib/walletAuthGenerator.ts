@@ -68,9 +68,16 @@ export class WalletAuthGenerator {
     // Encode signature as base58
     const signatureBase58 = this.encodeSignature(signature);
 
+    // For x402 authentication, the gateway expects the public key of the signing keypair
+    // Derive the public key from the private key to ensure it matches the signature
+    const keypair = Keypair.fromSecretKey(privateKey);
+    const signingPublicKey = keypair.publicKey.toBase58();
+
     // Return authentication headers
+    // Use the signing public key for X-WALLET header (gateway verifies signature against this)
+    // But also include wallet address in a separate header if needed
     return {
-      'X-WALLET': walletAddress,
+      'X-WALLET': signingPublicKey, // Use the public key of the signing keypair
       'X-WALLET-NONCE': nonce,
       'X-WALLET-SIGNATURE': signatureBase58,
     };
@@ -88,36 +95,85 @@ export class WalletAuthGenerator {
    */
   private extractPrivateKey(sessionSecrets: any, publicKey: string): Uint8Array | null {
     try {
-      // Try common locations for private key in Grid session secrets
-      // Grid SDK may store it as:
-      // - sessionSecrets.privateKey
-      // - sessionSecrets.secretKey
-      // - sessionSecrets.keypair.secretKey
-      // - sessionSecrets.keypair.privateKey
-      // - Array of bytes in sessionSecrets.keypair
+      // Grid SDK stores session secrets as an array of provider entries
+      // Each entry has: { publicKey, privateKey, provider, tag }
+      // We need to find the "solana" provider entry
+      
+      // Debug: Log the structure we received
+      console.log('🔍 [WalletAuth] Extracting private key. Session secrets type:', typeof sessionSecrets, 'isArray:', Array.isArray(sessionSecrets));
+      if (Array.isArray(sessionSecrets)) {
+        console.log('🔍 [WalletAuth] Session secrets array length:', sessionSecrets.length);
+        sessionSecrets.forEach((entry: any, idx: number) => {
+          console.log(`🔍 [WalletAuth] Entry ${idx}:`, {
+            provider: entry?.provider,
+            tag: entry?.tag,
+            hasPrivateKey: !!entry?.privateKey,
+            privateKeyType: typeof entry?.privateKey,
+            privateKeyLength: entry?.privateKey?.length
+          });
+        });
+      } else if (sessionSecrets) {
+        console.log('🔍 [WalletAuth] Session secrets keys:', Object.keys(sessionSecrets));
+      }
       
       let privateKeyBytes: Uint8Array | null = null;
 
-      // Check direct properties
-      if (sessionSecrets?.privateKey) {
-        privateKeyBytes = this.normalizeKeyBytes(sessionSecrets.privateKey);
-      } else if (sessionSecrets?.secretKey) {
-        privateKeyBytes = this.normalizeKeyBytes(sessionSecrets.secretKey);
-      } else if (sessionSecrets?.keypair?.secretKey) {
-        privateKeyBytes = this.normalizeKeyBytes(sessionSecrets.keypair.secretKey);
-      } else if (sessionSecrets?.keypair?.privateKey) {
-        privateKeyBytes = this.normalizeKeyBytes(sessionSecrets.keypair.privateKey);
-      } else if (Array.isArray(sessionSecrets?.keypair)) {
-        // Keypair might be stored as array of bytes
-        privateKeyBytes = new Uint8Array(sessionSecrets.keypair);
+      // Check if sessionSecrets is an array (Grid SDK format)
+      if (Array.isArray(sessionSecrets)) {
+        // Find the Solana provider entry
+        const solanaEntry = sessionSecrets.find((entry: any) => 
+          entry?.provider === 'solana' || entry?.tag === 'solana'
+        );
+        
+        if (solanaEntry) {
+          console.log('🔍 [WalletAuth] Found Solana entry:', {
+            provider: solanaEntry.provider,
+            tag: solanaEntry.tag,
+            hasPrivateKey: !!solanaEntry.privateKey
+          });
+        } else {
+          console.warn('🔍 [WalletAuth] No Solana entry found in session secrets array');
+        }
+        
+        if (solanaEntry?.privateKey) {
+          // Private key is stored as base64-encoded string in Grid format
+          console.log('🔍 [WalletAuth] Attempting to normalize private key, type:', typeof solanaEntry.privateKey, 'length:', solanaEntry.privateKey.length);
+          privateKeyBytes = this.normalizeKeyBytes(solanaEntry.privateKey);
+          if (privateKeyBytes) {
+            console.log('✅ [WalletAuth] Successfully normalized private key, length:', privateKeyBytes.length);
+          } else {
+            console.error('❌ [WalletAuth] Failed to normalize private key');
+          }
+        }
+      }
+      
+      // Fallback: Try common locations for private key (legacy/test formats)
+      if (!privateKeyBytes) {
+        if (sessionSecrets?.privateKey) {
+          privateKeyBytes = this.normalizeKeyBytes(sessionSecrets.privateKey);
+        } else if (sessionSecrets?.secretKey) {
+          privateKeyBytes = this.normalizeKeyBytes(sessionSecrets.secretKey);
+        } else if (sessionSecrets?.keypair?.secretKey) {
+          privateKeyBytes = this.normalizeKeyBytes(sessionSecrets.keypair.secretKey);
+        } else if (sessionSecrets?.keypair?.privateKey) {
+          privateKeyBytes = this.normalizeKeyBytes(sessionSecrets.keypair.privateKey);
+        } else if (Array.isArray(sessionSecrets?.keypair)) {
+          // Keypair might be stored as array of bytes
+          privateKeyBytes = new Uint8Array(sessionSecrets.keypair);
+        }
       }
 
       if (!privateKeyBytes) {
+        console.error('Could not find private key in session secrets. Structure:', {
+          isArray: Array.isArray(sessionSecrets),
+          keys: sessionSecrets ? Object.keys(sessionSecrets) : [],
+          firstEntryKeys: Array.isArray(sessionSecrets) && sessionSecrets[0] ? Object.keys(sessionSecrets[0]) : []
+        });
         return null;
       }
 
-      // Validate that the private key corresponds to the public key
-      // Create a Keypair from the private key and verify public key matches
+      // Validate that the private key is usable
+      // Create a Keypair from the private key
       try {
         // Solana Keypair.fromSecretKey() expects 64 bytes (32-byte seed + 32-byte public key)
         // If we have 32 bytes, we need to derive the full keypair
@@ -135,13 +191,14 @@ export class WalletAuthGenerator {
           return null;
         }
 
-        // Verify the keypair matches the public key
+        // Verify the keypair is valid (can create a keypair from it)
         const keypair = Keypair.fromSecretKey(secretKey);
         const derivedPublicKey = keypair.publicKey.toBase58();
         
+        // For Grid wallets, the wallet address might not match the Solana keypair address
+        // (Grid uses program-derived addresses). So we only warn, don't fail.
         if (derivedPublicKey !== publicKey) {
-          console.warn(`Private key does not match public key. Expected: ${publicKey}, Got: ${derivedPublicKey}`);
-          // Still return the key, as the mismatch might be due to different key formats
+          console.warn(`Private key public key (${derivedPublicKey}) does not match wallet address (${publicKey}). This may be normal for Grid wallets.`);
         }
 
         return secretKey;
@@ -156,7 +213,8 @@ export class WalletAuthGenerator {
   }
 
   /**
-   * Normalize key bytes from various formats (array, base58 string, hex string, etc.)
+   * Normalize key bytes from various formats (array, base58 string, hex string, base64, etc.)
+   * Grid SDK stores keys as base64-encoded strings, so we try that first
    */
   private normalizeKeyBytes(key: any): Uint8Array | null {
     try {
@@ -169,25 +227,45 @@ export class WalletAuthGenerator {
       }
       
       if (typeof key === 'string') {
-        // Try base58 first (Solana standard)
+        // Grid SDK stores keys as base64-encoded strings, try that first
         try {
-          return new Uint8Array(bs58.decode(key));
-        } catch {
-          // Try hex
-          if (key.startsWith('0x')) {
-            return new Uint8Array(Buffer.from(key.slice(2), 'hex'));
+          const base64Decoded = Buffer.from(key, 'base64');
+          // If it's 32 or 64 bytes, it's likely a valid key
+          if (base64Decoded.length === 32 || base64Decoded.length === 64) {
+            return new Uint8Array(base64Decoded);
           }
-          // Try base64
-          try {
-            return new Uint8Array(Buffer.from(key, 'base64'));
-          } catch {
-            return null;
+        } catch {
+          // Not base64, continue
+        }
+        
+        // Try base58 (Solana standard)
+        try {
+          const base58Decoded = bs58.decode(key);
+          if (base58Decoded.length === 32 || base58Decoded.length === 64) {
+            return new Uint8Array(base58Decoded);
+          }
+        } catch {
+          // Not base58, continue
+        }
+        
+        // Try hex
+        if (key.startsWith('0x')) {
+          const hexDecoded = Buffer.from(key.slice(2), 'hex');
+          if (hexDecoded.length === 32 || hexDecoded.length === 64) {
+            return new Uint8Array(hexDecoded);
+          }
+        } else if (/^[0-9a-fA-F]+$/.test(key) && (key.length === 64 || key.length === 128)) {
+          // Hex without 0x prefix (64 chars = 32 bytes, 128 chars = 64 bytes)
+          const hexDecoded = Buffer.from(key, 'hex');
+          if (hexDecoded.length === 32 || hexDecoded.length === 64) {
+            return new Uint8Array(hexDecoded);
           }
         }
       }
       
       return null;
-    } catch {
+    } catch (error) {
+      console.error('Error normalizing key bytes:', error);
       return null;
     }
   }

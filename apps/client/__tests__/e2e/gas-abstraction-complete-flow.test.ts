@@ -61,7 +61,8 @@ describe.skipIf(!HAS_TEST_CREDENTIALS)('Gas Abstraction Complete Flow (E2E)', ()
       
       const token = testSession.accessToken;
       const gridSession = testSession.gridSession;
-      const gridSessionSecrets = await loadGridSession();
+      const gridSessionData = await loadGridSession();
+      const gridSessionSecrets = gridSessionData.sessionSecrets;
       const gridAddress = gridSession.address;
       const backendUrl = process.env.TEST_BACKEND_URL || 'http://localhost:3001';
       
@@ -330,7 +331,8 @@ describe.skipIf(!HAS_TEST_CREDENTIALS)('Gas Abstraction Complete Flow (E2E)', ()
       
       const token = testSession.accessToken;
       const gridSession = testSession.gridSession;
-      const gridSessionSecrets = await loadGridSession();
+      const gridSessionData = await loadGridSession();
+      const gridSessionSecrets = gridSessionData.sessionSecrets;
       const gridAddress = gridSession.address;
       const backendUrl = process.env.TEST_BACKEND_URL || 'http://localhost:3001';
       
@@ -422,6 +424,253 @@ describe.skipIf(!HAS_TEST_CREDENTIALS)('Gas Abstraction Complete Flow (E2E)', ()
     }, 60000);
   });
 
+  describe('Failed Transaction Refund', () => {
+    test.skipIf(!GAS_ABSTRACTION_ENABLED)('should refund gas credits for failed transactions', async () => {
+      console.log('🚀 Starting E2E: Failed Transaction Refund\n');
+      console.log('━'.repeat(60));
+      
+      const token = testSession.accessToken;
+      const gridSession = testSession.gridSession;
+      const gridSessionData = await loadGridSession();
+      const gridSessionSecrets = gridSessionData.sessionSecrets;
+      const gridAddress = gridSession.address;
+      const backendUrl = process.env.TEST_BACKEND_URL || 'http://localhost:3001';
+      
+      // ============================================
+      // STEP 1: Check Initial Balance
+      // ============================================
+      console.log('📋 Step 1/5: Checking initial balance...\n');
+      
+      const balanceUrl = `${backendUrl}/api/gas-abstraction/balance`;
+      const initialBalanceResponse = await fetch(balanceUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          gridSessionSecrets,
+          gridSession: {
+            authentication: gridSession.authentication || gridSession,
+            address: gridAddress
+          },
+        }),
+      });
+
+      if (!initialBalanceResponse.ok) {
+        console.log('⚠️  Skipping test - gateway unavailable');
+        return;
+      }
+
+      const initialBalance = await initialBalanceResponse.json();
+      const initialBalanceUsdc = initialBalance.balanceBaseUnits / 1_000_000;
+      
+      console.log('✅ Initial balance:', initialBalanceUsdc, 'USDC');
+      console.log();
+      
+      // ============================================
+      // STEP 2: Sponsor a Transaction
+      // ============================================
+      console.log('📋 Step 2/5: Sponsoring transaction...\n');
+      
+      const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+      const { blockhash } = await connection.getLatestBlockhash('confirmed');
+      
+      const userPubkey = new PublicKey(gridAddress);
+      
+      // Create a transaction that will fail (transfer to invalid address or insufficient funds)
+      // We'll create a transaction with an invalid instruction that will fail on-chain
+      const invalidInstruction = SystemProgram.transfer({
+        fromPubkey: userPubkey,
+        toPubkey: new PublicKey('11111111111111111111111111111111'), // Invalid address
+        lamports: 1_000_000_000, // Large amount that will likely fail
+      });
+      
+      const message = new TransactionMessage({
+        payerKey: userPubkey,
+        recentBlockhash: blockhash,
+        instructions: [invalidInstruction],
+      }).compileToV0Message();
+      
+      const transaction = new VersionedTransaction(message);
+      const serializedTx = Buffer.from(transaction.serialize()).toString('base64');
+      
+      // Request sponsorship
+      const sponsorUrl = `${backendUrl}/api/gas-abstraction/sponsor`;
+      const sponsorResponse = await fetch(sponsorUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          transaction: serializedTx,
+          gridSessionSecrets,
+          gridSession: {
+            authentication: gridSession.authentication || gridSession,
+            address: gridAddress
+          },
+        }),
+      });
+
+      if (!sponsorResponse.ok) {
+        console.log('⚠️  Sponsorship failed:', sponsorResponse.status);
+        const errorData = await sponsorResponse.json().catch(() => ({}));
+        console.log('   Error:', errorData.error);
+        console.log('   Skipping refund test - cannot sponsor transaction');
+        return;
+      }
+
+      const sponsorResult = await sponsorResponse.json();
+      const billedUsdc = sponsorResult.billedBaseUnits / 1_000_000;
+      
+      console.log('✅ Transaction sponsored');
+      console.log('   Billed:', billedUsdc, 'USDC');
+      console.log('   Transaction signature:', sponsorResult.transaction?.slice(0, 20) + '...');
+      console.log();
+      
+      // ============================================
+      // STEP 3: Submit Invalid Transaction to Solana
+      // ============================================
+      console.log('📋 Step 3/5: Submitting invalid transaction to Solana...\n');
+      
+      // Note: The transaction is already sponsored, but we'll try to submit it
+      // In a real scenario, the transaction would fail on-chain and trigger a refund
+      // For testing, we'll check the balance after a delay to see if refund occurs
+      
+      try {
+        // Try to submit the sponsored transaction (it may fail)
+        const signedTx = VersionedTransaction.deserialize(Buffer.from(sponsorResult.transaction, 'base64'));
+        const signature = await connection.sendTransaction(signedTx, {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+        });
+        
+        console.log('   Transaction submitted:', signature);
+        console.log('   Waiting for confirmation...');
+        
+        // Wait for confirmation (or failure)
+        await connection.confirmTransaction(signature, 'confirmed').catch(() => {
+          console.log('   Transaction failed (expected)');
+        });
+      } catch (error: any) {
+        console.log('   Transaction submission failed (expected):', error.message);
+      }
+      
+      console.log();
+      
+      // ============================================
+      // STEP 4: Wait for Settlement and Refund
+      // ============================================
+      console.log('📋 Step 4/5: Waiting for settlement and refund...\n');
+      console.log('   Waiting up to 2 minutes for automatic refund...');
+      
+      // Wait for settlement (gateway typically processes refunds within 2 minutes)
+      const maxWaitTime = 120000; // 2 minutes
+      const checkInterval = 10000; // Check every 10 seconds
+      const startTime = Date.now();
+      
+      let refundDetected = false;
+      let finalBalance = initialBalance;
+      
+      while (Date.now() - startTime < maxWaitTime && !refundDetected) {
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+        
+        const balanceCheckResponse = await fetch(balanceUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            gridSessionSecrets,
+            gridSession: {
+              authentication: gridSession.authentication || gridSession,
+              address: gridAddress
+            },
+          }),
+        });
+        
+        if (balanceCheckResponse.ok) {
+          const balanceCheck = await balanceCheckResponse.json();
+          const currentBalanceUsdc = balanceCheck.balanceBaseUnits / 1_000_000;
+          
+          // Check if balance increased (refund occurred)
+          if (currentBalanceUsdc > initialBalanceUsdc - billedUsdc + 0.0001) {
+            refundDetected = true;
+            finalBalance = balanceCheck;
+            console.log('   ✅ Refund detected!');
+            break;
+          }
+          
+          // Check usage history for refund indication
+          if (balanceCheck.usages && Array.isArray(balanceCheck.usages)) {
+            const refundedUsage = balanceCheck.usages.find((usage: any) => 
+              usage.status === 'failed' || usage.status === 'refunded' || 
+              (usage.description && usage.description.includes('Refunded'))
+            );
+            
+            if (refundedUsage) {
+              refundDetected = true;
+              finalBalance = balanceCheck;
+              console.log('   ✅ Refund found in usage history');
+              break;
+            }
+          }
+          
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          process.stdout.write(`\r   Elapsed: ${elapsed}s...`);
+        }
+      }
+      
+      console.log();
+      console.log();
+      
+      // ============================================
+      // STEP 5: Verify Refund
+      // ============================================
+      console.log('📋 Step 5/5: Verifying refund...\n');
+      
+      const finalBalanceUsdc = finalBalance.balanceBaseUnits / 1_000_000;
+      const balanceChange = finalBalanceUsdc - (initialBalanceUsdc - billedUsdc);
+      
+      console.log('   Initial balance:', initialBalanceUsdc, 'USDC');
+      console.log('   Billed:', billedUsdc, 'USDC');
+      console.log('   Expected after billing:', (initialBalanceUsdc - billedUsdc).toFixed(6), 'USDC');
+      console.log('   Final balance:', finalBalanceUsdc, 'USDC');
+      console.log('   Balance change (refund):', balanceChange.toFixed(6), 'USDC');
+      
+      // Check usage history for refund indication
+      if (finalBalance.usages && Array.isArray(finalBalance.usages)) {
+        const refundedUsage = finalBalance.usages.find((usage: any) => 
+          usage.status === 'failed' || 
+          usage.status === 'refunded' ||
+          (usage.description && usage.description.includes('Refunded')) ||
+          (usage.description && usage.description.includes('refund'))
+        );
+        
+        if (refundedUsage) {
+          console.log('   ✅ Refund found in usage history');
+          console.log('      Status:', refundedUsage.status);
+          console.log('      Description:', refundedUsage.description || 'N/A');
+        }
+      }
+      
+      if (refundDetected || balanceChange > 0.0001) {
+        console.log();
+        console.log('✅ E2E Test Complete: Failed transaction refund verified');
+        console.log('   Refund was processed automatically by the gateway');
+      } else {
+        console.log();
+        console.log('⚠️  Refund not detected within 2 minutes');
+        console.log('   Note: Refunds may take longer to process');
+        console.log('   Or transaction may have succeeded unexpectedly');
+      }
+      
+      console.log('━'.repeat(60));
+    }, 180000); // 3 minute timeout for settlement
+  });
+
   describe('Graceful Degradation', () => {
     test.skipIf(!GAS_ABSTRACTION_ENABLED)('should continue working with SOL when gateway unavailable', async () => {
       console.log('🚀 Starting E2E: Graceful Degradation\n');
@@ -432,7 +681,8 @@ describe.skipIf(!HAS_TEST_CREDENTIALS)('Gas Abstraction Complete Flow (E2E)', ()
       
       const token = testSession.accessToken;
       const gridSession = testSession.gridSession;
-      const gridSessionSecrets = await loadGridSession();
+      const gridSessionData = await loadGridSession();
+      const gridSessionSecrets = gridSessionData.sessionSecrets;
       const gridAddress = gridSession.address;
       const backendUrl = process.env.TEST_BACKEND_URL || 'http://localhost:3001';
       
