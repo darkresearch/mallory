@@ -190,7 +190,8 @@ router.post('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     // Prepare x402 context for Nansen tools
     const x402Context = (gridSessionSecrets && gridSession) ? {
       gridSessionSecrets,
-      gridSession
+      gridSession,
+      gaslessMode: clientContext?.gaslessMode || false  // Pass gasless mode preference
     } : undefined;
 
     // Prepare tools
