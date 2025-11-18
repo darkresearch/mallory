@@ -2,6 +2,7 @@ import express, { Request, Response, Router } from 'express';
 import { authenticateUser, AuthenticatedRequest } from '../../middleware/auth.js';
 import { supabase } from '../../lib/supabase.js';
 import type { HoldingsResponse, TokenHolding } from '@darkresearch/mallory-shared';
+import { fetchBirdeyeMarketData, fetchBirdeyeMetadata } from '../../services/birdeye/client.js';
 
 const router: Router = express.Router();
 
@@ -24,116 +25,6 @@ interface GridBalanceResponse {
     request_id: string;
     timestamp: string;
   };
-}
-
-interface BirdeyeMarketData {
-  price?: number;
-  market_cap?: number;
-}
-
-interface BirdeyeMetadata {
-  symbol?: string;
-  name?: string;
-  logo_uri?: string;
-  decimals?: number;
-}
-
-/**
- * Fetch market data for multiple tokens from Birdeye
- */
-async function fetchBirdeyeMarketData(tokenAddresses: string[]): Promise<Map<string, BirdeyeMarketData>> {
-  const resultMap = new Map();
-  
-  if (tokenAddresses.length === 0) return resultMap;
-
-  try {
-    const addressList = tokenAddresses.slice(0, 20).join(',');
-    const url = `https://public-api.birdeye.so/defi/v3/token/market-data/multiple?list_address=${addressList}`;
-    
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-      'X-Chain': 'solana',
-    };
-
-    if (process.env.BIRDEYE_API_KEY) {
-      headers['X-API-KEY'] = process.env.BIRDEYE_API_KEY;
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-    
-    const response = await fetch(url, { headers, signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    if (!response.ok) return resultMap;
-
-    const data = await response.json() as any;
-    
-    if (data.success && data.data) {
-      for (const [address, tokenData] of Object.entries(data.data)) {
-        const marketData = tokenData as any;
-        resultMap.set(address, {
-          price: marketData.price || 0,
-          market_cap: marketData.market_cap || 0
-        });
-      }
-    }
-
-    return resultMap;
-  } catch (error) {
-    console.error('Birdeye market data error:', error);
-    return resultMap;
-  }
-}
-
-/**
- * Fetch metadata for multiple tokens from Birdeye
- */
-async function fetchBirdeyeMetadata(tokenAddresses: string[]): Promise<Map<string, BirdeyeMetadata>> {
-  const resultMap = new Map();
-  
-  if (tokenAddresses.length === 0) return resultMap;
-
-  try {
-    const addressList = tokenAddresses.slice(0, 50).join(',');
-    const url = `https://public-api.birdeye.so/defi/v3/token/meta-data/multiple?list_address=${addressList}`;
-    
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-      'X-Chain': 'solana',
-    };
-
-    if (process.env.BIRDEYE_API_KEY) {
-      headers['X-API-KEY'] = process.env.BIRDEYE_API_KEY;
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-    
-    const response = await fetch(url, { headers, signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    if (!response.ok) return resultMap;
-
-    const data = await response.json() as any;
-    
-    if (data.success && data.data) {
-      for (const [address, tokenData] of Object.entries(data.data)) {
-        const metadata = tokenData as any;
-        resultMap.set(address, {
-          symbol: metadata.symbol || 'UNKNOWN',
-          name: metadata.name || 'Unknown Token',
-          decimals: metadata.decimals || 9,
-          logo_uri: metadata.logo_uri || ''
-        });
-      }
-    }
-
-    return resultMap;
-  } catch (error) {
-    console.error('Birdeye metadata error:', error);
-    return resultMap;
-  }
 }
 
 /**
