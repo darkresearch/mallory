@@ -388,10 +388,22 @@ export class X402GasAbstractionService {
    * @throws GatewayError on API errors
    */
   async getTopupRequirements(): Promise<X402PaymentRequirement> {
-    return await this.makeAuthenticatedRequest<X402PaymentRequirement>(
+    const requirements = await this.makeAuthenticatedRequest<X402PaymentRequirement>(
       '/topup/requirements',
       'GET'
     );
+    
+    // Normalize response: if top-level fields are missing, extract from accepts array
+    if (!requirements.network || !requirements.asset || !requirements.scheme) {
+      if (requirements.accepts && requirements.accepts.length > 0) {
+        const firstAccept = requirements.accepts[0];
+        requirements.network = requirements.network || firstAccept.network;
+        requirements.asset = requirements.asset || firstAccept.asset;
+        requirements.scheme = requirements.scheme || firstAccept.scheme;
+      }
+    }
+    
+    return requirements;
   }
 
   /**

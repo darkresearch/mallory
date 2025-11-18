@@ -28,6 +28,12 @@ export function loadGasAbstractionConfig(): GasAbstractionConfig {
   if (!gatewayUrl) {
     throw new Error('GAS_GATEWAY_URL environment variable is required');
   }
+  
+  // Validate URL format and protocol
+  const trimmedUrl = gatewayUrl.trim();
+  if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+    throw new Error(`GAS_GATEWAY_URL must start with http:// or https://. Got: ${trimmedUrl}`);
+  }
 
   // Load GAS_GATEWAY_NETWORK with value "solana-mainnet-beta"
   const gatewayNetwork = process.env.GAS_GATEWAY_NETWORK || 'solana-mainnet-beta';
@@ -46,12 +52,18 @@ export function loadGasAbstractionConfig(): GasAbstractionConfig {
   if (!solanaRpcUrl) {
     throw new Error('SOLANA_RPC_URL environment variable is required');
   }
+  
+  // Validate Solana RPC URL format and protocol
+  const trimmedRpcUrl = solanaRpcUrl.trim();
+  if (!trimmedRpcUrl.startsWith('http://') && !trimmedRpcUrl.startsWith('https://') && !trimmedRpcUrl.startsWith('ws://') && !trimmedRpcUrl.startsWith('wss://')) {
+    throw new Error(`SOLANA_RPC_URL must start with http://, https://, ws://, or wss://. Got: ${trimmedRpcUrl}`);
+  }
 
   return {
-    gatewayUrl,
+    gatewayUrl: trimmedUrl,
     gatewayNetwork,
     usdcMint,
-    solanaRpcUrl,
+    solanaRpcUrl: trimmedRpcUrl,
   };
 }
 
@@ -62,7 +74,11 @@ export function loadGasAbstractionConfig(): GasAbstractionConfig {
  * @throws Error if configuration is invalid
  */
 export function validateGasAbstractionConfig(config: GasAbstractionConfig): void {
-  // Validate gateway URL format
+  // Validate gateway URL format and protocol
+  if (!config.gatewayUrl.startsWith('http://') && !config.gatewayUrl.startsWith('https://')) {
+    throw new Error(`GAS_GATEWAY_URL must start with http:// or https://. Got: ${config.gatewayUrl}`);
+  }
+  
   try {
     new URL(config.gatewayUrl);
   } catch (error) {
@@ -79,7 +95,11 @@ export function validateGasAbstractionConfig(config: GasAbstractionConfig): void
     throw new Error(`Invalid GAS_GATEWAY_USDC_MINT: ${config.usdcMint}`);
   }
 
-  // Validate Solana RPC URL format
+  // Validate Solana RPC URL format and protocol
+  if (!config.solanaRpcUrl.startsWith('http://') && !config.solanaRpcUrl.startsWith('https://') && !config.solanaRpcUrl.startsWith('ws://') && !config.solanaRpcUrl.startsWith('wss://')) {
+    throw new Error(`SOLANA_RPC_URL must start with http://, https://, ws://, or wss://. Got: ${config.solanaRpcUrl}`);
+  }
+  
   try {
     new URL(config.solanaRpcUrl);
   } catch (error) {

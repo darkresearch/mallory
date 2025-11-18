@@ -67,6 +67,10 @@ router.post('/balance', authenticateUser, async (req: AuthenticatedRequest, res:
         console.log('🔍 [Balance] Parsed gridSessionSecrets from string');
       } catch (e) {
         console.error('❌ [Balance] Failed to parse gridSessionSecrets:', e);
+        return res.status(400).json({
+          error: 'Invalid gridSessionSecrets format',
+          message: 'gridSessionSecrets must be valid JSON'
+        });
       }
     }
     
@@ -77,6 +81,10 @@ router.post('/balance', authenticateUser, async (req: AuthenticatedRequest, res:
         console.log('🔍 [Balance] Parsed gridSession from string');
       } catch (e) {
         console.error('❌ [Balance] Failed to parse gridSession:', e);
+        return res.status(400).json({
+          error: 'Invalid gridSession format',
+          message: 'gridSession must be valid JSON'
+        });
       }
     }
     
@@ -136,6 +144,16 @@ router.get('/topup/requirements', authenticateUser, async (req: AuthenticatedReq
 
   try {
     const requirements = await gasService.getTopupRequirements();
+    
+    // Normalize response: if top-level fields are missing, extract from accepts array
+    if (!requirements.network || !requirements.asset || !requirements.scheme) {
+      if (requirements.accepts && requirements.accepts.length > 0) {
+        const firstAccept = requirements.accepts[0];
+        requirements.network = requirements.network || firstAccept.network;
+        requirements.asset = requirements.asset || firstAccept.asset;
+        requirements.scheme = requirements.scheme || firstAccept.scheme;
+      }
+    }
     
     // Log what we received from gateway for debugging
     console.log('📋 Gateway top-up requirements:', {
