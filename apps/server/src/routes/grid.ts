@@ -920,7 +920,7 @@ router.post('/send-tokens-gasless', authenticateUser, async (req: AuthenticatedR
     }
 
     // Sign and send using Grid SDK
-    const result = await gridClient.signAndSend({
+    const sendResult = await gridClient.signAndSend({
       sessionSecrets,
       session,
       transactionPayload: transactionPayload.data,
@@ -929,7 +929,7 @@ router.post('/send-tokens-gasless', authenticateUser, async (req: AuthenticatedR
 
     console.log('✅ [Grid Proxy] Tokens sent via gas abstraction');
     
-    const signature = result.transaction_signature || 'success';
+    const signature = sendResult.transaction_signature || 'success';
     
     res.json({
       success: true,

@@ -148,61 +148,75 @@ async function checkOpenMemory() {
 }
 
 // Start server
-app.listen(PORT, async () => {
-  console.log('');
-  console.log('🚀 Mallory Server Started');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`📍 Port: ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔐 CORS: ${process.env.NODE_ENV === 'development' ? 'All origins (dev mode)' : allowedOrigins.join(', ')}`);
-  console.log('');
-  console.log('📡 Available endpoints:');
-  console.log(`   GET  /health - Health check`);
-  console.log(`   POST /api/chat - AI chat streaming`);
-  console.log(`   GET  /api/wallet/holdings - Wallet holdings`);
-  console.log(`   POST /api/grid/init-account - Grid init (CORS proxy)`);
-  console.log(`   POST /api/grid/verify-otp - Grid OTP verify (CORS proxy)`);
-  console.log(`   POST /api/grid/send-tokens - Grid token transfer (CORS proxy)`);
-  console.log(`   POST /api/gas-abstraction/balance - Gas credits balance`);
-  console.log(`   GET  /api/gas-abstraction/topup/requirements - Top-up requirements`);
-  console.log(`   POST /api/gas-abstraction/topup - Submit top-up payment`);
-  console.log(`   POST /api/gas-abstraction/sponsor - Sponsor transaction`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('');
-  
-  // Log infinite-memory version
+const server = app.listen(PORT, async () => {
   try {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    const infiniteMemoryPkgPath = join(__dirname, '../node_modules/infinite-memory/package.json');
-    const infiniteMemoryPkg = JSON.parse(readFileSync(infiniteMemoryPkgPath, 'utf-8'));
-    console.log(`📦 infinite-memory version: ${infiniteMemoryPkg.version}`);
     console.log('');
-  } catch (error) {
-    console.log('⚠️  Could not read infinite-memory version');
+    console.log('🚀 Mallory Server Started');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`📍 Port: ${PORT}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔐 CORS: ${process.env.NODE_ENV === 'development' ? 'All origins (dev mode)' : allowedOrigins.join(', ')}`);
     console.log('');
-  }
-  
-  // Check OpenMemory connection
-  await checkOpenMemory();
-  
-  // Validate Gas Abstraction configuration (if enabled)
-  try {
-    const { loadGasAbstractionConfig, validateGasAbstractionConfig } = await import('./lib/gasAbstractionConfig.js');
-    const gasConfig = loadGasAbstractionConfig();
-    validateGasAbstractionConfig(gasConfig);
+    console.log('📡 Available endpoints:');
+    console.log(`   GET  /health - Health check`);
+    console.log(`   POST /api/chat - AI chat streaming`);
+    console.log(`   GET  /api/wallet/holdings - Wallet holdings`);
+    console.log(`   POST /api/grid/init-account - Grid init (CORS proxy)`);
+    console.log(`   POST /api/grid/verify-otp - Grid OTP verify (CORS proxy)`);
+    console.log(`   POST /api/grid/send-tokens - Grid token transfer (CORS proxy)`);
+    console.log(`   POST /api/gas-abstraction/balance - Gas credits balance`);
+    console.log(`   GET  /api/gas-abstraction/topup/requirements - Top-up requirements`);
+    console.log(`   POST /api/gas-abstraction/topup - Submit top-up payment`);
+    console.log(`   POST /api/gas-abstraction/sponsor - Sponsor transaction`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('');
-  } catch (error: any) {
-    if (error.message?.includes('required') || error.message?.includes('Invalid')) {
-      console.log('⚠️  Gas Abstraction: Not configured');
-      console.log('   Gas abstraction features will be disabled');
-      console.log('   To enable, set GAS_GATEWAY_URL and SOLANA_RPC_URL in .env');
+    
+    // Log infinite-memory version
+    try {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      const infiniteMemoryPkgPath = join(__dirname, '../node_modules/infinite-memory/package.json');
+      const infiniteMemoryPkg = JSON.parse(readFileSync(infiniteMemoryPkgPath, 'utf-8'));
+      console.log(`📦 infinite-memory version: ${infiniteMemoryPkg.version}`);
       console.log('');
-    } else {
-      // Re-throw unexpected errors
-      throw error;
+    } catch (error) {
+      console.log('⚠️  Could not read infinite-memory version');
+      console.log('');
     }
+    
+    // Check OpenMemory connection
+    await checkOpenMemory();
+    
+    // Validate Gas Abstraction configuration (if enabled)
+    try {
+      const { loadGasAbstractionConfig, validateGasAbstractionConfig } = await import('./lib/gasAbstractionConfig.js');
+      const gasConfig = loadGasAbstractionConfig();
+      validateGasAbstractionConfig(gasConfig);
+      console.log('');
+    } catch (error: any) {
+      if (error.message?.includes('required') || error.message?.includes('Invalid')) {
+        console.log('⚠️  Gas Abstraction: Not configured');
+        console.log('   Gas abstraction features will be disabled');
+        console.log('   To enable, set GAS_GATEWAY_URL and SOLANA_RPC_URL in .env');
+        console.log('');
+      } else {
+        // Re-throw unexpected errors
+        throw error;
+      }
+    }
+  } catch (error: any) {
+    console.error('❌ Error during server initialization:', error);
+    process.exit(1);
   }
+});
+
+server.on('error', (error: any) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use. Please stop the other process or use a different port.`);
+  } else {
+    console.error('❌ Server error:', error);
+  }
+  process.exit(1);
 });
 
 // Graceful shutdown
