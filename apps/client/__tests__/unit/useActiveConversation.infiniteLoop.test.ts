@@ -55,8 +55,23 @@ const mockParams = {
   conversationId: undefined as string | undefined,
 };
 
+const mockRouter = {
+  push: mock((path: string) => {}),
+  replace: mock((path: string) => {}),
+  back: mock(() => {}),
+};
+
 mock.module('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
+  useRouter: () => mockRouter,
+}));
+
+// Mock react-native Platform
+mock.module('react-native', () => ({
+  Platform: {
+    OS: 'web',
+    select: (obj: any) => obj.web || obj.default,
+  },
 }));
 
 mock.module('@/lib', () => ({
@@ -71,6 +86,16 @@ mock.module('@/lib', () => ({
 
 mock.module('@/features/chat', () => ({
   getCurrentOrCreateConversation: mockGetCurrentOrCreateConversation,
+}));
+
+// Mock ActiveConversationContext
+const mockSetGlobalConversationId = mock((id: string | null) => {});
+
+mock.module('@/contexts/ActiveConversationContext', () => ({
+  useActiveConversationContext: () => ({
+    conversationId: null,
+    setConversationId: mockSetGlobalConversationId,
+  }),
 }));
 
 // Import after mocking
