@@ -166,8 +166,9 @@ export function GasAbstractionProvider({ children, enabled }: GasAbstractionProv
   
   /**
    * Fetch balance from gateway
+   * Implements retry logic for transient network errors (Task 15.2)
    */
-  const refreshBalance = useCallback(async () => {
+  const refreshBalance = useCallback(async (retryCount = 0): Promise<void> => {
     if (!enabled) return;
     
     // Check if Grid account is available
@@ -203,21 +204,45 @@ export function GasAbstractionProvider({ children, enabled }: GasAbstractionProv
       // Note: Using POST because Grid session data needs to be sent
       // (GET requests with body are not standard HTTP)
       const url = generateAPIUrl('/api/gas-abstraction/balance');
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          gridSessionSecrets,
-          gridSession
-        }),
-      });
+      let response: Response;
+      
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            gridSessionSecrets,
+            gridSession
+          }),
+        });
+      } catch (networkError) {
+        // Network error (connection failed, timeout, etc.)
+        // Retry once for transient network errors
+        if (retryCount === 0) {
+          console.log('🔄 [GasAbstraction] Network error, retrying balance fetch...');
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+          return refreshBalance(1); // Retry once
+        }
+        throw networkError; // Re-throw if already retried
+      }
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to fetch balance: ${response.status}`);
+        const status = response.status;
+        
+        // Retry once for transient server errors (5xx)
+        if (status >= 500 && status < 600 && retryCount === 0) {
+          console.log(`🔄 [GasAbstraction] Server error ${status}, retrying balance fetch...`);
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+          return refreshBalance(1); // Retry once
+        }
+        
+        // For 401 errors, don't retry (authentication issue)
+        // For 4xx errors, don't retry (client error)
+        throw new Error(errorData.error || `Failed to fetch balance: ${status}`);
       }
       
       const data: GatewayBalance = await response.json();
@@ -240,7 +265,8 @@ export function GasAbstractionProvider({ children, enabled }: GasAbstractionProv
       console.error('❌ [GasAbstraction] Failed to fetch balance:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch balance';
       setBalanceError(errorMessage);
-      // Keep last known balance on error (don't clear it)
+      // Keep last known balance on error (don't clear it) - graceful degradation
+      // Wallet continues to work with SOL gas even if balance fetch fails
     } finally {
       setBalanceLoading(false);
     }
@@ -351,8 +377,9 @@ export function GasAbstractionProvider({ children, enabled }: GasAbstractionProv
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || errorData.message || `Sponsorship failed: ${response.status}`;
         
-        // Handle insufficient balance error
+        // Handle insufficient balance error (402)
         if (response.status === 402) {
           const required = errorData.data?.required || errorData.required;
           const available = errorData.data?.available || errorData.available;
@@ -363,10 +390,39 @@ export function GasAbstractionProvider({ children, enabled }: GasAbstractionProv
           throw new InsufficientBalanceError(required, available);
         }
         
+        // Handle old blockhash error (400 with blockhash message)
+        // Note: Backend should handle retry with fresh blockhash, but we handle it gracefully here
+        if (response.status === 400 && (
+          errorMessage.toLowerCase().includes('blockhash') ||
+          errorMessage.toLowerCase().includes('expired') ||
+          errorMessage.toLowerCase().includes('stale')
+        )) {
+          // Log error
+          await gasTelemetry.sponsorError(walletAddress, response.status);
+          
+          // Throw specific error that callers can handle (e.g., rebuild transaction with fresh blockhash)
+          const blockhashError = new Error('Transaction blockhash expired. Please rebuild transaction with fresh blockhash and retry.');
+          (blockhashError as any).isBlockhashError = true;
+          (blockhashError as any).status = 400;
+          throw blockhashError;
+        }
+        
+        // Handle service unavailable (503) - graceful degradation
+        if (response.status === 503) {
+          // Log error
+          await gasTelemetry.sponsorError(walletAddress, response.status);
+          
+          // Throw specific error that allows fallback to SOL
+          const unavailableError = new Error('Gas sponsorship temporarily unavailable. Please use SOL gas or try again later.');
+          (unavailableError as any).isServiceUnavailable = true;
+          (unavailableError as any).status = 503;
+          throw unavailableError;
+        }
+        
         // Log other errors
         await gasTelemetry.sponsorError(walletAddress, response.status);
         
-        throw new Error(errorData.error || `Sponsorship failed: ${response.status}`);
+        throw new Error(errorMessage);
       }
       
       const result = await response.json();
@@ -384,12 +440,15 @@ export function GasAbstractionProvider({ children, enabled }: GasAbstractionProv
       // If error wasn't already logged (e.g., network error), log it
       if (!(error instanceof InsufficientBalanceError)) {
         // Try to extract error code from error message or default to 500
-        const errorCode = error instanceof Error && error.message.includes('status') 
-          ? parseInt(error.message.match(/status[:\s]+(\d+)/)?.[1] || '500')
-          : 500;
+        const errorCode = (error as any)?.status || 
+          (error instanceof Error && error.message.includes('status') 
+            ? parseInt(error.message.match(/status[:\s]+(\d+)/)?.[1] || '500')
+            : 500);
         await gasTelemetry.sponsorError(walletAddress, errorCode);
       }
       
+      // Graceful degradation: Errors don't break wallet functionality
+      // Callers can catch these errors and fall back to SOL gas
       throw error;
     }
   }, [enabled, gridAccount, isBalanceStale, refreshBalance]);
