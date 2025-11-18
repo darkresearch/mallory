@@ -381,8 +381,8 @@ export function GasAbstractionProvider({ children, enabled }: GasAbstractionProv
         
         // Handle insufficient balance error (402)
         if (response.status === 402) {
-          const required = errorData.data?.required || errorData.required;
-          const available = errorData.data?.available || errorData.available;
+          const required = errorData.data?.required || errorData.required || 0;
+          const available = errorData.data?.available || errorData.available || 0;
           
           // Log insufficient balance
           await gasTelemetry.sponsorInsufficientBalance(walletAddress, required, available);

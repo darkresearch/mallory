@@ -188,8 +188,8 @@ export function createGasSponsorClient(): GasSponsorClient {
         const errorData = await response.json().catch(() => ({}));
         
         if (response.status === 402) {
-          const required = errorData.data?.required || errorData.required;
-          const available = errorData.data?.available || errorData.available;
+          const required = errorData.data?.required || errorData.required || 0;
+          const available = errorData.data?.available || errorData.available || 0;
           throw new InsufficientBalanceError(required, available);
         }
         

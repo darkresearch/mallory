@@ -883,7 +883,9 @@ router.post('/send-tokens-gasless', authenticateUser, async (req: AuthenticatedR
 
     // Request sponsorship from gas abstraction service
     console.log('   Requesting sponsorship...');
-    const gasService = await import('../lib/x402GasAbstractionService.js').then(m => m.createX402GasAbstractionService());
+    const { X402GasAbstractionService } = await import('../lib/x402GasAbstractionService.js');
+    const { loadGasAbstractionConfig } = await import('../lib/gasAbstractionConfig.js');
+    const gasService = new X402GasAbstractionService(loadGasAbstractionConfig());
     
     const result = await gasService.sponsorTransaction(
       serialized,

@@ -32,7 +32,9 @@ function createGridSender(sessionSecrets: any, session: any, address: string, us
         console.log('💸 [Grid Sender] Using gasless mode for token transfer');
         try {
           // Import gas abstraction service
-          const gasService = await import('../../lib/x402GasAbstractionService.js').then(m => m.createX402GasAbstractionService());
+          const { X402GasAbstractionService } = await import('../../lib/x402GasAbstractionService.js');
+          const { loadGasAbstractionConfig } = await import('../../lib/gasAbstractionConfig.js');
+          const gasService = new X402GasAbstractionService(loadGasAbstractionConfig());
           
           // Build transaction (same as regular flow)
           const {
