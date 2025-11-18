@@ -8,7 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
-import { useWindowDimensions } from 'react-native';
+import { useWindowDimensions, Alert } from 'react-native';
 import { generateAPIUrl } from '../../lib';
 import { loadMessagesFromSupabase, convertDatabaseMessageToUIMessage } from '../../features/chat';
 import { storage, SECURE_STORAGE_KEYS } from '../../lib/storage';
@@ -41,6 +41,7 @@ export function ChatManager({}: ChatManagerProps) {
   const { conversationId: currentConversationId } = useActiveConversationContext();
   
   // Get gasless mode preference (hook always called, returns null if not available)
+  // Task 13.1: Gasless mode is checked and passed to backend via clientContext
   const gasAbstraction = useGasAbstraction();
   const gaslessMode = gasAbstraction?.gaslessEnabled || false;
   
@@ -49,6 +50,10 @@ export function ChatManager({}: ChatManagerProps) {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const previousStatusRef = useRef<string>('ready');
   const conversationMessagesSetRef = useRef<string | null>(null);
+  
+  // Task 13.3: Track previous balance to detect sponsored transactions
+  const previousBalanceRef = useRef<number | null>(null);
+  const lastToolExecutionTimeRef = useRef<number>(0);
   
   // Extract wallet balance
   const walletBalance = React.useMemo(() => {
@@ -107,7 +112,7 @@ export function ChatManager({}: ChatManagerProps) {
           viewportWidth: viewportWidth || undefined,
           getDeviceInfo: () => getDeviceInfo(viewportWidth),
           walletBalance: walletBalance,
-          gaslessMode: gaslessMode
+          gaslessMode: gaslessMode // Task 13.1: Gasless mode checked before tool transactions
         })
       },
     }),
@@ -293,7 +298,41 @@ export function ChatManager({}: ChatManagerProps) {
       aiStatus: status as any,
       aiError: error || null,
     });
+    
+    // Task 13.3: Check for tool execution (when status changes from streaming to ready)
+    // This indicates a tool may have been executed
+    if (status === 'ready' && previousStatusRef.current === 'streaming') {
+      lastToolExecutionTimeRef.current = Date.now();
+    }
+    previousStatusRef.current = status;
   }, [messages, status, error, currentConversationId]);
+  
+  // Task 13.3: Monitor gas balance changes to detect sponsored transactions
+  useEffect(() => {
+    if (!gaslessMode || !gasAbstraction) return;
+    
+    const currentBalance = gasAbstraction.balanceBaseUnits || 0;
+    const previousBalance = previousBalanceRef.current;
+    
+    // If balance decreased and we recently executed a tool, show notification
+    if (previousBalance !== null && currentBalance < previousBalance) {
+      const balanceDecrease = previousBalance - currentBalance;
+      const timeSinceToolExecution = Date.now() - lastToolExecutionTimeRef.current;
+      
+      // Only show notification if balance decreased within 10 seconds of tool execution
+      // This indicates a sponsored transaction from a tool
+      if (timeSinceToolExecution < 10000 && balanceDecrease > 0) {
+        const billedUsdc = balanceDecrease / 1_000_000;
+        Alert.alert(
+          'Gasless Transaction Sponsored',
+          `Your transaction was sponsored using gas credits. Charged: ${billedUsdc.toFixed(6)} USDC.`,
+          [{ text: 'OK' }]
+        );
+      }
+    }
+    
+    previousBalanceRef.current = currentBalance;
+  }, [gasAbstraction?.balanceBaseUnits, gaslessMode, gasAbstraction]);
 
   // Update stream state based on status and message content
   useEffect(() => {
