@@ -11,3 +11,6 @@ expo-env.d.ts
 
 # Maestro
 .maestro/reports/
+
+# Vercel
+.vercel

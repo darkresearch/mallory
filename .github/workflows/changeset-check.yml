@@ -1,0 +1,46 @@
+name: Changeset Required
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check for changeset or skip label
+        run: |
+          # Check if PR has skip-changeset label
+          LABELS='${{ toJson(github.event.pull_request.labels.*.name) }}'
+          if echo "$LABELS" | grep -q "skip-changeset"; then
+            echo "✅ Changeset requirement skipped via 'skip-changeset' label"
+            exit 0
+          fi
+          
+          # Check if changeset files were added
+          git fetch origin main
+          CHANGESET_FILES=$(git diff --name-only origin/main...HEAD -- '.changeset/*.md' | grep -v 'README.md' || true)
+          
+          if [ -n "$CHANGESET_FILES" ]; then
+            echo "✅ Changeset found:"
+            echo "$CHANGESET_FILES"
+            exit 0
+          else
+            echo "❌ No changeset found"
+            echo ""
+            echo "This PR requires a changeset to document the changes for the release notes."
+            echo ""
+            echo "To add a changeset, run:"
+            echo "  bun changeset"
+            echo ""
+            echo "Or add the 'skip-changeset' label if this PR doesn't need a changelog entry"
+            echo "(docs, tests, CI changes, etc.)"
+            exit 1
+          fi
+
