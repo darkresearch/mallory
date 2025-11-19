@@ -76,12 +76,13 @@ export function useChatHistoryData(userId?: string) {
       
       console.log('🔄 [useChatHistoryData] Loading conversations for user:', userId);
       
-      // First query: Get all general conversations for the user (including metadata)
+      // First query: Get all visible general conversations for the user (including metadata)
       const { data: conversationsData, error: conversationsError } = await supabase
         .from('conversations')
         .select('id, title, token_ca, created_at, updated_at, metadata')
         .eq('user_id', userId)
         .eq('token_ca', GLOBAL_TOKEN_ID)
+        .neq('is_visible', false)  // Filter out soft-deleted conversations (handles null as true)
         .order('updated_at', { ascending: false });
       
       if (conversationsError) {
@@ -335,12 +336,51 @@ export function useChatHistoryData(userId?: string) {
     await loadConversationsAndMessages(true);
   }, [loadConversationsAndMessages]);
 
+  // Soft delete conversation (mark as hidden instead of deleting)
+  const deleteConversation = useCallback(async (conversationId: string) => {
+    try {
+      console.log('🗑️ [useChatHistoryData] Soft deleting conversation:', conversationId);
+      
+      // Update conversation to set is_visible = false (soft delete)
+      const { error: conversationError } = await supabase
+        .from('conversations')
+        .update({ is_visible: false })
+        .eq('id', conversationId);
+      
+      if (conversationError) {
+        console.error('Error soft deleting conversation:', conversationError);
+        throw conversationError;
+      }
+      
+      // Update local state and cache immediately for optimistic UI update
+      setConversations(prev => {
+        const updated = prev.filter(conv => conv.id !== conversationId);
+        cache.conversations = updated;
+        return updated;
+      });
+      
+      setAllMessages(prev => {
+        const updated = { ...prev };
+        delete updated[conversationId];
+        cache.allMessages = updated;
+        return updated;
+      });
+      
+      console.log('✅ [useChatHistoryData] Successfully soft deleted conversation:', conversationId);
+      return { success: true };
+    } catch (error) {
+      console.error('Error soft deleting conversation:', error);
+      return { success: false, error };
+    }
+  }, []);
+
   return {
     conversations,
     allMessages,
     isLoading,
     isInitialized,
     refresh,
+    deleteConversation,
     // Export handlers for real-time subscriptions (to be set up by the screen)
     handleConversationInsert,
     handleConversationUpdate,
