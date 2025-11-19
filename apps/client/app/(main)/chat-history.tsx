@@ -297,13 +297,9 @@ export default function ChatHistoryScreen() {
 
   useEffect(() => {
     const loadCurrentConversationId = async () => {
-      try {
-        const currentId = contextConversationId || await storage.persistent.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
-        setCurrentConversationId(currentId);
-      } catch (error) {
-        console.error('Error loading current conversation ID:', error);
-        setCurrentConversationId(contextConversationId);
-      }
+      // Since ActiveConversationProvider already loads from storage on mount,
+      // we can rely on the context value directly
+      setCurrentConversationId(contextConversationId);
     };
     loadCurrentConversationId();
   }, [contextConversationId]);
@@ -386,14 +382,14 @@ export default function ChatHistoryScreen() {
       () => {
         runOnJS(async () => {
           try {
-            const activeConversationId = await storage.persistent.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
-            if (activeConversationId) {
-              router.push(`/(main)/chat?conversationId=${activeConversationId}`);
+            // Use contextConversationId instead of reading from storage
+            if (contextConversationId) {
+              router.push(`/(main)/chat?conversationId=${contextConversationId}`);
             } else {
               router.push('/(main)/chat');
             }
           } catch (error) {
-            console.error('Error reading conversationId from storage:', error);
+            console.error('Error reading conversationId:', error);
             router.push('/(main)/chat');
           }
         })();
