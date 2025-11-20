@@ -35,65 +35,20 @@ import {
 } from '../../lib/gasAbstraction';
 import { generateAPIUrl } from '../../lib/api/client';
 import { storage, SECURE_STORAGE_KEYS } from '../../lib/storage';
-import { Connection, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
-import { getAssociatedTokenAddress, createTransferInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { config } from '../../lib/config';
-import { gridClientService } from '../../features/grid';
 import { gasTelemetry } from '../../lib/telemetry';
+import { gridClientService } from '../../features/grid';
 
 const SOLANA_EXPLORER_BASE = 'https://solscan.io/tx/';
 
-// RPC fallback endpoints - try primary, then fallback to Alchemy endpoints
-const RPC_ENDPOINTS = [
-  config.solanaRpcUrl || 'https://api.mainnet-beta.solana.com',
-  'https://solana-mainnet.g.alchemy.com/v2/80TPIXr5ixeNieu5Vronk8yeKyoGuYbF',
-  'https://solana-mainnet.g.alchemy.com/v2/dQUc3lgpoJrVS1Ku7xGeNvKua8iRy1n5',
-  'https://solana-mainnet.g.alchemy.com/v2/jFEGN5fSDKXsyGO-j-mkQZ8Z_vfc0GBM',
-];
-
-/**
- * Create Solana connection with fallback RPC endpoints
- * Tries each endpoint in order until one succeeds
- */
-async function createConnectionWithFallback(): Promise<Connection> {
-  let lastError: Error | null = null;
-  
-  for (const endpoint of RPC_ENDPOINTS) {
-    if (!endpoint || typeof endpoint !== 'string') {
-      console.warn(`⚠️ [GasAbstraction] Invalid RPC endpoint, skipping`);
-      continue;
-    }
-    
-    try {
-      const connection = new Connection(endpoint, 'confirmed');
-      // Test connection by getting slot (with timeout)
-      const slotPromise = connection.getSlot();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('RPC connection timeout')), 5000)
-      );
-      
-      await Promise.race([slotPromise, timeoutPromise]);
-      console.log(`✅ [GasAbstraction] Connected to RPC: ${endpoint.substring(0, 50)}...`);
-      return connection;
-    } catch (error) {
-      console.warn(`⚠️ [GasAbstraction] RPC endpoint failed: ${endpoint.substring(0, 50)}...`, error);
-      lastError = error instanceof Error ? error : new Error(String(error));
-      continue;
-    }
-  }
-  
-  // If all fail, throw error instead of returning invalid connection
-  const errorMessage = lastError 
-    ? `All RPC endpoints failed. Last error: ${lastError.message}`
-    : 'All RPC endpoints failed';
-  console.error(`❌ [GasAbstraction] ${errorMessage}`);
-  throw new Error(errorMessage);
-}
-
 export default function GasAbstractionScreen() {
   const router = useRouter();
-  const { gridAccount } = useGrid();
-  const {
+  
+  try {
+    console.log('🔍 [GasAbstraction] Screen rendering...');
+    const { gridAccount } = useGrid();
+    console.log('🔍 [GasAbstraction] Grid account:', gridAccount?.address ? 'Found' : 'Missing');
+    const {
     balance,
     balanceBaseUnits,
     balanceLoading,
@@ -245,184 +200,229 @@ export default function GasAbstractionScreen() {
         throw new Error('Asset mismatch. Expected USDC');
       }
 
-      // Create USDC transfer transaction with RPC fallback
-      const connection = await createConnectionWithFallback();
-      const blockhashResult = await connection.getLatestBlockhash('confirmed');
-      
-      if (!blockhashResult?.blockhash) {
-        throw new Error('Failed to fetch blockhash from Solana network');
-      }
-      
-      const { blockhash } = blockhashResult;
+      console.log('💰 [GasAbstraction] Creating USDC transfer for x402 payment', {
+        amount,
+        recipient: topupRequirements.payTo,
+        tokenMint: usdcMint,
+      });
 
-      // Validate addresses before creating PublicKey objects
-      if (!gridAccount.address || typeof gridAccount.address !== 'string') {
-        throw new Error('Invalid user wallet address');
-      }
-      
-      if (!topupRequirements.payTo || typeof topupRequirements.payTo !== 'string') {
-        throw new Error('Invalid payment address');
-      }
-
-      // Create PublicKey objects with error handling
-      let userPubkey: PublicKey;
-      let payToPubkey: PublicKey;
-      let usdcMintPubkey: PublicKey;
-      
-      try {
-        userPubkey = new PublicKey(gridAccount.address);
-        payToPubkey = new PublicKey(topupRequirements.payTo);
-        usdcMintPubkey = new PublicKey(usdcMint);
-      } catch (error) {
-        throw new Error(`Invalid address format: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-
-      // Get token accounts
-      // Note: getAssociatedTokenAddress returns a Promise<PublicKey>
-      let userTokenAccount: PublicKey;
-      let payToTokenAccount: PublicKey;
-      
-      try {
-        console.log('🔍 [GasAbstraction] Getting token accounts:', {
-          usdcMint: usdcMintPubkey.toBase58(),
-          userPubkey: userPubkey.toBase58(),
-          payToPubkey: payToPubkey.toBase58()
-        });
-        
-        // Get user's associated token account
-        // Note: Grid wallets are PDAs (off-curve), so we need allowOwnerOffCurve: true
-        try {
-          userTokenAccount = await getAssociatedTokenAddress(
-            usdcMintPubkey,
-            userPubkey,
-            true // allowOwnerOffCurve = true for Grid PDA wallets
-          );
-          console.log('✅ [GasAbstraction] User token account:', userTokenAccount.toBase58());
-        } catch (error) {
-          console.error('❌ [GasAbstraction] Error getting user token account:', error);
-          throw new Error(`Failed to get user token account: ${error instanceof Error ? (error.message || error.name || 'Unknown error') : String(error)}`);
-        }
-
-        // Get payTo's associated token account (with allowOwnerOffCurve for PDA)
-        try {
-          payToTokenAccount = await getAssociatedTokenAddress(
-            usdcMintPubkey,
-            payToPubkey,
-            true // allowOwnerOffCurve
-          );
-          console.log('✅ [GasAbstraction] PayTo token account:', payToTokenAccount.toBase58());
-        } catch (error) {
-          console.error('❌ [GasAbstraction] Error getting payTo token account:', error);
-          throw new Error(`Failed to get payment recipient token account: ${error instanceof Error ? (error.message || error.name || 'Unknown error') : String(error)}`);
-        }
-      } catch (error) {
-        // Re-throw if it's already our formatted error
-        if (error instanceof Error && error.message.includes('Failed to get')) {
-          throw error;
-        }
-        // Otherwise, format the error
-        console.error('❌ [GasAbstraction] Unexpected error getting token accounts:', error);
-        const errorDetails = error instanceof Error 
-          ? (error.message || error.name || 'Unknown error')
-          : String(error || 'Unknown error');
-        throw new Error(`Failed to get token accounts: ${errorDetails}`);
-      }
-
+      // Calculate amount in base units
       const amountBaseUnits = Math.floor(amount * 1_000_000);
       
-      if (isNaN(amountBaseUnits) || amountBaseUnits <= 0) {
-        throw new Error('Invalid amount for transfer');
+      // Per requirements 3.7-3.10: Create USDC transfer from Grid wallet to gateway
+      // Then sign with Grid (which triggers Privy approval)
+      console.log('📝 [GasAbstraction] Creating USDC transfer transaction from Grid wallet...');
+      
+      const { Connection, PublicKey, TransactionMessage, VersionedTransaction } = await import('@solana/web3.js');
+      const { getAssociatedTokenAddress, createTransferInstruction, TOKEN_PROGRAM_ID } = await import('@solana/spl-token');
+      
+      // RPC endpoints with fallbacks
+      // Alchemy URLs are loaded from environment variables (secrets)
+      const alchemyRpc1 = process.env.EXPO_PUBLIC_SOLANA_RPC_ALCHEMY_1;
+      const alchemyRpc2 = process.env.EXPO_PUBLIC_SOLANA_RPC_ALCHEMY_2;
+      const alchemyRpc3 = process.env.EXPO_PUBLIC_SOLANA_RPC_ALCHEMY_3;
+      
+      const rpcEndpoints = [
+        process.env.EXPO_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
+        // Only include Alchemy endpoints if API keys are provided
+        ...(alchemyRpc1 ? [alchemyRpc1] : []),
+        ...(alchemyRpc2 ? [alchemyRpc2] : []),
+        ...(alchemyRpc3 ? [alchemyRpc3] : []),
+        // Public fallback endpoint
+        'https://api.mainnet-beta.solana.com',
+      ].filter(Boolean); // Remove any undefined/null values
+      
+      // Try each RPC endpoint until one works
+      let connection: Connection | null = null;
+      let blockhash: string | null = null;
+      let lastError: Error | null = null;
+      
+      for (const endpoint of rpcEndpoints) {
+        try {
+          console.log(`🔗 [GasAbstraction] Trying RPC endpoint: ${endpoint.substring(0, 50)}...`);
+          const testConnection = new Connection(endpoint, 'confirmed');
+          
+          // Test with a quick call
+          const testBlockhash = await Promise.race([
+            testConnection.getLatestBlockhash('confirmed'),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('RPC timeout')), 5000))
+          ]) as { blockhash: string };
+          
+          connection = testConnection;
+          blockhash = testBlockhash.blockhash;
+          console.log(`✅ [GasAbstraction] Connected to RPC: ${endpoint.substring(0, 50)}...`);
+          break;
+        } catch (error) {
+          console.warn(`⚠️ [GasAbstraction] RPC endpoint failed: ${endpoint.substring(0, 50)}...`, error);
+          lastError = error instanceof Error ? error : new Error(String(error));
+          continue;
+        }
       }
-
-      // Create transfer instruction
-      let transferInstruction;
-      try {
-        transferInstruction = createTransferInstruction(
-          userTokenAccount,
-          payToTokenAccount,
-          userPubkey,
-          amountBaseUnits,
-          [],
-          TOKEN_PROGRAM_ID
-        );
-      } catch (error) {
-        throw new Error(`Failed to create transfer instruction: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      if (!connection || !blockhash) {
+        throw new Error(`All RPC endpoints failed. Last error: ${lastError?.message || 'Unknown'}`);
       }
-
-      // Create transaction message
-      let message;
-      try {
-        message = new TransactionMessage({
-          payerKey: userPubkey,
-          recentBlockhash: blockhash,
-          instructions: [transferInstruction],
-        }).compileToV0Message();
-      } catch (error) {
-        throw new Error(`Failed to create transaction message: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-
-      // Create versioned transaction
-      let transaction: VersionedTransaction;
-      try {
-        transaction = new VersionedTransaction(message);
-      } catch (error) {
-        throw new Error(`Failed to create transaction: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-
-      // Note: Grid SDK doesn't support sign-only operations.
-      // For top-up, we need to use a different approach.
-      // The transaction will be signed and submitted through the backend
-      // which handles the x402 payment submission.
-      //
-      // For now, we'll submit the unsigned transaction to the backend
-      // and let it handle signing via Grid and submission to x402 gateway.
-      // This is a simplified flow that works with Grid's API limitations.
+      const userPubkey = new PublicKey(gridAccount.address);
+      const payToPubkey = new PublicKey(topupRequirements.payTo);
+      const usdcMintPubkey = new PublicKey(usdcMint);
+      
+      // Get token accounts
+      const userTokenAccount = await getAssociatedTokenAddress(
+        usdcMintPubkey,
+        userPubkey,
+        true // allowOwnerOffCurve for Grid PDA
+      );
+      
+      const payToTokenAccount = await getAssociatedTokenAddress(
+        usdcMintPubkey,
+        payToPubkey,
+        true // allowOwnerOffCurve
+      );
+      
+      // Create transfer instruction (per requirement 3.7)
+      const transferInstruction = createTransferInstruction(
+        userTokenAccount,
+        payToTokenAccount,
+        userPubkey,
+        amountBaseUnits,
+        [],
+        TOKEN_PROGRAM_ID
+      );
+      
+      // Build transaction (per requirement 3.7)
+      const message = new TransactionMessage({
+        payerKey: userPubkey,
+        recentBlockhash: blockhash,
+        instructions: [transferInstruction],
+      }).compileToV0Message();
+      
+      const transaction = new VersionedTransaction(message);
+      const unsignedSerialized = Buffer.from(transaction.serialize()).toString('base64');
+      
+      console.log('✅ [GasAbstraction] Transaction created, requesting signature from Grid...');
       
       // Serialize unsigned transaction
-      const serializedTx = Buffer.from(transaction.serialize()).toString('base64');
-      const publicKey = userPubkey.toBase58();
-
-      // Submit transaction to backend for signing and x402 payment submission
-      // The backend will:
-      // 1. Sign the transaction using Grid
-      // 2. Construct x402 payment payload
-      // 3. Submit to x402 gateway
+      const unsignedTransaction = Buffer.from(transaction.serialize()).toString('base64');
+      
+      // Sign transaction via backend (per requirement 3.9)
+      // Backend will use Grid to sign but NOT submit (for x402 gateway)
+      const signUrl = generateAPIUrl('/api/grid/sign-transaction');
       const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
-      const url = generateAPIUrl('/api/gas-abstraction/topup');
       
-      // Get Grid session for backend signing
-      const gridSessionSecretsJson = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
-      if (!gridSessionSecretsJson) {
-        throw new Error('Grid session secrets not available');
+      // Get Grid session data
+      const sessionSecretsJson = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
+      const accountJson = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_ACCOUNT);
+      
+      if (!sessionSecretsJson || !accountJson) {
+        throw new Error('Grid session not found. Please reconnect your wallet.');
       }
-      const gridSessionSecrets = JSON.parse(gridSessionSecretsJson);
-      const gridSession = {
-        authentication: gridAccount!.authentication || gridAccount!,
-        address: gridAccount!.address
-      };
       
-      const response = await fetch(url, {
+      const sessionSecrets = JSON.parse(sessionSecretsJson);
+      const account = JSON.parse(accountJson);
+      
+      console.log('📤 [GasAbstraction] Sending transaction to backend for signing...');
+      
+      const signResponse = await fetch(signUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          transaction: serializedTx,
-          publicKey: publicKey,
-          amountBaseUnits: amountBaseUnits,
-          gridSessionSecrets,
-          gridSession,
+          transaction: unsignedTransaction,
+          sessionSecrets,
+          session: account.authentication,
+          address: gridAccount.address,
+        }),
+      });
+      
+      if (!signResponse.ok) {
+        const errorData = await signResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to sign transaction');
+      }
+      
+      const signResult = await signResponse.json();
+      
+      if (!signResult.success || !signResult.signedTransaction) {
+        throw new Error(signResult.error || 'Failed to get signed transaction from backend');
+      }
+      
+      const signedTransaction = signResult.signedTransaction;
+      console.log('✅ [GasAbstraction] Transaction signed by Grid');
+      
+      // Note: The transaction may have been submitted by Grid SDK (signAndSend)
+      // The x402 gateway can verify transactions that are already on-chain
+      // We'll wait a moment for the transaction to be confirmed before sending to gateway
+      console.log('⏳ [GasAbstraction] Waiting for transaction confirmation...');
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds for confirmation
+      
+      // Per requirement 3.11-3.12: Construct x402 payment payload
+      // The payment payload must match the gateway spec exactly
+      // Use the scheme from the requirements - gateway returns "exact" in accepts array
+      // We should match what the gateway expects
+      console.log('📦 [GasAbstraction] Constructing x402 payment payload...');
+      const scheme = topupRequirements.scheme || (topupRequirements.accepts && topupRequirements.accepts[0]?.scheme) || 'solana';
+      
+      const paymentPayload = {
+        x402Version: topupRequirements.x402Version,
+        scheme: scheme, // Use scheme from requirements (gateway returns "exact")
+        network: topupRequirements.network,
+        asset: topupRequirements.asset,
+        payload: {
+          transaction: signedTransaction, // Base64-encoded signed transaction
+          publicKey: gridAccount.address, // Base58 user public key
+        },
+      };
+      
+      // Base64-encode the payment payload (per requirement 3.12)
+      const paymentBase64 = Buffer.from(JSON.stringify(paymentPayload)).toString('base64');
+      console.log('✅ [GasAbstraction] x402 Payment payload constructed and encoded');
+      
+      // Submit to backend (per requirement 3.13)
+      const topupUrl = generateAPIUrl('/api/gas-abstraction/topup');
+      
+      console.log('📤 [GasAbstraction] Submitting payment to gateway...');
+      const response = await fetch(topupUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          payment: paymentBase64, // Base64-encoded x402 payment payload (per requirement 3.12-3.13)
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const error = new Error(errorData.error || 'Top-up failed');
+        console.error('❌ [GasAbstraction] Top-up failed:', {
+          status: response.status,
+          error: errorData.error,
+          message: errorData.message,
+          data: errorData.data,
+        });
+        
+        const error = new Error(errorData.error || errorData.message || 'Top-up failed');
         (error as any).status = response.status; // Attach status for telemetry
+        
+        // Provide more specific error messages
         if (response.status === 402) {
-          throw new Error('Payment missing or invalid. Please retry.');
+          // 402 Payment Required - gateway couldn't verify the payment
+          if (errorData.data && (errorData.data.required || errorData.data.available)) {
+            // This is actually an insufficient balance error (wrong status code from gateway)
+            throw new Error(`Insufficient balance. Available: ${(errorData.data.available || 0) / 1_000_000} USDC, Required: ${(errorData.data.required || 0) / 1_000_000} USDC`);
+          } else {
+            // Payment verification failed
+            throw new Error('Payment verification failed. The gateway could not verify your USDC transfer. Please ensure the transaction was confirmed on-chain and try again.');
+          }
+        } else if (response.status === 400) {
+          // 400 Bad Request - validation error
+          throw new Error(errorData.message || errorData.error || 'Invalid payment. Please check the transaction and try again.');
+        } else if (response.status === 503) {
+          // 503 Service Unavailable
+          throw new Error('Gas gateway is temporarily unavailable. Please try again in a few moments.');
         }
+        
         throw error;
       }
 
@@ -475,6 +475,34 @@ export default function GasAbstractionScreen() {
   };
 
   const suggestedAmounts = [0.5, 1, 5, 10];
+
+  console.log('🔍 [GasAbstraction] Render state:', {
+    hasGridAccount: !!gridAccount?.address,
+    balance,
+    balanceLoading,
+    balanceError,
+  });
+
+  // Early return if Grid account is not available
+  if (!gridAccount?.address) {
+    console.warn('⚠️ [GasAbstraction] No Grid account, showing error message');
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FBAA69" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Gas Credits</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>
+            Please connect your Grid wallet to use gas credits.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -711,7 +739,7 @@ export default function GasAbstractionScreen() {
                       size="small"
                       onPress={() => setTopupAmount(amount.toFixed(2))}
                     >
-                      {amount} USDC
+                      {`${amount} USDC`}
                     </PressableButton>
                   ))}
                 </View>
@@ -758,6 +786,25 @@ export default function GasAbstractionScreen() {
       </Modal>
     </SafeAreaView>
   );
+  } catch (error) {
+    console.error('❌ [GasAbstraction] Rendering error:', error);
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FBAA69" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Gas Credits</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>
+            Error loading gas credits screen: {error instanceof Error ? error.message : 'Unknown error'}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
