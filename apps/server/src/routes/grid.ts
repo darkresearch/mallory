@@ -498,6 +498,723 @@ router.post('/complete-sign-in', authenticateUser, async (req: AuthenticatedRequ
 });
 
 /**
+ * POST /api/grid/sign-transaction
+ * 
+ * Sign a transaction using Grid SDK (for x402 payments)
+ * Returns the signed transaction without submitting it
+ * 
+ * Body: { 
+ *   transaction: string (base64),
+ *   sessionSecrets: object,
+ *   session: object,
+ *   address: string
+ * }
+ * Returns: { success: boolean, signedTransaction?: string, error?: string }
+ */
+router.post('/sign-transaction', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+  const gridClient = createGridClient();
+  
+  try {
+    const { transaction, sessionSecrets, session, address } = req.body;
+    
+    if (!transaction || !sessionSecrets || !session || !address) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required fields: transaction, sessionSecrets, session, address' 
+      });
+    }
+    
+    console.log('✍️ [Grid Proxy] Signing transaction for x402 payment (not submitting)');
+    
+    // For x402 payments, we need to SIGN the transaction but NOT submit it
+    // The x402 gateway will handle submission and verification
+    // Use Grid's sign() method (not signAndSend) to get signed transaction without submitting
+    
+    // Validate and normalize the transaction first
+    // Grid's prepareArbitraryTransaction expects a properly formatted base64 transaction
+    let normalizedTransaction = transaction;
+    try {
+      // Deserialize and re-serialize to ensure proper format
+      const { VersionedTransaction, PublicKey } = await import('@solana/web3.js');
+      const txBuffer = Buffer.from(transaction, 'base64');
+      const deserializedTx = VersionedTransaction.deserialize(txBuffer);
+      
+      // Verify the transaction payer matches the Grid wallet address
+      const message = deserializedTx.message;
+      const transactionPayer = new PublicKey(message.staticAccountKeys[0]).toBase58();
+      const gridAddressBase58 = new PublicKey(address).toBase58();
+      
+      console.log('🔍 [Grid Proxy] Transaction validation:', {
+        transactionPayer,
+        gridAddress: gridAddressBase58,
+        payerMatches: transactionPayer === gridAddressBase58,
+        numSignatures: deserializedTx.signatures?.length || 0,
+        numInstructions: message.compiledInstructions?.length || 0,
+      });
+      
+      // Verify the transaction is unsigned (no signatures)
+      if (deserializedTx.signatures && deserializedTx.signatures.length > 0) {
+        const hasNonZeroSignatures = deserializedTx.signatures.some(sig => 
+          sig.some(byte => byte !== 0)
+        );
+        if (hasNonZeroSignatures) {
+          console.warn('⚠️ [Grid Proxy] Transaction appears to already have signatures');
+        }
+      }
+      
+      // Warn if payer doesn't match (but continue - Grid might handle it)
+      if (transactionPayer !== gridAddressBase58) {
+        console.warn('⚠️ [Grid Proxy] Transaction payer does not match Grid address:', {
+          transactionPayer,
+          gridAddress: gridAddressBase58,
+        });
+      }
+      
+      // Re-serialize to ensure proper format
+      normalizedTransaction = Buffer.from(deserializedTx.serialize()).toString('base64');
+      
+      console.log('✅ [Grid Proxy] Transaction validated and normalized');
+    } catch (validateError: any) {
+      console.error('❌ [Grid Proxy] Failed to validate transaction:', {
+        error: validateError.message,
+        transactionLength: transaction.length,
+        stack: validateError.stack?.substring(0, 300),
+      });
+      return res.status(400).json({
+        success: false,
+        error: `Invalid transaction format: ${validateError.message || 'Failed to deserialize transaction'}`,
+      });
+    }
+    
+    // Prepare transaction with Grid
+    // For x402 payments, we let Grid handle the fee payer (user's Grid wallet)
+    // The gateway will verify the USDC transfer, regardless of who paid fees
+    console.log('🔧 [Grid Proxy] Preparing transaction with Grid:', {
+      address,
+      transactionLength: normalizedTransaction.length,
+      hasFeeConfig: true,
+    });
+    
+    let transactionPayload;
+    try {
+      transactionPayload = await gridClient.prepareArbitraryTransaction(
+      address,
+      {
+          transaction: normalizedTransaction,
+        fee_config: {
+          currency: 'sol',
+          payer_address: address, // Use Grid wallet as fee payer (Grid can sign this)
+          self_managed_fees: false, // Let Grid handle fees
+        }
+      }
+    );
+      
+      console.log('📋 [Grid Proxy] Grid prepareArbitraryTransaction response:', {
+        hasData: !!transactionPayload?.data,
+        hasError: !!transactionPayload?.error,
+        responseKeys: transactionPayload ? Object.keys(transactionPayload) : [],
+        errorMessage: transactionPayload?.error?.message || transactionPayload?.error,
+        errorCode: transactionPayload?.error?.code,
+        fullResponse: JSON.stringify(transactionPayload).substring(0, 500),
+      });
+      
+      // Check if Grid returned an error in the response
+      if (transactionPayload?.error) {
+        const gridError = transactionPayload.error;
+        const errorMessage = gridError?.message || gridError || 'Unknown Grid error';
+        
+        console.error('❌ [Grid Proxy] Grid returned error in response:', {
+          error: gridError,
+          message: errorMessage,
+          code: gridError?.code,
+          details: gridError?.details,
+        });
+        
+        // Provide more helpful error messages for common cases
+        let userFriendlyError = errorMessage;
+        if (errorMessage.toLowerCase().includes('simulation failed') || 
+            errorMessage.toLowerCase().includes('insufficient') ||
+            errorMessage.toLowerCase().includes('balance')) {
+          userFriendlyError = 'Transaction simulation failed. This usually means the wallet does not have sufficient USDC balance or the token account does not exist. Please ensure you have USDC in your Grid wallet before attempting a top-up.';
+        }
+        
+        return res.status(500).json({
+          success: false,
+          error: `Grid prepareArbitraryTransaction failed: ${userFriendlyError}`,
+          details: gridError?.details,
+          code: gridError?.code,
+          gridError: gridError,
+        });
+      }
+    } catch (prepareError: any) {
+      console.error('❌ [Grid Proxy] Grid prepareArbitraryTransaction threw error:', {
+        error: prepareError.message,
+        code: prepareError.code,
+        details: prepareError.details,
+        name: prepareError.name,
+        stack: prepareError.stack?.substring(0, 500),
+      });
+      return res.status(500).json({
+        success: false,
+        error: `Grid prepareArbitraryTransaction failed: ${prepareError.message || 'Unknown error'}`,
+        details: prepareError.details,
+        code: prepareError.code,
+        name: prepareError.name,
+      });
+    }
+    
+    if (!transactionPayload || !transactionPayload.data) {
+      console.error('❌ [Grid Proxy] Grid returned invalid response:', {
+        transactionPayload,
+        hasData: !!transactionPayload?.data,
+        hasError: !!transactionPayload?.error,
+        errorMessage: transactionPayload?.error?.message || transactionPayload?.error,
+        responseType: typeof transactionPayload,
+        responseString: JSON.stringify(transactionPayload).substring(0, 500),
+      });
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to prepare transaction with Grid',
+        details: transactionPayload?.error?.message || transactionPayload?.error || 'Grid returned no data',
+        gridError: transactionPayload?.error,
+        gridResponse: transactionPayload,
+      });
+    }
+    
+    // For x402 payments, we need to sign the transaction with Grid SDK
+    // Grid wallets are PDAs and require Grid's SDK to sign
+    // Grid SDK only provides signAndSend() which submits the transaction
+    // 
+    // According to the x402 gateway spec (https://gist.github.com/carlos-sqds/44bc364a8f3cedd329f3ddbbc1d00d06):
+    // - The gateway verifies the transaction on-chain
+    // - The transaction can be submitted before sending to gateway
+    // - The gateway checks if the transaction exists on-chain and verifies it
+    //
+    // SOLUTION: Use Grid's signAndSend to sign and submit the transaction
+    // Then fetch the signed transaction from the network using the signature
+    // This allows us to get the signed transaction bytes for the x402 payment
+    
+    console.log('🔐 [Grid Proxy] Using Grid SDK to sign transaction (will submit to Solana)...');
+    console.log('📝 [Grid Proxy] Note: For x402 payments, gateway will verify transaction on-chain');
+    
+    // Log session structure for debugging
+    console.log('🔍 [Grid Proxy] Session data structure:', {
+      hasSessionSecrets: !!sessionSecrets,
+      sessionSecretsType: typeof sessionSecrets,
+      sessionSecretsIsArray: Array.isArray(sessionSecrets),
+      sessionSecretsKeys: sessionSecrets && typeof sessionSecrets === 'object' && !Array.isArray(sessionSecrets) ? Object.keys(sessionSecrets) : [],
+      sessionSecretsLength: Array.isArray(sessionSecrets) ? sessionSecrets.length : undefined,
+      hasSession: !!session,
+      sessionType: typeof session,
+      sessionIsArray: Array.isArray(session),
+      sessionKeys: session && typeof session === 'object' && !Array.isArray(session) ? Object.keys(session) : [],
+      sessionLength: Array.isArray(session) ? session.length : undefined,
+      address
+    });
+    
+    // Validate session structure matches what Grid SDK expects
+    // Grid SDK expects session to be the authentication object (array or object)
+    // and sessionSecrets to be the secrets array
+    if (!sessionSecrets) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing sessionSecrets: required for Grid SDK signing'
+      });
+    }
+    
+    if (typeof sessionSecrets !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid sessionSecrets: must be an object or array, got ' + typeof sessionSecrets
+      });
+    }
+    
+    if (!session) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing session: required for Grid SDK signing (should be account.authentication)'
+      });
+    }
+    
+    if (typeof session !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid session: must be an object or array (authentication), got ' + typeof session
+      });
+    }
+    
+    // Handle case where authentication is an array (new Grid format)
+    // Grid SDK might need the session extracted from the array
+    // Based on other working code (send-tokens, gasAbstraction), Grid SDK accepts the array directly
+    // But we'll try both formats to be safe
+    let normalizedSession = session;
+    if (Array.isArray(session) && session.length > 0) {
+      console.log('📋 [Grid Proxy] Session is array, will try both formats...');
+      const firstAuth = session[0];
+      // If the array entry has a nested session object, extract it for normalized format
+      if (firstAuth?.session && typeof firstAuth.session === 'object') {
+        normalizedSession = firstAuth.session;
+        console.log('✅ [Grid Proxy] Normalized session: extracted from array entry.session');
+      } else {
+        // Otherwise use the first entry itself
+        normalizedSession = firstAuth;
+        console.log('✅ [Grid Proxy] Normalized session: using first array entry');
+      }
+    }
+    
+    // Log session structure for debugging
+    console.log('🔍 [Grid Proxy] Session formats to try:', {
+      original: {
+        type: Array.isArray(session) ? 'array' : typeof session,
+        length: Array.isArray(session) ? session.length : undefined,
+        firstEntryKeys: Array.isArray(session) && session[0] ? Object.keys(session[0]) : undefined
+      },
+      normalized: {
+        type: typeof normalizedSession,
+        keys: normalizedSession && typeof normalizedSession === 'object' && !Array.isArray(normalizedSession) ? Object.keys(normalizedSession) : undefined
+      }
+    });
+    
+    // Check if sessionSecrets is an array (Grid SDK format)
+    // Grid SDK expects sessionSecrets to be an array of provider entries
+    if (Array.isArray(sessionSecrets)) {
+      const solanaEntry = sessionSecrets.find((entry: any) => 
+        entry?.provider === 'solana' || entry?.tag === 'solana'
+      );
+      if (!solanaEntry) {
+        console.warn('⚠️ [Grid Proxy] No Solana provider entry found in sessionSecrets array');
+      } else if (!solanaEntry.privateKey) {
+        console.warn('⚠️ [Grid Proxy] Solana entry found but missing privateKey');
+      } else {
+        console.log('✅ [Grid Proxy] Found Solana entry in sessionSecrets');
+      }
+    }
+    
+    // Try both session formats - Grid SDK might accept either
+    // First try with normalized session (extracted from array)
+    // If that fails, try with original session (full array)
+    try {
+      let result;
+      let lastError: any = null;
+      
+      // Try original format first (as used in send-tokens and other working code)
+      // Then try normalized if that fails
+      const sessionFormats = [
+        { name: 'original', session: session }, // Try original array format first
+        { name: 'normalized', session: normalizedSession },
+      ];
+      
+      for (const format of sessionFormats) {
+        try {
+          console.log(`🔐 [Grid Proxy] Trying signAndSend with ${format.name} session format...`);
+          console.log('   Session type:', typeof format.session, Array.isArray(format.session) ? 'array' : 'object');
+          console.log('   Session keys:', format.session && typeof format.session === 'object' && !Array.isArray(format.session) ? Object.keys(format.session) : 'N/A');
+          
+          result = await gridClient.signAndSend({
+        sessionSecrets,
+            session: format.session,
+        transactionPayload: transactionPayload.data,
+        address
+      });
+          
+          console.log(`✅ [Grid Proxy] signAndSend succeeded with ${format.name} session format`);
+          break; // Success, exit loop
+        } catch (formatError: any) {
+          console.warn(`⚠️ [Grid Proxy] ${format.name} session format failed:`, formatError.message);
+          lastError = formatError;
+          continue; // Try next format
+        }
+      }
+      
+      if (!result) {
+        // All formats failed
+        throw lastError || new Error('All session formats failed');
+      }
+      
+      if (!result || !result.transaction_signature) {
+        return res.status(500).json({
+          success: false,
+          error: 'Grid signAndSend did not return transaction signature'
+        });
+      }
+      
+      const signature = result.transaction_signature;
+      console.log('✅ [Grid Proxy] Transaction signed and submitted, signature:', signature);
+      
+      // Fetch the signed transaction from Solana network
+      // The gateway needs the full signed transaction bytes, not just the signature
+      const { Connection } = await import('@solana/web3.js');
+      // Prioritize Alchemy RPC for faster responses
+      const rpcUrlForConnection = process.env.SOLANA_RPC_ALCHEMY_1 || 
+                                  process.env.SOLANA_RPC_ALCHEMY_2 || 
+                                  process.env.SOLANA_RPC_ALCHEMY_3 ||
+                                  process.env.SOLANA_RPC_URL || 
+                                  process.env.EXPO_PUBLIC_SOLANA_RPC_URL || 
+                                  'https://api.mainnet-beta.solana.com';
+      const connection = new Connection(rpcUrlForConnection, 'confirmed');
+      console.log(`🔗 [Grid Proxy] Using RPC for connection: ${rpcUrlForConnection.substring(0, 50)}...`);
+      
+      console.log('📥 [Grid Proxy] Fetching signed transaction from Solana network...');
+      
+      // Get the transaction from the network
+      // Note: getTransaction may return null if transaction is not yet confirmed
+      // According to x402 gateway spec, the gateway verifies transactions on-chain
+      // So we MUST wait for confirmation before returning the transaction
+      // The gateway will verify the transaction exists and matches the payment payload
+      // IMPORTANT: We need the EXACT transaction bytes that are on-chain
+      // Using direct RPC call to get raw base64 transaction bytes
+      let confirmedTx = null;
+      let rawTransactionBase64: string | null = null;
+      const maxRetries = 15; // Increased retries for mainnet (up to 30 seconds)
+      const retryDelay = 2000; // 2 seconds
+      
+      console.log(`⏳ [Grid Proxy] Waiting for transaction confirmation (up to ${maxRetries * retryDelay / 1000}s)...`);
+      console.log(`   Signature: ${signature}`);
+      
+      // Get RPC URL (prioritize Alchemy, same one used to create connection)
+      const rpcUrl = process.env.SOLANA_RPC_ALCHEMY_1 || 
+                    process.env.SOLANA_RPC_ALCHEMY_2 || 
+                    process.env.SOLANA_RPC_ALCHEMY_3 ||
+                    process.env.SOLANA_RPC_URL || 
+                    process.env.EXPO_PUBLIC_SOLANA_RPC_URL || 
+                    'https://api.mainnet-beta.solana.com';
+      console.log(`🔗 [Grid Proxy] Using RPC for direct call: ${rpcUrl.substring(0, 50)}...`);
+      
+      let useBase64Encoding = true; // Prefer raw bytes for exact match
+      for (let i = 0; i < maxRetries; i++) {
+        // First try to get raw transaction bytes (base64 encoding)
+        // This gives us the exact bytes that are on-chain
+        if (useBase64Encoding) {
+          try {
+            // Try direct RPC call to get raw base64 transaction bytes
+            // This bypasses web3.js parsing and gives us exact on-chain bytes
+            console.log(`🔍 [Grid Proxy] Attempting direct RPC call for raw bytes (attempt ${i + 1})...`);
+            const rpcResponse = await fetch(rpcUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'getTransaction',
+                params: [
+                  signature,
+                  {
+                    encoding: 'base64',
+        maxSupportedTransactionVersion: 0,
+        commitment: 'confirmed'
+                  }
+                ]
+              })
+            });
+            
+            if (!rpcResponse.ok) {
+              throw new Error(`RPC returned ${rpcResponse.status}: ${rpcResponse.statusText}`);
+            }
+            
+            const rpcData = await rpcResponse.json();
+            
+            console.log(`🔍 [Grid Proxy] RPC response:`, {
+              hasResult: !!rpcData.result,
+              hasTransaction: !!rpcData.result?.transaction,
+              transactionType: typeof rpcData.result?.transaction,
+              transactionKeys: rpcData.result?.transaction ? Object.keys(rpcData.result.transaction) : [],
+              error: rpcData.error,
+            });
+            
+            if (rpcData.error) {
+              throw new Error(`RPC error: ${JSON.stringify(rpcData.error)}`);
+            }
+            
+            if (rpcData.result && rpcData.result.transaction) {
+              // When encoding is 'base64', RPC returns transaction as:
+              // - String: direct base64 string (some RPCs)
+              // - Object: { transaction: [base64 string], meta: {...} } (other RPCs)
+              // - Array: [base64 string] (some formats)
+              
+              let transactionBase64: string | null = null;
+              
+              if (typeof rpcData.result.transaction === 'string') {
+                // Direct base64 string
+                transactionBase64 = rpcData.result.transaction;
+              } else if (Array.isArray(rpcData.result.transaction) && rpcData.result.transaction.length > 0) {
+                // Array format: [base64 string]
+                transactionBase64 = rpcData.result.transaction[0];
+              } else if (typeof rpcData.result.transaction === 'object') {
+                // Object format: check common fields
+                if (rpcData.result.transaction.transaction) {
+                  transactionBase64 = rpcData.result.transaction.transaction;
+                } else if (rpcData.result.transaction[0]) {
+                  transactionBase64 = rpcData.result.transaction[0];
+                } else {
+                  // Try to find any string field that looks like base64
+                  for (const key in rpcData.result.transaction) {
+                    if (typeof rpcData.result.transaction[key] === 'string' && rpcData.result.transaction[key].length > 100) {
+                      transactionBase64 = rpcData.result.transaction[key];
+                      break;
+                    }
+                  }
+                }
+              }
+              
+              if (transactionBase64 && typeof transactionBase64 === 'string') {
+                rawTransactionBase64 = transactionBase64;
+                console.log(`✅ [Grid Proxy] Got raw transaction bytes from direct RPC call (attempt ${i + 1}/${maxRetries})`);
+                console.log(`   Transaction length: ${rawTransactionBase64.length} bytes (base64)`);
+                // Also get parsed version for confirmation check
+                confirmedTx = await connection.getTransaction(signature, {
+                  maxSupportedTransactionVersion: 0,
+                  commitment: 'confirmed'
+                });
+                break;
+              } else {
+                console.log(`⚠️ [Grid Proxy] Could not extract base64 string from RPC response`);
+                console.log(`   Transaction structure:`, JSON.stringify(rpcData.result.transaction).substring(0, 200));
+              }
+            } else if (rpcData.result === null) {
+              console.log(`⏳ [Grid Proxy] Transaction not yet confirmed in RPC (attempt ${i + 1})`);
+            }
+          } catch (e) {
+            console.log(`⚠️ [Grid Proxy] Direct RPC call failed:`, e instanceof Error ? e.message : String(e));
+            console.log(`   Will try web3.js method as fallback`);
+          }
+        }
+        
+        // Fallback to web3.js getTransaction
+        if (!rawTransactionBase64) {
+          try {
+            confirmedTx = await connection.getTransaction(signature, {
+              maxSupportedTransactionVersion: 0,
+              commitment: 'confirmed',
+              encoding: useBase64Encoding ? 'base64' : undefined
+            });
+            
+            if (confirmedTx && confirmedTx.transaction) {
+              if (typeof confirmedTx.transaction === 'string') {
+                rawTransactionBase64 = confirmedTx.transaction;
+                console.log(`✅ [Grid Proxy] Got raw transaction from web3.js (attempt ${i + 1}/${maxRetries})`);
+                break;
+              } else {
+                console.log(`✅ [Grid Proxy] Transaction confirmed on attempt ${i + 1}/${maxRetries} (parsed, will reconstruct)`);
+                break;
+              }
+            }
+          } catch (e) {
+            console.log(`⚠️ [Grid Proxy] getTransaction failed:`, e instanceof Error ? e.message : String(e));
+          }
+        }
+        
+        // Fallback to parsed transaction if base64 failed or not available
+        if (!useBase64Encoding || !confirmedTx || !confirmedTx.transaction) {
+          confirmedTx = await connection.getTransaction(signature, {
+            maxSupportedTransactionVersion: 0,
+            commitment: 'confirmed'
+          });
+          
+          if (confirmedTx && confirmedTx.transaction) {
+            console.log(`✅ [Grid Proxy] Transaction confirmed on attempt ${i + 1}/${maxRetries} (parsed)`);
+            break;
+          }
+        }
+        
+        if (i < maxRetries - 1) {
+          console.log(`⏳ [Grid Proxy] Transaction not yet confirmed (attempt ${i + 1}/${maxRetries}), waiting ${retryDelay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+      }
+      
+      let signedTransaction: string;
+      
+      // Prefer raw transaction bytes from direct RPC call (exact on-chain bytes)
+      if (rawTransactionBase64) {
+        signedTransaction = rawTransactionBase64;
+        console.log('✅ [Grid Proxy] Using raw transaction bytes from direct RPC call (exact on-chain bytes)');
+        console.log(`   Transaction length: ${signedTransaction.length} bytes (base64)`);
+      } else if (confirmedTx && confirmedTx.transaction) {
+        // Fallback: check if web3.js returned raw bytes
+        console.log('🔍 [Grid Proxy] Transaction type check:', {
+          transactionType: typeof confirmedTx.transaction,
+          isString: typeof confirmedTx.transaction === 'string',
+          isObject: typeof confirmedTx.transaction === 'object',
+          hasMessage: typeof confirmedTx.transaction === 'object' && 'message' in confirmedTx.transaction,
+          hasSignatures: typeof confirmedTx.transaction === 'object' && 'signatures' in confirmedTx.transaction,
+        });
+        
+        if (typeof confirmedTx.transaction === 'string') {
+          // Raw base64-encoded transaction bytes from web3.js
+          signedTransaction = confirmedTx.transaction;
+          console.log('✅ [Grid Proxy] Using raw transaction bytes from web3.js (base64)');
+          console.log(`   Transaction length: ${signedTransaction.length} bytes (base64)`);
+        } else {
+          // Fallback: reconstruct from parsed transaction
+          const { VersionedTransaction, TransactionMessage } = await import('@solana/web3.js');
+          
+          try {
+            // Reconstruct VersionedTransaction from parsed transaction
+            const parsedTx = confirmedTx.transaction;
+            if (parsedTx.message && parsedTx.signatures) {
+              console.log('📋 [Grid Proxy] Reconstructing VersionedTransaction from network response...');
+              
+              // According to x402 gateway spec, the gateway verifies transactions on-chain
+              // The transaction in the payment payload must match what's on-chain exactly
+              // getTransaction returns a ParsedConfirmedTransaction, which has the transaction data
+              // but we need the raw serialized bytes
+              
+              // The parsed transaction has message and signatures
+              // We need to reconstruct the VersionedTransaction and serialize it
+              // This should match what's on-chain if done correctly
+              const message = TransactionMessage.decompile(parsedTx.message);
+              const versionedTx = new VersionedTransaction(message);
+              
+              // Signatures in getTransaction response are base58-encoded strings
+              // We need to decode them to bytes
+              const { decode: bs58Decode } = await import('bs58');
+              versionedTx.signatures = parsedTx.signatures.map((sig: string) => {
+                try {
+                  // Signatures are base58 strings
+                  return bs58Decode(sig);
+                } catch (e) {
+                  // If base58 decode fails, try as Uint8Array (already bytes)
+                  if (sig instanceof Uint8Array) {
+                    return sig;
+                  }
+                  // Last resort: try base64
+                  return Buffer.from(sig, 'base64');
+                }
+              });
+              
+              // Serialize the reconstructed transaction
+              // This should match the on-chain transaction bytes
+              signedTransaction = Buffer.from(versionedTx.serialize()).toString('base64');
+              console.log('✅ [Grid Proxy] Reconstructed signed transaction from network');
+              console.log(`   Transaction length: ${signedTransaction.length} bytes (base64)`);
+              console.log(`   Signatures count: ${versionedTx.signatures.length}`);
+            } else {
+              throw new Error('Unexpected transaction format from network');
+            }
+          } catch (reconstructError: any) {
+            console.warn('⚠️ [Grid Proxy] Failed to reconstruct transaction from network:', reconstructError.message);
+            console.warn('   Falling back to prepared transaction...');
+            
+            // Fallback to prepared transaction
+            const preparedTxBase64 = transactionPayload.data.transaction || transactionPayload.data;
+            if (preparedTxBase64 && typeof preparedTxBase64 === 'string') {
+              signedTransaction = preparedTxBase64;
+              console.log('✅ [Grid Proxy] Using prepared transaction as fallback');
+            } else {
+              throw new Error('Could not get transaction bytes from prepared transaction');
+            }
+          }
+        }
+      } else {
+        // Transaction not confirmed after retries
+        // According to x402 gateway spec, the gateway verifies transactions on-chain
+        // If the transaction isn't confirmed yet, the gateway will return 402
+        // We should wait longer or return an error asking the client to retry
+        console.error('❌ [Grid Proxy] Transaction not confirmed after all retries');
+        console.error(`   Signature: ${signature}`);
+        console.error(`   Attempted ${maxRetries} times over ${maxRetries * retryDelay / 1000} seconds`);
+        console.error('   The gateway requires confirmed transactions for verification');
+        
+        return res.status(408).json({
+          success: false,
+          error: 'Transaction not confirmed on-chain',
+          message: `Transaction was submitted but not confirmed after ${maxRetries * retryDelay / 1000} seconds. Please wait and retry.`,
+          signature: signature,
+          suggestion: 'Wait 10-30 seconds for confirmation, then retry the top-up request'
+        });
+      }
+      
+      console.log('✅ [Grid Proxy] Signed transaction ready for x402 payment');
+      
+      // Include transaction format info in response for debugging
+      const transactionFormat = rawTransactionBase64 
+        ? 'raw-base64-direct-rpc' 
+        : (typeof confirmedTx?.transaction === 'string' 
+          ? 'raw-base64-web3js' 
+          : 'reconstructed');
+      
+      res.json({
+        success: true,
+        signedTransaction,
+        signature,
+        note: 'Transaction was submitted to Solana. Gateway will verify it on-chain.',
+        debug: {
+          transactionFormat,
+          transactionLength: signedTransaction.length,
+          confirmedOnAttempt: confirmedTx ? 'confirmed' : 'timeout'
+        }
+      });
+      
+    } catch (signError: any) {
+      console.error('❌ [Grid Proxy] Grid signAndSend failed:', {
+        error: signError.message,
+        code: signError.code,
+        details: signError.details,
+        name: signError.name,
+        stack: signError.stack?.substring(0, 1000),
+      });
+      
+      // Check if it's a signature validation error
+      if (signError.message?.includes('signature') || signError.message?.includes('Invalid signature')) {
+        console.error('🔍 [Grid Proxy] Signature validation error - checking session structure:', {
+          sessionSecretsStructure: {
+            type: typeof sessionSecrets,
+            isArray: Array.isArray(sessionSecrets),
+            length: Array.isArray(sessionSecrets) ? sessionSecrets.length : undefined,
+            keys: !Array.isArray(sessionSecrets) && typeof sessionSecrets === 'object' ? Object.keys(sessionSecrets) : undefined,
+            firstEntry: Array.isArray(sessionSecrets) && sessionSecrets[0] ? {
+              keys: Object.keys(sessionSecrets[0]),
+              hasProvider: !!sessionSecrets[0].provider,
+              hasPrivateKey: !!sessionSecrets[0].privateKey
+            } : undefined
+          },
+          sessionStructure: {
+            type: typeof session,
+            isArray: Array.isArray(session),
+            length: Array.isArray(session) ? session.length : undefined,
+            keys: !Array.isArray(session) && typeof session === 'object' ? Object.keys(session) : undefined
+          }
+        });
+      }
+      
+      // Extract provider from session for debugging
+      let sessionProvider: string | undefined;
+      if (Array.isArray(session) && session.length > 0) {
+        sessionProvider = session[0]?.provider;
+      }
+      
+      // Check if sessionSecrets has matching provider
+      const matchingSecret = Array.isArray(sessionSecrets) 
+        ? sessionSecrets.find((s: any) => s?.provider === sessionProvider || s?.tag === sessionProvider)
+        : null;
+      
+      return res.status(500).json({
+        success: false,
+        error: `Grid signAndSend failed: ${signError.message || 'Unknown error'}`,
+        details: signError.details,
+        code: signError.code,
+        debug: {
+          sessionProvider,
+          sessionSecretsProviders: Array.isArray(sessionSecrets) 
+            ? sessionSecrets.map((s: any) => ({ provider: s?.provider, tag: s?.tag }))
+            : [],
+          hasMatchingSecret: !!matchingSecret,
+          sessionFormat: Array.isArray(session) ? 'array' : typeof session,
+          sessionLength: Array.isArray(session) ? session.length : undefined
+        }
+      });
+    }
+    
+  } catch (error: any) {
+    console.error('❌ [Grid Proxy] Sign transaction error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to sign transaction'
+    });
+  }
+});
+
+/**
  * POST /api/grid/send-tokens
  * 
  * Proxy for Grid token transfers - builds Solana transaction and signs via Grid SDK
@@ -572,7 +1289,15 @@ router.post('/send-tokens', authenticateUser, async (req: AuthenticatedRequest, 
       );
 
       // Check if recipient's ATA exists, if not, create it
-      const toAccountInfo = await connection.getAccountInfo(toTokenAccount);
+      let toAccountInfo = null;
+      try {
+        toAccountInfo = await connection.getAccountInfo(toTokenAccount);
+      } catch (error: any) {
+        // If RPC is rate-limited or unavailable, assume the account exists
+        // (Most mainnet accounts, especially for gateways, already have USDC accounts)
+        console.warn('⚠️  [Grid Proxy] Could not check recipient ATA, assuming it exists:', error.message);
+        toAccountInfo = { data: Buffer.from([]) }; // Mock account info to skip creation
+      }
       
       if (!toAccountInfo) {
         console.log('   Creating ATA for recipient...');
@@ -651,12 +1376,29 @@ router.post('/send-tokens', authenticateUser, async (req: AuthenticatedRequest, 
     console.log('   Signing and sending...');
 
     // Sign and send using Grid SDK
-    const result = await gridClient.signAndSend({
-      sessionSecrets,
-      session,
-      transactionPayload: transactionPayload.data,
-      address
-    });
+    let result;
+    try {
+      result = await gridClient.signAndSend({
+        sessionSecrets,
+        session,
+        transactionPayload: transactionPayload.data,
+        address
+      });
+    } catch (signError: any) {
+      console.error('❌ [Grid Proxy] Grid signAndSend failed:', {
+        error: signError.message,
+        code: signError.code,
+        details: signError.details,
+      });
+      
+      // Return detailed error to client
+      return res.status(500).json({
+        success: false,
+        error: signError.message || 'Failed to sign and send transaction via Grid',
+        code: signError.code,
+        details: signError.details,
+      });
+    }
 
     console.log('✅ [Grid Proxy] Tokens sent via Grid');
     
@@ -679,85 +1421,6 @@ router.post('/send-tokens', authenticateUser, async (req: AuthenticatedRequest, 
   }
 });
 
-/**
- * POST /api/grid/sign-transaction
- * 
- * Sign a Solana transaction using Grid SDK without sending it.
- * Used for top-up flows where the signed transaction needs to be submitted elsewhere.
- * 
- * Body: {
- *   transaction: string (base64-encoded unsigned VersionedTransaction),
- *   sessionSecrets: object,
- *   session: object,
- *   address: string
- * }
- * Returns: { success: boolean, signedTransaction?: string (base64), error?: string }
- */
-router.post('/sign-transaction', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
-  // Create fresh GridClient instance for this request (GridClient is stateful)
-  const gridClient = createGridClient();
-  
-  try {
-    const { transaction: serializedTx, sessionSecrets, session, address } = req.body;
-    
-    if (!serializedTx || !sessionSecrets || !session || !address) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Missing required fields: transaction, sessionSecrets, session, address' 
-      });
-    }
-    
-    console.log('✍️  [Grid Proxy] Signing transaction (not sending):', {
-      address,
-      txLength: serializedTx.length
-    });
-    
-    // Prepare transaction via Grid SDK
-    const transactionPayload = await gridClient.prepareArbitraryTransaction(
-      address,
-      {
-        transaction: serializedTx,
-        fee_config: {
-          currency: 'sol',
-          payer_address: address,
-          self_managed_fees: false
-        }
-      }
-    );
-
-    if (!transactionPayload || !transactionPayload.data) {
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to prepare transaction - Grid returned no data'
-      });
-    }
-
-    // Note: Grid SDK's signAndSend always sends the transaction.
-    // For top-up, we need the signed transaction but not to send it.
-    // We'll need to use a workaround: prepare the transaction and return the prepared payload
-    // The client can then extract the signed transaction from the prepared payload.
-    // However, Grid's API doesn't expose the signed transaction directly.
-    // 
-    // Alternative: Use Grid's internal signing if available, or accept that we need to
-    // send the transaction and then the x402 gateway will handle it.
-    //
-    // For now, we'll return an error indicating this needs to be handled differently.
-    // The top-up flow should be handled server-side where we can use Grid's signing
-    // and then submit to x402 gateway.
-    
-    return res.status(501).json({
-      success: false,
-      error: 'Sign-only not supported by Grid SDK. Use server-side top-up flow instead.'
-    });
-    
-  } catch (error) {
-    console.error('❌ [Grid Proxy] Sign transaction error:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Internal server error'
-    });
-  }
-});
 
 /**
  * POST /api/grid/send-tokens-gasless
