@@ -93,7 +93,7 @@ export class WalletAuthGenerator {
    * @param publicKey - Wallet public key (base58) for validation
    * @returns Private key as Uint8Array, or null if not found
    */
-  private extractPrivateKey(sessionSecrets: any, publicKey: string): Uint8Array | null {
+  public extractPrivateKey(sessionSecrets: any, publicKey: string): Uint8Array | null {
     try {
       // Grid SDK stores session secrets as an array of provider entries
       // Each entry has: { publicKey, privateKey, provider, tag }
