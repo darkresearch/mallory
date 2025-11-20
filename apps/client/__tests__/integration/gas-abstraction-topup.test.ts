@@ -27,7 +27,12 @@ const BACKEND_URL = process.env.TEST_BACKEND_URL || 'http://localhost:3001';
 const GAS_ABSTRACTION_ENABLED = process.env.GAS_ABSTRACTION_ENABLED === 'true';
 const HAS_TEST_CREDENTIALS = !!(process.env.TEST_SUPABASE_EMAIL && process.env.TEST_SUPABASE_PASSWORD);
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
-const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+// Prioritize Alchemy RPC for faster responses
+const SOLANA_RPC_URL = process.env.SOLANA_RPC_ALCHEMY_1 || 
+                       process.env.SOLANA_RPC_ALCHEMY_2 || 
+                       process.env.SOLANA_RPC_ALCHEMY_3 ||
+                       process.env.SOLANA_RPC_URL || 
+                       'https://api.mainnet-beta.solana.com';
 
 describe.skipIf(!HAS_TEST_CREDENTIALS)('Gas Abstraction Top-Up Flow (Integration)', () => {
   let testSession: {
@@ -165,7 +170,8 @@ describe.skipIf(!HAS_TEST_CREDENTIALS)('Gas Abstraction Top-Up Flow (Integration
 
       const userTokenAccount = await getAssociatedTokenAddress(
         new PublicKey(USDC_MINT),
-        userPubkey
+        userPubkey,
+        true // allowOwnerOffCurve for Grid PDA wallets
       );
 
       const payToTokenAccount = await getAssociatedTokenAddress(
@@ -249,7 +255,8 @@ describe.skipIf(!HAS_TEST_CREDENTIALS)('Gas Abstraction Top-Up Flow (Integration
 
       const userTokenAccount = await getAssociatedTokenAddress(
         new PublicKey(USDC_MINT),
-        userPubkey
+        userPubkey,
+        true // allowOwnerOffCurve for Grid PDA wallets
       );
 
       const payToTokenAccount = await getAssociatedTokenAddress(
