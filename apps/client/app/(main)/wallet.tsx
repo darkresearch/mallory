@@ -23,6 +23,7 @@ import SendModal from '../../components/wallet/SendModal';
 import { sendToken } from '../../features/wallet';
 import { walletService } from '../../features/wallet';
 import { SESSION_STORAGE_KEYS, storage, getAppVersion } from '../../lib';
+import { isGasAbstractionEnabled } from '../../lib/gasAbstraction';
 
 
 export default function WalletScreen() {
@@ -305,7 +306,18 @@ export default function WalletScreen() {
                 <Text style={styles.actionButtonLabel}>Send</Text>
               </View>
 
-
+              {isGasAbstractionEnabled() && (
+                <View style={styles.actionButton}>
+                  <TouchableOpacity 
+                    style={styles.actionButtonCircle}
+                    onPress={() => router.push('/(main)/gas-abstraction')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="flash" size={20} color="#fff" />
+                  </TouchableOpacity>
+                  <Text style={styles.actionButtonLabel}>Gas Credits</Text>
+                </View>
+              )}
             </View>
           </View>
 

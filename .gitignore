@@ -4,6 +4,10 @@ node_modules/
 # Environment
 .env
 .env.local
+.env.test
+.env.bak
+.env.bak2
+.test-secrets/
 
 # Build outputs
 dist/
@@ -41,3 +45,7 @@ core
 
 # OpenMemory (installed via setup script, not committed)
 services/openmemory/
+
+# Project-specific directories (not committed)
+.kiro/
+supabase/

@@ -16,15 +16,174 @@ import { createGridClient } from '../../../lib/gridClient';
 interface X402Context {
   gridSessionSecrets: any;
   gridSession: any;
+  gaslessMode?: boolean; // Gas abstraction preference from client
 }
 
 /**
  * Create Grid token sender for x402 utilities
  * This wraps the Grid SDK sendTokens functionality
+ * Supports gasless mode when useGasless is true
  */
-function createGridSender(sessionSecrets: any, session: any, address: string): GridTokenSender {
+function createGridSender(sessionSecrets: any, session: any, address: string, useGasless: boolean = false): GridTokenSender {
   return {
     async sendTokens(params: { recipient: string; amount: string; tokenMint?: string }): Promise<string> {
+      // If gasless mode enabled, use gas abstraction endpoint
+      if (useGasless) {
+        console.log('💸 [Grid Sender] Using gasless mode for token transfer');
+        try {
+          // Import gas abstraction service
+          const { X402GasAbstractionService } = await import('../../lib/x402GasAbstractionService.js');
+          const { loadGasAbstractionConfig } = await import('../../lib/gasAbstractionConfig.js');
+          const gasService = new X402GasAbstractionService(loadGasAbstractionConfig());
+          
+          // Build transaction (same as regular flow)
+          const {
+            PublicKey,
+            SystemProgram,
+            TransactionMessage,
+            VersionedTransaction,
+            Connection,
+            LAMPORTS_PER_SOL
+          } = await import('@solana/web3.js');
+          
+          const {
+            createTransferInstruction,
+            getAssociatedTokenAddress,
+            createAssociatedTokenAccountInstruction,
+            TOKEN_PROGRAM_ID,
+            ASSOCIATED_TOKEN_PROGRAM_ID
+          } = await import('@solana/spl-token');
+          
+          const connection = new Connection(
+            process.env.SOLANA_RPC_URL || process.env.EXPO_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
+            'confirmed'
+          );
+
+          const instructions = [];
+          
+          if (params.tokenMint) {
+            const fromTokenAccount = await getAssociatedTokenAddress(
+              new PublicKey(params.tokenMint),
+              new PublicKey(address),
+              true
+            );
+            
+            const toTokenAccount = await getAssociatedTokenAddress(
+              new PublicKey(params.tokenMint),
+              new PublicKey(params.recipient),
+              false
+            );
+
+            const toAccountInfo = await connection.getAccountInfo(toTokenAccount);
+            
+            if (!toAccountInfo) {
+              const createAtaIx = createAssociatedTokenAccountInstruction(
+                new PublicKey(address),
+                toTokenAccount,
+                new PublicKey(params.recipient),
+                new PublicKey(params.tokenMint),
+                TOKEN_PROGRAM_ID,
+                ASSOCIATED_TOKEN_PROGRAM_ID
+              );
+              instructions.push(createAtaIx);
+            }
+
+            const amountInSmallestUnit = Math.floor(parseFloat(params.amount) * 1000000);
+
+            const transferIx = createTransferInstruction(
+              fromTokenAccount,
+              toTokenAccount,
+              new PublicKey(address),
+              amountInSmallestUnit,
+              [],
+              TOKEN_PROGRAM_ID
+            );
+            instructions.push(transferIx);
+          } else {
+            const amountInLamports = Math.floor(parseFloat(params.amount) * LAMPORTS_PER_SOL);
+            
+            const transferIx = SystemProgram.transfer({
+              fromPubkey: new PublicKey(address),
+              toPubkey: new PublicKey(params.recipient),
+              lamports: amountInLamports
+            });
+            instructions.push(transferIx);
+          }
+
+          const { blockhash } = await connection.getLatestBlockhash('confirmed');
+
+          const message = new TransactionMessage({
+            payerKey: new PublicKey(address),
+            recentBlockhash: blockhash,
+            instructions
+          }).compileToV0Message();
+
+          const transaction = new VersionedTransaction(message);
+          const serialized = Buffer.from(transaction.serialize()).toString('base64');
+
+          // Request sponsorship (sponsorTransaction handles auth internally)
+          const result = await gasService.sponsorTransaction(
+            serialized,
+            address,
+            session,
+            sessionSecrets
+          );
+          
+          // Deserialize sponsored transaction
+          const sponsoredTxBuffer = Buffer.from(result.transaction, 'base64');
+          const sponsoredTx = VersionedTransaction.deserialize(sponsoredTxBuffer);
+          
+          // Sign and send sponsored transaction
+          const gridClient = createGridClient();
+          const sponsoredSerialized = Buffer.from(sponsoredTx.serialize()).toString('base64');
+          
+          const transactionPayload = await gridClient.prepareArbitraryTransaction(
+            address,
+            {
+              transaction: sponsoredSerialized,
+              fee_config: {
+                currency: 'sol',
+                payer_address: address,
+                self_managed_fees: false
+              }
+            }
+          );
+
+          if (!transactionPayload || !transactionPayload.data) {
+            throw new Error('Failed to prepare sponsored transaction');
+          }
+
+          const sendResult = await gridClient.signAndSend({
+            sessionSecrets,
+            session,
+            transactionPayload: transactionPayload.data,
+            address
+          });
+
+          const billedUsdc = result.billedBaseUnits / 1_000_000;
+          console.log('✅ [Grid Sender] Gasless transaction completed:', {
+            signature: sendResult.transaction_signature,
+            billedBaseUnits: result.billedBaseUnits,
+            billedUsdc: billedUsdc.toFixed(6)
+          });
+
+          // Log notification for gasless transaction
+          console.log(`💰 [Gas Abstraction] Transaction sponsored: ${billedUsdc.toFixed(6)} USDC charged for gas fees`);
+
+          return sendResult.transaction_signature || 'success';
+        } catch (error: any) {
+          console.error('❌ [Grid Sender] Gasless transaction failed:', error);
+          // Fallback to regular SOL transaction if gasless fails
+          if (error.status === 402 || error.status === 503) {
+            console.log('⚠️ [Grid Sender] Falling back to SOL transaction');
+            // Continue to regular flow below
+          } else {
+            throw error;
+          }
+        }
+      }
+      
+      // Regular SOL transaction flow (existing code)
       // Create fresh GridClient instance for this sender (GridClient is stateful)
       const gridClient = createGridClient();
       const { recipient, amount, tokenMint } = params;
@@ -192,7 +351,8 @@ async function handleX402OrReturnRequirement(
     const gridSender = createGridSender(
       x402Context.gridSessionSecrets,
       x402Context.gridSession.authentication,  // Pass authentication array to Grid SDK
-      x402Context.gridSession.address
+      x402Context.gridSession.address,
+      x402Context.gaslessMode || false  // Use gasless mode if enabled
     );
 
     // Execute x402 payment and fetch data

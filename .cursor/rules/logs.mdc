@@ -1,0 +1,7 @@
+---
+alwaysApply: true
+---
+
+Log every error we encounter in a file called logs.md and add a timestamp to the error.
+whenever we encounter an error, you source of truth is the logs.md file.
+to check if we already encountered the same error, so we never loop again in the same cycle of errors.

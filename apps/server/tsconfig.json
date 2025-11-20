@@ -8,6 +8,7 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "types": [],
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "declaration": true,
@@ -19,6 +20,7 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/__tests__/**", "**/*.test.ts"]
+  "exclude": ["node_modules", "dist", "**/__tests__/**", "**/*.test.ts"],
+  "typeRoots": ["./node_modules/@types", "./src/types"]
 }
 
