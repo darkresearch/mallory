@@ -14,8 +14,176 @@ import { authenticateUser, type AuthenticatedRequest } from '../middleware/auth.
 import { X402GasAbstractionService, GatewayError } from '../lib/x402GasAbstractionService.js';
 import { gasTelemetry } from '../lib/telemetry.js';
 import { loadGasAbstractionConfig } from '../lib/gasAbstractionConfig.js';
+import { WalletAuthGenerator } from '../lib/walletAuthGenerator.js';
+import { createTopupPaymentWithEphemeralWallet } from '../lib/gasAbstractionTopupHelper.js';
+import { createGridClient } from '../lib/gridClient.js';
+import type { GridTokenSender } from '@darkresearch/mallory-shared/x402/EphemeralWalletManager.js';
 
 const router = Router();
+
+/**
+ * Create Grid token sender from session data
+ * Reuses the same logic as /api/grid/send-tokens endpoint
+ */
+function createGridSender(sessionSecrets: any, session: any, address: string): GridTokenSender {
+  return {
+    async sendTokens(params: { recipient: string; amount: string; tokenMint?: string }): Promise<string> {
+      // Validate inputs
+      if (!address || typeof address !== 'string') {
+        throw new Error(`Invalid address: ${address}`);
+      }
+      if (!params.recipient || typeof params.recipient !== 'string') {
+        throw new Error(`Invalid recipient: ${params.recipient}`);
+      }
+      
+      console.log('🔧 [Grid Sender] Sending tokens:', {
+        from: address,
+        to: params.recipient,
+        amount: params.amount,
+        tokenMint: params.tokenMint || 'SOL'
+      });
+      
+      // Import dependencies
+      const gridClient = createGridClient();
+      const {
+        PublicKey,
+        SystemProgram,
+        TransactionMessage,
+        VersionedTransaction,
+        Connection,
+        LAMPORTS_PER_SOL
+      } = await import('@solana/web3.js');
+      
+      const {
+        createTransferInstruction,
+        getAssociatedTokenAddress,
+        createAssociatedTokenAccountInstruction,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      } = await import('@solana/spl-token');
+      
+      const connection = new Connection(
+        process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
+        'confirmed'
+      );
+
+      // Build transaction (same as /api/grid/send-tokens)
+      const instructions = [];
+      const fromPubkey = new PublicKey(address);
+      const toPubkey = new PublicKey(params.recipient);
+      
+      if (params.tokenMint) {
+        const tokenMintPubkey = new PublicKey(params.tokenMint);
+        const fromTokenAccount = await getAssociatedTokenAddress(
+          tokenMintPubkey,
+          fromPubkey,
+          true  // allowOwnerOffCurve for Grid PDA
+        );
+        
+        const toTokenAccount = await getAssociatedTokenAddress(
+          tokenMintPubkey,
+          toPubkey,
+          false
+        );
+
+        // Check if recipient's ATA exists
+        let toAccountInfo = null;
+        try {
+          toAccountInfo = await connection.getAccountInfo(toTokenAccount);
+        } catch (error: any) {
+          console.warn('⚠️  [Grid Sender] Could not check recipient ATA, assuming it exists:', error.message);
+          toAccountInfo = { data: Buffer.from([]) };
+        }
+        
+        if (!toAccountInfo) {
+          const createAtaIx = createAssociatedTokenAccountInstruction(
+            fromPubkey,
+            toTokenAccount,
+            toPubkey,
+            tokenMintPubkey,
+            TOKEN_PROGRAM_ID,
+            ASSOCIATED_TOKEN_PROGRAM_ID
+          );
+          instructions.push(createAtaIx);
+        }
+
+        const amountInSmallestUnit = Math.floor(parseFloat(params.amount) * 1000000);
+        const transferIx = createTransferInstruction(
+          fromTokenAccount,
+          toTokenAccount,
+          fromPubkey,
+          amountInSmallestUnit,
+          [],
+          TOKEN_PROGRAM_ID
+        );
+        instructions.push(transferIx);
+      } else {
+        const amountInLamports = Math.floor(parseFloat(params.amount) * LAMPORTS_PER_SOL);
+        const transferIx = SystemProgram.transfer({
+          fromPubkey: fromPubkey,
+          toPubkey: toPubkey,
+          lamports: amountInLamports
+        });
+        instructions.push(transferIx);
+      }
+
+      const { blockhash } = await connection.getLatestBlockhash('confirmed');
+      const message = new TransactionMessage({
+        payerKey: fromPubkey,
+        recentBlockhash: blockhash,
+        instructions
+      }).compileToV0Message();
+
+      const transaction = new VersionedTransaction(message);
+      const serialized = Buffer.from(transaction.serialize()).toString('base64');
+
+      // Prepare and sign via Grid (same as /api/grid/send-tokens)
+      const transactionPayload = await gridClient.prepareArbitraryTransaction(
+        address,
+        {
+          transaction: serialized,
+          fee_config: {
+            currency: 'sol',
+            payer_address: address,
+            self_managed_fees: false
+          }
+        }
+      );
+
+      if (!transactionPayload || !transactionPayload.data) {
+        throw new Error('Failed to prepare transaction - Grid returned no data');
+      }
+
+      // Sign and send - pass session exactly as received (matching grid.ts implementation)
+      console.log('🔐 [Grid Sender] Signing with Grid:', {
+        hasSessionSecrets: !!sessionSecrets,
+        sessionType: Array.isArray(session) ? 'array' : typeof session,
+        sessionKeys: session && typeof session === 'object' ? Object.keys(session) : [],
+        address
+      });
+      
+      let result;
+      try {
+        result = await gridClient.signAndSend({
+          sessionSecrets,
+          session,
+          transactionPayload: transactionPayload.data,
+          address
+        });
+      } catch (signError: any) {
+        console.error('❌ [Grid Sender] Grid signAndSend failed:', {
+          error: signError.message,
+          code: signError.code,
+          details: signError.details,
+          stack: signError.stack?.substring(0, 500),
+        });
+        throw new Error(`Grid signAndSend failed: ${signError.message || 'Unknown error'}`);
+      }
+
+      return result.transaction_signature || 'success';
+    },
+  };
+}
 
 // Initialize service with configuration
 let gasService: X402GasAbstractionService | null = null;
@@ -212,12 +380,12 @@ router.get('/topup/requirements', authenticateUser, async (req: AuthenticatedReq
 
 /**
  * POST /api/gas-abstraction/topup
- * Submit USDC payment to credit balance
+ * Submit USDC payment to credit balance using ephemeral wallet
  * 
  * Body: {
- *   payment: X402Payment (base64) - OR -
- *   transaction: string (base64 unsigned), publicKey: string, amountBaseUnits: number,
- *   gridSessionSecrets: object, gridSession: object
+ *   amountBaseUnits: number (optional, defaults to maxAmountRequired),
+ *   gridSessionSecrets: object,
+ *   gridSession: object
  * }
  */
 router.post('/topup', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
@@ -229,127 +397,102 @@ router.post('/topup', authenticateUser, async (req: AuthenticatedRequest, res: R
   }
 
   try {
-    const walletAddress = req.body?.gridSession?.address || req.user?.id;
+    const { amountBaseUnits, gridSessionSecrets, gridSession } = req.body;
+    
+    if (!gridSessionSecrets || !gridSession) {
+      return res.status(400).json({
+        error: 'Grid session required',
+        message: 'gridSessionSecrets and gridSession must be provided in request body'
+      });
+    }
+
+    // Log full gridSession structure for debugging
+    console.log('🔍 [Topup] Grid session structure:', {
+      hasGridSession: !!gridSession,
+      gridSessionType: typeof gridSession,
+      gridSessionIsArray: Array.isArray(gridSession),
+      gridSessionKeys: gridSession && typeof gridSession === 'object' ? Object.keys(gridSession) : [],
+      gridSessionAddress: gridSession?.address,
+      gridSessionAuth: gridSession?.authentication,
+      gridSessionAuthAddress: gridSession?.authentication?.address,
+      hasUserId: !!req.user?.id,
+      userId: req.user?.id,
+      bodyPublicKey: req.body?.publicKey,
+    });
+    
+    // Extract wallet address - try multiple locations (but NOT req.user?.id which is a UUID)
+    let walletAddress = gridSession?.address || 
+                         gridSession?.authentication?.address ||
+                         req.body?.publicKey ||
+                         req.body?.walletAddress;
+    
+    // If gridSession is an array, try first element
+    if (!walletAddress && Array.isArray(gridSession) && gridSession.length > 0) {
+      const firstItem = gridSession[0];
+      walletAddress = firstItem?.address || firstItem?.authentication?.address;
+      console.log('📋 [Topup] Tried first array element:', {
+        hasAddress: !!firstItem?.address,
+        hasAuthAddress: !!firstItem?.authentication?.address,
+        address: walletAddress
+      });
+    }
+    
+    if (!walletAddress) {
+      console.error('❌ [Topup] Wallet address not found in request:', {
+        hasGridSession: !!gridSession,
+        gridSessionType: typeof gridSession,
+        gridSessionKeys: gridSession && typeof gridSession === 'object' ? Object.keys(gridSession) : [],
+        hasAuthentication: !!gridSession?.authentication,
+        authKeys: gridSession?.authentication && typeof gridSession.authentication === 'object' ? Object.keys(gridSession.authentication) : [],
+        hasUserId: !!req.user?.id,
+        fullGridSession: JSON.stringify(gridSession).substring(0, 500), // First 500 chars for debugging
+      });
+      return res.status(400).json({
+        error: 'Wallet address not found',
+        message: 'Grid session must contain wallet address. Please ensure gridSession.address or gridAccount.address is provided.',
+        debug: {
+          gridSessionKeys: gridSession && typeof gridSession === 'object' ? Object.keys(gridSession) : [],
+          hasUserId: !!req.user?.id
+        }
+      });
+    }
+    
+    console.log('✅ [Topup] Wallet address extracted:', walletAddress);
+    
+    // Validate wallet address is a valid base58 string
+    try {
+      const { PublicKey } = await import('@solana/web3.js');
+      const pubkey = new PublicKey(walletAddress); // This will throw if invalid
+      console.log('✅ [Topup] Wallet address validated:', pubkey.toBase58());
+    } catch (error) {
+      console.error('❌ [Topup] Invalid wallet address:', {
+        address: walletAddress,
+        addressType: typeof walletAddress,
+        addressLength: walletAddress?.length,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return res.status(400).json({
+        error: 'Invalid wallet address',
+        message: `Wallet address "${walletAddress}" is not a valid Solana address: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
     
     // Log top-up start
     gasTelemetry.topupStart(walletAddress);
     
-    let payment: string;
+    // Client should send the base64-encoded x402 payment payload
+    // The client constructs the full x402 payment payload (including signed transaction and public key)
+    // Backend just proxies it to the gateway
+    const { payment } = req.body;
     
-    // Check if payment payload is provided directly, or if we need to construct it
-    if (req.body.payment) {
-      // Direct payment payload (legacy format)
-      payment = req.body.payment;
-    } else if (req.body.transaction && req.body.publicKey && req.body.gridSessionSecrets && req.body.gridSession) {
-      // New format: unsigned transaction + Grid session
-      // Sign transaction using Grid, then construct x402 payment payload
-      const { transaction: serializedTx, publicKey, amountBaseUnits, gridSessionSecrets, gridSession } = req.body;
-      
-      // Validate transaction data format
-      if (typeof serializedTx !== 'string' || serializedTx.length === 0) {
-        return res.status(400).json({
-          error: 'Invalid transaction data',
-          message: 'Transaction must be a non-empty base64-encoded string'
-        });
-      }
-      
-      // Validate base64 format
-      try {
-        Buffer.from(serializedTx, 'base64');
-      } catch (error) {
-        return res.status(400).json({
-          error: 'Invalid transaction format',
-          message: 'Transaction must be valid base64-encoded data'
-        });
-      }
-      
-      // Validate Grid session data
-      if (!gridSession || !gridSession.address) {
-        return res.status(400).json({
-          error: 'Invalid Grid session',
-          message: 'Grid session must include address'
-        });
-      }
-      
-      // Import Grid client
-      const { createGridClient } = await import('../lib/gridClient.js');
-      const gridClient = createGridClient();
-      
-      // Prepare transaction with Grid
-      let transactionPayload;
-      try {
-        transactionPayload = await gridClient.prepareArbitraryTransaction(
-          gridSession.address,
-          {
-            transaction: serializedTx,
-            fee_config: {
-              currency: 'sol',
-              payer_address: gridSession.address,
-              self_managed_fees: false
-            }
-          }
-        );
-      } catch (error: any) {
-        // Grid preparation errors should return 400 (bad request)
-        return res.status(400).json({
-          error: 'Failed to prepare transaction',
-          message: error.message || 'Transaction data is invalid or cannot be processed by Grid'
-        });
-      }
-      
-      if (!transactionPayload || !transactionPayload.data) {
-        return res.status(400).json({
-          error: 'Failed to prepare transaction with Grid',
-          message: 'Grid returned no transaction data'
-        });
-      }
-      
-      // Sign transaction using Grid
-      // Note: Grid's signAndSend sends the transaction, but for top-up we need the signed tx
-      // We'll use a workaround: prepare the transaction and extract the signed version
-      // However, Grid doesn't expose the signed transaction directly.
-      // 
-      // For now, we'll accept that the transaction needs to be sent to Solana first,
-      // then the x402 gateway will verify it on-chain. This is acceptable for top-up flows.
-      //
-      // Alternative: Use the prepared transaction payload which may contain signing info
-      // But Grid's API doesn't expose this.
-      //
-      // For now, we'll construct the payment payload with the unsigned transaction
-      // and let the x402 gateway handle verification. The user will need to sign and send
-      // the transaction separately, or we can use a different flow.
-      
-      // Get top-up requirements to construct payment payload
-      const requirements = await gasService.getTopupRequirements();
-      const config = await import('../lib/gasAbstractionConfig.js').then(m => m.loadGasAbstractionConfig());
-      
-      // Construct x402 payment payload
-      // Note: The x402 gateway expects a signed transaction in the payload.
-      // Since Grid SDK doesn't support sign-only, we'll need to use a workaround.
-      // For now, we'll construct the payment payload with the unsigned transaction
-      // and the gateway may handle it differently, or we'll need to implement
-      // a client-side signing flow using Grid's prepareArbitraryTransaction.
-      //
-      // TODO: Implement proper transaction signing flow
-      const paymentPayload = {
-        x402Version: requirements.x402Version,
-        scheme: 'solana',
-        network: 'solana-mainnet-beta',
-        asset: config.usdcMint,
-        payload: {
-          transaction: serializedTx, // TODO: Should be signed transaction
-          publicKey: publicKey,
-        },
-      };
-      
-      // Convert to base64 for submission
-      payment = Buffer.from(JSON.stringify(paymentPayload)).toString('base64');
-    } else {
-      return res.status(400).json({ 
-        error: 'Payment payload or transaction data required',
-        message: 'Provide either "payment" (base64 x402 payload) or "transaction", "publicKey", "amountBaseUnits", "gridSessionSecrets", and "gridSession"'
+    if (!payment) {
+      return res.status(400).json({
+        error: 'Payment payload required',
+        message: 'Client must provide the base64-encoded x402 payment payload in the request body.'
       });
     }
+    
+    console.log('📦 [Topup] Submitting payment to gateway (base64 length:', payment.length, ')...');
     
     // Submit to gateway
     const result = await gasService.submitTopup(payment);

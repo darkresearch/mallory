@@ -274,6 +274,7 @@ export class X402GasAbstractionService {
         
         // For 402 Payment Required, extract required and available amounts
         if (response.status === 402) {
+          console.log('❌ [Gateway] 402 Payment Required error data:', JSON.stringify(errorData, null, 2));
           errorMessage = this.parseInsufficientBalanceError(errorData);
         }
         
@@ -612,6 +613,36 @@ export class X402GasAbstractionService {
       ? payment 
       : Buffer.from(JSON.stringify(payment)).toString('base64');
     
+    // Log request details (decode and log payment structure for debugging)
+    let paymentStructure: any = null;
+    try {
+      const decoded = Buffer.from(paymentBase64, 'base64').toString('utf-8');
+      paymentStructure = JSON.parse(decoded);
+      console.log('📤 [Service] Submitting top-up to gateway:', {
+        url,
+        paymentBase64Length: paymentBase64.length,
+        paymentType: typeof payment,
+        paymentStructure: {
+          x402Version: paymentStructure.x402Version,
+          scheme: paymentStructure.scheme,
+          network: paymentStructure.network,
+          asset: paymentStructure.asset,
+          hasPayload: !!paymentStructure.payload,
+          hasTransaction: !!paymentStructure.payload?.transaction,
+          transactionLength: paymentStructure.payload?.transaction?.length,
+          hasPublicKey: !!paymentStructure.payload?.publicKey,
+          publicKey: paymentStructure.payload?.publicKey,
+        },
+      });
+    } catch (e) {
+      console.log('📤 [Service] Submitting top-up to gateway:', {
+        url,
+        paymentBase64Length: paymentBase64.length,
+        paymentType: typeof payment,
+        decodeError: e instanceof Error ? e.message : String(e),
+      });
+    }
+    
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -620,16 +651,83 @@ export class X402GasAbstractionService {
       },
     });
 
+    // Get response text first to log it
+    const responseText = await response.text();
+    console.log(`📥 [Service] Gateway top-up response (${response.status}):`, responseText.substring(0, 500));
+
     if (!response.ok) {
-      const errorData: any = await response.json().catch(() => ({}));
+      let errorData: any = {};
+      try {
+        errorData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ [Service] Failed to parse gateway error response as JSON:', responseText);
+        errorData = { error: responseText, rawResponse: responseText };
+      }
+      
+      let errorMessage = errorData.error || errorData.message || `Gateway returned ${response.status}`;
+      
+      if (response.status === 402) {
+        console.log('❌ [Gateway] 402 Payment Required error data:', JSON.stringify(errorData, null, 2));
+        
+        // Decode and log the payment payload we sent for debugging
+        try {
+          const decodedPayment = Buffer.from(paymentBase64, 'base64').toString('utf-8');
+          const paymentObj = JSON.parse(decodedPayment);
+          console.log('🔍 [Gateway] Payment payload we sent:', {
+            x402Version: paymentObj.x402Version,
+            scheme: paymentObj.scheme,
+            network: paymentObj.network,
+            asset: paymentObj.asset,
+            hasPayload: !!paymentObj.payload,
+            hasTransaction: !!paymentObj.payload?.transaction,
+            transactionLength: paymentObj.payload?.transaction?.length,
+            hasPublicKey: !!paymentObj.payload?.publicKey,
+            publicKey: paymentObj.payload?.publicKey,
+            transactionPreview: paymentObj.payload?.transaction?.substring(0, 50) + '...',
+          });
+        } catch (e) {
+          console.error('❌ [Gateway] Failed to decode payment payload for logging:', e);
+        }
+        
+        // For 402, the gateway might return the requirements again (per spec)
+        // Check if it's a requirements response
+        if (errorData.accepts || errorData.payTo) {
+          errorMessage = 'Payment missing or invalid. The gateway returned payment requirements. Please verify the transaction was signed correctly.';
+        } else {
+          errorMessage = this.parseInsufficientBalanceError(errorData);
+        }
+      } else if (response.status === 400) {
+        console.log('❌ [Gateway] 400 Bad Request error data:', JSON.stringify(errorData, null, 2));
+        errorMessage = this.parseValidationError(errorData);
+      }
+      
       throw new GatewayError(
-        errorData.error || errorData.message || `Gateway returned ${response.status}`,
+        errorMessage,
         response.status,
         errorData
       );
     }
 
-    return await response.json() as TopupResult;
+    // Parse successful response
+    let result: TopupResult;
+    try {
+      result = JSON.parse(responseText) as TopupResult;
+    } catch (parseError) {
+      console.error('❌ [Service] Failed to parse gateway success response as JSON:', responseText);
+      throw new GatewayError(
+        'Gateway returned invalid JSON response',
+        502,
+        { rawResponse: responseText }
+      );
+    }
+
+    console.log('✅ [Service] Top-up successful:', {
+      wallet: result.wallet?.substring(0, 20) + '...',
+      amountBaseUnits: result.amountBaseUnits,
+      txSignature: result.txSignature?.substring(0, 20) + '...',
+    });
+
+    return result;
   }
 
   /**
