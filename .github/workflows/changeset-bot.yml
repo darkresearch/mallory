@@ -6,23 +6,23 @@ on:
 
 permissions:
   pull-requests: write
-
+  issues: write
 jobs:
   changeset-check:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
-      
+
       - name: Install dependencies
         run: bun install
-      
+
       - name: Check for changeset or skip label
         id: check
         run: |
@@ -33,11 +33,11 @@ jobs:
             echo "✅ Changeset skipped via label"
             exit 0
           fi
-          
+
           # Check if changeset files were added
           git fetch origin main
           CHANGESET_FILES=$(git diff --name-only origin/main...HEAD -- '.changeset/*.md' | grep -v 'README.md' || true)
-          
+
           if [ -n "$CHANGESET_FILES" ]; then
             echo "status=found" >> $GITHUB_OUTPUT
             echo "✅ Changeset found: $CHANGESET_FILES"
@@ -45,58 +45,58 @@ jobs:
             echo "status=missing" >> $GITHUB_OUTPUT
             echo "❌ No changeset found"
           fi
-      
+
       - name: Comment on PR (missing changeset)
         if: steps.check.outputs.status == 'missing'
         uses: actions/github-script@v7
         with:
           script: |
             const comment = `## ⚠️ Missing Changeset
-            
+
             This PR doesn't include a changeset file. Please add one so we can track this change in the release notes.
-            
+
             ### 📝 How to add a changeset:
-            
+
             \`\`\`bash
             # Run the interactive changeset CLI
             bun changeset
             \`\`\`
-            
+
             The CLI will ask you:
             1. **Which packages changed?** (Select with space, confirm with enter)
             2. **Change type?** (patch = bug fix, minor = feature, major = breaking)
             3. **Summary**: Describe what changed (this goes in the changelog)
-            
+
             Then commit the generated file:
             \`\`\`bash
             git add .changeset/*.md
             git commit -m "docs: add changeset"
             git push
             \`\`\`
-            
+
             ### 🏷️ Skip changeset?
-            
+
             If this PR doesn't need a changeset (docs, tests, CI changes), add the \`skip-changeset\` label.
-            
+
             **Common skip cases:**
             - Documentation-only changes
             - Test-only changes  
             - CI/tooling updates
             - Code refactoring with no behavior change
             `;
-            
+
             // Find existing bot comments
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            
+
             const botComment = comments.find(comment => 
               comment.user.type === 'Bot' && 
               comment.body.includes('Missing Changeset')
             );
-            
+
             if (botComment) {
               // Update existing comment
               await github.rest.issues.updateComment({
@@ -114,7 +114,7 @@ jobs:
                 body: comment
               });
             }
-      
+
       - name: Comment on PR (changeset found)
         if: steps.check.outputs.status == 'found'
         uses: actions/github-script@v7
@@ -126,12 +126,12 @@ jobs:
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            
+
             const warningComment = comments.find(comment => 
               comment.user.type === 'Bot' && 
               comment.body.includes('Missing Changeset')
             );
-            
+
             if (warningComment) {
               await github.rest.issues.deleteComment({
                 owner: context.repo.owner,
@@ -139,13 +139,13 @@ jobs:
                 comment_id: warningComment.id
               });
             }
-            
+
             // Check if success comment already exists
             const successComment = comments.find(comment =>
               comment.user.type === 'Bot' &&
               comment.body.includes('Changeset Detected')
             );
-            
+
             // Only create success comment if it doesn't exist
             if (!successComment) {
               await github.rest.issues.createComment({
@@ -155,4 +155,3 @@ jobs:
                 body: '## ✅ Changeset Detected\n\nThanks for adding a changeset! This change will be included in the next release.'
               });
             }
-
