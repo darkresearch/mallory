@@ -230,42 +230,75 @@ jobs:
       - name: Install server dependencies
         run: cd apps/server && bun install
 
-      - name: Debug environment variables
+      - name: Validate required secrets
         run: |
-          echo "🔍 Checking environment variables..."
-          echo "GRID_API_KEY: ${GRID_API_KEY:+SET}${GRID_API_KEY:-NOT SET}"
-          echo "SUPABASE_URL: ${SUPABASE_URL:+SET}${SUPABASE_URL:-NOT SET}"
-          echo "SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:+SET}${SUPABASE_SERVICE_ROLE_KEY:-NOT SET}"
-          echo "GRID_ENV: ${GRID_ENV:-NOT SET (will default to production)}"
+          echo "🔍 Validating required GitHub secrets..."
           echo ""
-          echo "Checking if required variables are set..."
-          [ -z "$GRID_API_KEY" ] && echo "❌ GRID_API_KEY is empty!" || echo "✅ GRID_API_KEY is set"
-          [ -z "$SUPABASE_URL" ] && echo "❌ SUPABASE_URL is empty!" || echo "✅ SUPABASE_URL is set"
-          [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && echo "❌ SUPABASE_SERVICE_ROLE_KEY is empty!" || echo "✅ SUPABASE_SERVICE_ROLE_KEY is set"
-        env:
-          GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
-          GRID_ENV: production
-          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+          MISSING_SECRETS=0
+
+          # Check each required secret
+          if [ -z "${{ secrets.GRID_API_KEY }}" ]; then
+            echo "❌ GRID_API_KEY is not set in GitHub secrets"
+            MISSING_SECRETS=1
+          else
+            echo "✅ GRID_API_KEY is set"
+          fi
+
+          if [ -z "${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}" ]; then
+            echo "❌ EXPO_PUBLIC_SUPABASE_URL is not set in GitHub secrets"
+            MISSING_SECRETS=1
+          else
+            echo "✅ EXPO_PUBLIC_SUPABASE_URL is set"
+          fi
+
+          if [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
+            echo "❌ SUPABASE_SERVICE_ROLE_KEY is not set in GitHub secrets"
+            MISSING_SECRETS=1
+          else
+            echo "✅ SUPABASE_SERVICE_ROLE_KEY is set"
+          fi
+
+          echo ""
+
+          if [ $MISSING_SECRETS -eq 1 ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "❌ MISSING REQUIRED GITHUB SECRETS"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "The backend server requires these secrets to start:"
+            echo ""
+            echo "1. GRID_API_KEY"
+            echo "   - Get from: Your Grid dashboard/account settings"
+            echo ""
+            echo "2. EXPO_PUBLIC_SUPABASE_URL"
+            echo "   - Get from: Supabase Dashboard → Settings → API → Project URL"
+            echo "   - Example: https://xxxxx.supabase.co"
+            echo ""
+            echo "3. SUPABASE_SERVICE_ROLE_KEY"
+            echo "   - Get from: Supabase Dashboard → Settings → API → service_role key"
+            echo "   - ⚠️  This is DIFFERENT from the anon key!"
+            echo "   - ⚠️  Keep this secret secure!"
+            echo ""
+            echo "📋 How to add secrets:"
+            echo "   1. Go to: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "   2. Click 'New repository secret'"
+            echo "   3. Add each secret with the exact name shown above"
+            echo ""
+            echo "📖 For more details, see:"
+            echo "   - GITHUB_ACTIONS_SECRETS_CHECKLIST.md"
+            echo "   - GITHUB_ACTIONS_SECRETS_MAPPING.md"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 1
+          fi
+
+          echo "✅ All required secrets are configured!"
 
       - name: Start backend server
         run: |
           cd apps/server
-          
-          # Verify required environment variables are set
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$GRID_API_KEY" ]; then
-            echo "❌ Missing required environment variables!"
-            [ -z "$SUPABASE_URL" ] && echo "   - SUPABASE_URL is not set"
-            [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && echo "   - SUPABASE_SERVICE_ROLE_KEY is not set"
-            [ -z "$GRID_API_KEY" ] && echo "   - GRID_API_KEY is not set"
-            echo ""
-            echo "💡 Please ensure these GitHub secrets are configured:"
-            echo "   - EXPO_PUBLIC_SUPABASE_URL (mapped to SUPABASE_URL)"
-            echo "   - SUPABASE_SERVICE_ROLE_KEY"
-            echo "   - GRID_API_KEY"
-            exit 1
-          fi
-          
+
           # Start server in background
           bun run dev > server.log 2>&1 &
           SERVER_PID=$!
@@ -431,42 +464,75 @@ jobs:
       - name: Install server dependencies
         run: cd apps/server && bun install
 
-      - name: Debug environment variables
+      - name: Validate required secrets
         run: |
-          echo "🔍 Checking environment variables..."
-          echo "GRID_API_KEY: ${GRID_API_KEY:+SET}${GRID_API_KEY:-NOT SET}"
-          echo "SUPABASE_URL: ${SUPABASE_URL:+SET}${SUPABASE_URL:-NOT SET}"
-          echo "SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:+SET}${SUPABASE_SERVICE_ROLE_KEY:-NOT SET}"
-          echo "GRID_ENV: ${GRID_ENV:-NOT SET (will default to production)}"
+          echo "🔍 Validating required GitHub secrets..."
           echo ""
-          echo "Checking if required variables are set..."
-          [ -z "$GRID_API_KEY" ] && echo "❌ GRID_API_KEY is empty!" || echo "✅ GRID_API_KEY is set"
-          [ -z "$SUPABASE_URL" ] && echo "❌ SUPABASE_URL is empty!" || echo "✅ SUPABASE_URL is set"
-          [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && echo "❌ SUPABASE_SERVICE_ROLE_KEY is empty!" || echo "✅ SUPABASE_SERVICE_ROLE_KEY is set"
-        env:
-          GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
-          GRID_ENV: production
-          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+          MISSING_SECRETS=0
+
+          # Check each required secret
+          if [ -z "${{ secrets.GRID_API_KEY }}" ]; then
+            echo "❌ GRID_API_KEY is not set in GitHub secrets"
+            MISSING_SECRETS=1
+          else
+            echo "✅ GRID_API_KEY is set"
+          fi
+
+          if [ -z "${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}" ]; then
+            echo "❌ EXPO_PUBLIC_SUPABASE_URL is not set in GitHub secrets"
+            MISSING_SECRETS=1
+          else
+            echo "✅ EXPO_PUBLIC_SUPABASE_URL is set"
+          fi
+
+          if [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
+            echo "❌ SUPABASE_SERVICE_ROLE_KEY is not set in GitHub secrets"
+            MISSING_SECRETS=1
+          else
+            echo "✅ SUPABASE_SERVICE_ROLE_KEY is set"
+          fi
+
+          echo ""
+
+          if [ $MISSING_SECRETS -eq 1 ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "❌ MISSING REQUIRED GITHUB SECRETS"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "The backend server requires these secrets to start:"
+            echo ""
+            echo "1. GRID_API_KEY"
+            echo "   - Get from: Your Grid dashboard/account settings"
+            echo ""
+            echo "2. EXPO_PUBLIC_SUPABASE_URL"
+            echo "   - Get from: Supabase Dashboard → Settings → API → Project URL"
+            echo "   - Example: https://xxxxx.supabase.co"
+            echo ""
+            echo "3. SUPABASE_SERVICE_ROLE_KEY"
+            echo "   - Get from: Supabase Dashboard → Settings → API → service_role key"
+            echo "   - ⚠️  This is DIFFERENT from the anon key!"
+            echo "   - ⚠️  Keep this secret secure!"
+            echo ""
+            echo "📋 How to add secrets:"
+            echo "   1. Go to: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "   2. Click 'New repository secret'"
+            echo "   3. Add each secret with the exact name shown above"
+            echo ""
+            echo "📖 For more details, see:"
+            echo "   - GITHUB_ACTIONS_SECRETS_CHECKLIST.md"
+            echo "   - GITHUB_ACTIONS_SECRETS_MAPPING.md"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 1
+          fi
+
+          echo "✅ All required secrets are configured!"
 
       - name: Start backend server
         run: |
           cd apps/server
-          
-          # Verify required environment variables are set
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$GRID_API_KEY" ]; then
-            echo "❌ Missing required environment variables!"
-            [ -z "$SUPABASE_URL" ] && echo "   - SUPABASE_URL is not set"
-            [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && echo "   - SUPABASE_SERVICE_ROLE_KEY is not set"
-            [ -z "$GRID_API_KEY" ] && echo "   - GRID_API_KEY is not set"
-            echo ""
-            echo "💡 Please ensure these GitHub secrets are configured:"
-            echo "   - EXPO_PUBLIC_SUPABASE_URL (mapped to SUPABASE_URL)"
-            echo "   - SUPABASE_SERVICE_ROLE_KEY"
-            echo "   - GRID_API_KEY"
-            exit 1
-          fi
-          
+
           # Start server in background with output redirection
           bun run dev > server.log 2>&1 &
           SERVER_PID=$!
