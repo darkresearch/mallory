@@ -4,6 +4,7 @@ node_modules/
 # Environment
 .env
 .env.local
+.env.test
 
 # Build outputs
 dist/
