@@ -1,7 +1,7 @@
 /**
  * Integration Tests: Chat History Navigation
  * 
- * Tests the fixes from PR #92 for chat history navigation issues:
+ * Tests chat history navigation behavior:
  * - Navigation preserves active conversation
  * - Storage persistence across navigation
  * - URL parameter handling
@@ -10,8 +10,6 @@
  * REQUIREMENTS:
  * - Backend server running
  * - Test user with Grid wallet
- * 
- * @see https://github.com/darkresearch/mallory/pull/92
  */
 
 import { describe, test, expect, beforeEach, afterAll } from 'bun:test';
@@ -37,7 +35,7 @@ const SECURE_STORAGE_KEYS = {
   CURRENT_CONVERSATION_ID: 'mallory_current_conversation_id',
 };
 
-describe('Integration: Chat History Navigation (PR #92)', () => {
+describe('Integration: Chat History Navigation', () => {
   let testUserId: string;
   let testConversationIds: string[] = [];
 
@@ -60,7 +58,7 @@ describe('Integration: Chat History Navigation (PR #92)', () => {
     }
   });
 
-  describe('FIX #1: Navigation Preserves Active Conversation', () => {
+  describe('Navigation Preserves Active Conversation', () => {
     test('should include conversationId in URL when navigating back from chat-history', async () => {
       console.log('\n✅ TEST: Navigation preserves conversation\n');
 
@@ -164,7 +162,7 @@ describe('Integration: Chat History Navigation (PR #92)', () => {
     });
   });
 
-  describe('FIX #4: Storage Persistence Across Navigation', () => {
+  describe('Storage Persistence Across Navigation', () => {
     test('should NOT clear storage when conversationId becomes null temporarily', async () => {
       console.log('\n✅ TEST: Storage persists during navigation\n');
 
@@ -256,7 +254,7 @@ describe('Integration: Chat History Navigation (PR #92)', () => {
     });
   });
 
-  describe('FIX #2: URL Parameter Handling', () => {
+  describe('URL Parameter Handling', () => {
     test('should prefer URL param over storage when loading', async () => {
       console.log('\n✅ TEST: URL param takes precedence\n');
 
@@ -348,7 +346,7 @@ describe('Integration: Chat History Navigation (PR #92)', () => {
     });
   });
 
-  describe('FIX: Complete Navigation Flow Integration', () => {
+  describe('Complete Navigation Flow Integration', () => {
     test('should handle complete user journey: chat → history → select different chat', async () => {
       console.log('\n✅ TEST: Complete navigation flow\n');
 

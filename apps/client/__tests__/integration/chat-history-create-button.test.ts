@@ -1,19 +1,12 @@
 /**
- * Unit Tests: Chat History "Create Chat" Button State
+ * Integration Tests: Chat History "Create Chat" Button State
  * 
- * Tests Fix #2 from PR #92: "Create chat" button getting stuck in loading state
- * 
- * Issues being tested:
- * - Button state not reset on component mount/unmount
+ * Tests button state management for the "Create chat" button:
+ * - Button state reset on component mount/unmount
  * - Animation delay preventing state reset
  * - Multiple rapid clicks causing stuck state
- * 
- * Fixes being verified:
- * - Added cleanup on mount/unmount
- * - Removed animation delay - immediate navigation
- * - Added timeout to reset loading state
- * 
- * @see https://github.com/darkresearch/mallory/pull/92
+ * - Immediate navigation without animation delay
+ * - Timeout to reset loading state
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -67,7 +60,7 @@ async function createNewConversation(userId: string) {
   };
 }
 
-describe('Unit: Create Chat Button State Management (PR #92)', () => {
+describe('Integration: Create Chat Button State Management', () => {
   let testUserId: string;
   let testConversationIds: string[] = [];
 
@@ -88,7 +81,7 @@ describe('Unit: Create Chat Button State Management (PR #92)', () => {
     }
   });
 
-  describe('FIX #2: Button State Reset on Mount/Unmount', () => {
+  describe('Button State Reset on Mount/Unmount', () => {
     test('should reset isCreatingChat to false on component mount', async () => {
       console.log('\n✅ TEST: Button state reset on mount\n');
 
@@ -126,7 +119,7 @@ describe('Unit: Create Chat Button State Management (PR #92)', () => {
     });
   });
 
-  describe('FIX #2: Prevent Multiple Rapid Clicks', () => {
+  describe('Prevent Multiple Rapid Clicks', () => {
     test('should ignore duplicate clicks while creating chat', async () => {
       console.log('\n✅ TEST: Ignore rapid duplicate clicks\n');
 
@@ -200,7 +193,7 @@ describe('Unit: Create Chat Button State Management (PR #92)', () => {
     });
   });
 
-  describe('FIX #2: Immediate Navigation (No Animation Delay)', () => {
+  describe('Immediate Navigation (No Animation Delay)', () => {
     test('should navigate immediately after conversation creation', async () => {
       console.log('\n✅ TEST: Immediate navigation\n');
 
@@ -282,7 +275,7 @@ describe('Unit: Create Chat Button State Management (PR #92)', () => {
     });
   });
 
-  describe('FIX #2: Error Handling', () => {
+  describe('Error Handling', () => {
     test('should reset loading state on error', async () => {
       console.log('\n✅ TEST: Reset state on error\n');
 
@@ -364,7 +357,7 @@ describe('Unit: Create Chat Button State Management (PR #92)', () => {
     });
   });
 
-  describe('FIX #2: Real-world Integration', () => {
+  describe('Real-world Integration', () => {
     test('should create conversation and navigate successfully', async () => {
       console.log('\n✅ TEST: Full create chat flow\n');
 

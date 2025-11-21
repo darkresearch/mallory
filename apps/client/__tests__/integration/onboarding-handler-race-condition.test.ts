@@ -1,20 +1,13 @@
 /**
- * Unit Tests: OnboardingConversationHandler Race Condition
+ * Integration Tests: OnboardingConversationHandler Race Condition
  * 
- * Tests Fix #3 from PR #92: OnboardingHandler creating conversations before 
- * useActiveConversation finishes loading
- * 
- * Issues being tested:
+ * Tests race condition prevention in onboarding conversation creation:
  * - Handler runs before conversationId is loaded from URL
  * - Handler creates onboarding conversation when one already exists in URL
  * - Race condition between URL param loading and handler execution
- * 
- * Fixes being verified:
- * - Now checks both currentConversationId prop AND URL params
+ * - Checks both currentConversationId prop AND URL params
  * - Prevents creating onboarding conversation when URL has conversationId
  * - Waits for both sources before deciding to create
- * 
- * @see https://github.com/darkresearch/mallory/pull/92
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
@@ -56,7 +49,7 @@ async function createOnboardingConversation(userId: string) {
   };
 }
 
-describe('Unit: OnboardingHandler Race Condition (PR #92)', () => {
+describe('Integration: OnboardingHandler Race Condition', () => {
   let testUserId: string;
   let testConversationIds: string[] = [];
 
@@ -83,7 +76,7 @@ describe('Unit: OnboardingHandler Race Condition (PR #92)', () => {
     }
   });
 
-  describe('FIX #3: Check URL Params Before Creating Onboarding', () => {
+  describe('Check URL Params Before Creating Onboarding', () => {
     test('should NOT create onboarding when conversationId in URL', async () => {
       console.log('\n✅ TEST: Skip onboarding when URL has conversationId\n');
 
@@ -232,7 +225,7 @@ describe('Unit: OnboardingHandler Race Condition (PR #92)', () => {
     });
   });
 
-  describe('FIX #3: Race Condition Scenarios', () => {
+  describe('Race Condition Scenarios', () => {
     test('should prevent race condition: URL loads after handler runs', async () => {
       console.log('\n✅ TEST: Race condition - URL loads late\n');
 
@@ -345,7 +338,7 @@ describe('Unit: OnboardingHandler Race Condition (PR #92)', () => {
     });
   });
 
-  describe('FIX #3: Real-world Scenarios', () => {
+  describe('Real-world Scenarios', () => {
     test('should handle: navigate with conversationId → should not create onboarding', async () => {
       console.log('\n✅ TEST: Direct navigation with conversationId\n');
 
@@ -468,7 +461,7 @@ describe('Unit: OnboardingHandler Race Condition (PR #92)', () => {
     });
   });
 
-  describe('FIX #3: Safeguards', () => {
+  describe('Safeguards', () => {
     test('should only run once per session (hasTriggered ref)', async () => {
       console.log('\n✅ TEST: Run once per session\n');
 
