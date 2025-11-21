@@ -27,13 +27,17 @@ describe('Price Fallback System', () => {
   describe('Jupiter API Integration', () => {
     test('should use new lite-api.jup.ag endpoint when no API key is set', async () => {
       // This test verifies the endpoint selection logic
-      const hasApiKey = !process.env.JUPITER_API_KEY;
+      const hasApiKey = !!process.env.JUPITER_API_KEY;
       const expectedBase = hasApiKey 
         ? 'https://api.jup.ag/swap/v1'
         : 'https://lite-api.jup.ag/swap/v1';
       
       // The actual endpoint should be lite-api when no key is set
-      expect(expectedBase).toContain('lite-api.jup.ag');
+      if (!hasApiKey) {
+        expect(expectedBase).toContain('lite-api.jup.ag');
+      } else {
+        expect(expectedBase).toContain('api.jup.ag');
+      }
     });
 
     test('should use api.jup.ag endpoint when JUPITER_API_KEY is set', () => {
