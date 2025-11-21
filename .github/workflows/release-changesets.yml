@@ -35,8 +35,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Check if version was bumped
+        id: version_check
+        run: |
+          # Check if this commit includes CHANGELOG updates (indicates a version bump)
+          if git diff-tree --no-commit-id --name-only -r HEAD | grep -q "CHANGELOG.md"; then
+            echo "version_bumped=true" >> $GITHUB_OUTPUT
+            echo "✅ Version bump detected (CHANGELOG.md updated)"
+          else
+            echo "version_bumped=false" >> $GITHUB_OUTPUT
+            echo "ℹ️  No version bump (CHANGELOG.md not updated)"
+          fi
+      
       - name: Create tag and trigger deployment
-        if: steps.changesets.outputs.published == 'true'
+        if: steps.version_check.outputs.version_bumped == 'true'
         run: |
           # Get the version from one of the scoped packages in the fixed group
           # (root package.json is not managed by changesets and stays at 0.1.0)
@@ -58,7 +70,7 @@ jobs:
           git push origin $TAG
           
           echo "✅ Created and pushed tag: $TAG"
-          echo "🚀 This will trigger Vercel production deployment"
+          echo "🚀 This will trigger Vercel production deployment and GitHub release"
       
       - name: Summary
         if: steps.changesets.outputs.hasChangesets == 'true'
