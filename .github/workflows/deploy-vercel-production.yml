@@ -20,30 +20,28 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
       
-      - name: Install Vercel CLI
-        run: npm install --global vercel@latest
-      
-      - name: Install dependencies
+      - name: Install workspace dependencies
         run: bun install
-        working-directory: apps/client
       
-      - name: Pull Vercel Environment Information
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/client
+      - name: Install client dependencies  
+        run: cd apps/client && bun install
       
-      - name: Build Project Artifacts
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/client
+      - name: Build for production
+        run: cd apps/client && bun run web:export
         env:
-          # Required environment variables for build
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
           EXPO_PUBLIC_BACKEND_API_URL: ${{ secrets.EXPO_PUBLIC_BACKEND_API_URL }}
           EXPO_PUBLIC_GRID_ENV: production
       
-      - name: Deploy to Vercel Production
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/client
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: apps/client/dist
+          vercel-args: '--prod'
       
       - name: Deployment Summary
         run: |
