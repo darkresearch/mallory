@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- bf541bb: Fix chat history navigation creating new conversations (PR #92 by @Hebx)
+- bf541bb: Fix chat history navigation creating new conversations (#110, contributed by @Hebx)
 
   - **Fix navigation back from chat-history**: Now includes conversationId in URL to preserve active conversation
   - **Fix "Create chat" button stuck state**: Added proper cleanup on mount/unmount and removed animation delay
@@ -25,6 +25,20 @@
   - Unit tests for button state management and race condition prevention
   - All tests added to CI pipeline
 
-  Contributed by: @Hebx (Ihab Heb)
+- a4fa5ee: Add conversation management guidelines to prevent duplicate responses (#102, contributed by @kennethkabogo)
 
+  - Added explicit prompt instructions to prevent re-answering already-addressed questions
+  - Created decision tree for handling follow-up questions vs. new questions
+  - Improved conversation context awareness in AI responses
+
+- f45e9e4: Remove stale maestro artifacts (#104)
+
+  - Cleaned up obsolete mobile testing configuration files
+
+- 8bbc31b: Add changesets for version management and changelogs (#105)
+
+  - Implemented automated changelog generation
+  - Added changeset workflow for tracking changes
+
+- Updated dependencies
   - @darkresearch/mallory-shared@0.1.1
