@@ -1,6 +1,6 @@
 {
   "name": "@darkresearch/mallory-shared",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared types and utilities for Mallory client and server",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -21,4 +21,3 @@
   },
   "private": true
 }
-
