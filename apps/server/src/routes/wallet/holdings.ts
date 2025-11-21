@@ -91,7 +91,7 @@ async function fetchTokenPriceFromCoinGecko(tokenAddress: string): Promise<numbe
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch(url, { 
+    const response = await fetch(url, {
       headers: { 'Accept': 'application/json' },
       signal: controller.signal
     });
@@ -188,7 +188,7 @@ async function fetchTokenPricesFromJupiter(tokenAddresses: string[]): Promise<Ma
           
           // Price field is "usdPrice" (not "price")
           const price = tokenData.usdPrice || tokenData.price;
-          if (price && typeof price === 'number' && price > 0) {
+          if (price && typeof price === 'number' && isFinite(price) && price > 0) {
             resultMap.set(mintAddress, price);
             console.log(`💰 [Jupiter Price API] ✅ Token ${mintAddress.substring(0, 8)}... price:`, price.toFixed(6));
           } else {
@@ -372,29 +372,29 @@ async function fetchMarketDataWithFallbacks(tokenAddresses: string[]): Promise<M
 
   // Apply fallbacks for missing tokens
   const solAddress = 'So11111111111111111111111111111111111111112';
-  
-  // For SOL, try fallback sources if not found in Birdeye response
-  if (tokenAddresses.includes(solAddress) && !resultMap.has(solAddress)) {
-    const solPrice = await fetchSolPriceWithFallbacks();
-    if (solPrice !== null) {
-      resultMap.set(solAddress, {
-        price: solPrice,
-        market_cap: 0
-      });
+    
+    // For SOL, try fallback sources if not found in Birdeye response
+    if (tokenAddresses.includes(solAddress) && !resultMap.has(solAddress)) {
+      const solPrice = await fetchSolPriceWithFallbacks();
+      if (solPrice !== null) {
+        resultMap.set(solAddress, {
+          price: solPrice,
+          market_cap: 0
+        });
+      }
     }
-  }
-  
-  // Use fallback prices only for stablecoins that weren't found
-  for (const address of tokenAddresses) {
-    if (FALLBACK_PRICES[address] && !resultMap.has(address)) {
-      resultMap.set(address, {
-        price: FALLBACK_PRICES[address],
-        market_cap: 0
-      });
+    
+    // Use fallback prices only for stablecoins that weren't found
+    for (const address of tokenAddresses) {
+      if (FALLBACK_PRICES[address] && !resultMap.has(address)) {
+        resultMap.set(address, {
+          price: FALLBACK_PRICES[address],
+          market_cap: 0
+        });
+      }
     }
-  }
 
-  return resultMap;
+    return resultMap;
 }
 
 /**
@@ -491,7 +491,7 @@ router.get('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
     }));
     
     const [marketDataMap, metadataMap] = await Promise.all([
-      fetchMarketDataWithFallbacks(tokenAddresses),
+      fetchTokenPricesWithFallbacks(tokensForPricing),
       fetchBirdeyeMetadata(tokenAddresses)
     ]);
 
