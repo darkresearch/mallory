@@ -229,6 +229,24 @@ jobs:
         
       - name: Install server dependencies
         run: cd apps/server && bun install
+      
+      - name: Debug environment variables
+        run: |
+          echo "🔍 Checking environment variables..."
+          echo "GRID_API_KEY: ${GRID_API_KEY:+SET}${GRID_API_KEY:-NOT SET}"
+          echo "SUPABASE_URL: ${SUPABASE_URL:+SET}${SUPABASE_URL:-NOT SET}"
+          echo "SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:+SET}${SUPABASE_SERVICE_ROLE_KEY:-NOT SET}"
+          echo "GRID_ENV: ${GRID_ENV:-NOT SET (will default to production)}"
+          echo ""
+          echo "Checking if required variables are set..."
+          [ -z "$GRID_API_KEY" ] && echo "❌ GRID_API_KEY is empty!" || echo "✅ GRID_API_KEY is set"
+          [ -z "$SUPABASE_URL" ] && echo "❌ SUPABASE_URL is empty!" || echo "✅ SUPABASE_URL is set"
+          [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && echo "❌ SUPABASE_SERVICE_ROLE_KEY is empty!" || echo "✅ SUPABASE_SERVICE_ROLE_KEY is set"
+        env:
+          GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
+          GRID_ENV: production
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         
       - name: Start backend server
         run: |
@@ -249,6 +267,7 @@ jobs:
             # Check if process is still running
             if ! kill -0 $SERVER_PID 2>/dev/null; then
               echo "❌ Backend server process died!"
+              echo "📋 Server logs:"
               cat server.log
               exit 1
             fi
@@ -268,7 +287,8 @@ jobs:
             fi
             
             if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
-              echo "❌ Backend server failed to become ready"
+              echo "❌ Backend server failed to become ready after $MAX_ATTEMPTS attempts"
+              echo "📋 Server logs:"
               cat server.log
               exit 1
             fi
@@ -279,6 +299,7 @@ jobs:
         env:
           # Backend-specific secrets
           GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
+          GRID_ENV: production
           SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NODE_ENV: test
@@ -394,6 +415,24 @@ jobs:
         
       - name: Install server dependencies
         run: cd apps/server && bun install
+      
+      - name: Debug environment variables
+        run: |
+          echo "🔍 Checking environment variables..."
+          echo "GRID_API_KEY: ${GRID_API_KEY:+SET}${GRID_API_KEY:-NOT SET}"
+          echo "SUPABASE_URL: ${SUPABASE_URL:+SET}${SUPABASE_URL:-NOT SET}"
+          echo "SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:+SET}${SUPABASE_SERVICE_ROLE_KEY:-NOT SET}"
+          echo "GRID_ENV: ${GRID_ENV:-NOT SET (will default to production)}"
+          echo ""
+          echo "Checking if required variables are set..."
+          [ -z "$GRID_API_KEY" ] && echo "❌ GRID_API_KEY is empty!" || echo "✅ GRID_API_KEY is set"
+          [ -z "$SUPABASE_URL" ] && echo "❌ SUPABASE_URL is empty!" || echo "✅ SUPABASE_URL is set"
+          [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && echo "❌ SUPABASE_SERVICE_ROLE_KEY is empty!" || echo "✅ SUPABASE_SERVICE_ROLE_KEY is set"
+        env:
+          GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
+          GRID_ENV: production
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         
       - name: Start backend server
         run: |
@@ -414,6 +453,7 @@ jobs:
             # Check if process is still running
             if ! kill -0 $SERVER_PID 2>/dev/null; then
               echo "❌ Backend server process died!"
+              echo "📋 Server logs:"
               cat server.log
               exit 1
             fi
@@ -448,6 +488,7 @@ jobs:
         env:
           # Backend-specific secrets
           GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
+          GRID_ENV: production
           
           # Supabase (backend needs full access)
           SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
