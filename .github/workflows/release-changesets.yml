@@ -38,8 +38,8 @@ jobs:
       - name: Check if version was bumped
         id: version_check
         run: |
-          # Check if CHANGELOG.md was created/updated (indicates a release happened)
-          if git diff HEAD~1 HEAD --name-only | grep -q "CHANGELOG.md"; then
+          # Check if this commit includes CHANGELOG updates (indicates a version bump)
+          if git diff-tree --no-commit-id --name-only -r HEAD | grep -q "CHANGELOG.md"; then
             echo "version_bumped=true" >> $GITHUB_OUTPUT
             echo "✅ Version bump detected (CHANGELOG.md updated)"
           else

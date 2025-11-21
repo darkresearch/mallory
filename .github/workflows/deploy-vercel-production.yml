@@ -17,31 +17,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-      
-      - name: Install workspace dependencies
-        run: bun install
-      
-      - name: Install client dependencies  
-        run: cd apps/client && bun install
-      
-      - name: Build for production
-        run: cd apps/client && bun run web:export
-        env:
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
-          EXPO_PUBLIC_BACKEND_API_URL: ${{ secrets.EXPO_PUBLIC_BACKEND_API_URL }}
-          EXPO_PUBLIC_GRID_ENV: production
-      
       - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: apps/client/dist
-          vercel-args: '--prod'
+        run: |
+          cd apps/client
+          npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes \
+            --build-env EXPO_PUBLIC_SUPABASE_URL="${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}" \
+            --build-env EXPO_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}" \
+            --build-env EXPO_PUBLIC_BACKEND_API_URL="${{ secrets.EXPO_PUBLIC_BACKEND_API_URL }}" \
+            --build-env EXPO_PUBLIC_GRID_ENV="production"
       
       - name: Deployment Summary
         run: |
