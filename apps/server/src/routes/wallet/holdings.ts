@@ -58,8 +58,13 @@ async function fetchSolPriceFromCoinGecko(): Promise<number | null> {
       const data = await response.json() as any;
       if (data.solana?.usd) {
         const price = data.solana.usd;
-        console.log('💰 [CoinGecko] SOL price fetched:', price.toFixed(2));
-        return price;
+        // Validate price is finite and positive before returning
+        if (typeof price === 'number' && isFinite(price) && price > 0) {
+          console.log('💰 [CoinGecko] SOL price fetched:', price.toFixed(2));
+          return price;
+        } else {
+          console.warn('💰 [CoinGecko] Invalid SOL price (not finite or <= 0):', price);
+        }
       }
     } else {
       console.warn('💰 [CoinGecko] API error:', response.status);
@@ -103,8 +108,13 @@ async function fetchTokenPriceFromCoinGecko(tokenAddress: string): Promise<numbe
       const priceData = data[address];
       if (priceData?.usd) {
         const price = priceData.usd;
-        console.log(`💰 [CoinGecko] Token ${tokenAddress.substring(0, 8)}... price fetched:`, price.toFixed(6));
-        return price;
+        // Validate price is finite and positive before returning
+        if (typeof price === 'number' && isFinite(price) && price > 0) {
+          console.log(`💰 [CoinGecko] Token ${tokenAddress.substring(0, 8)}... price fetched:`, price.toFixed(6));
+          return price;
+        } else {
+          console.warn(`💰 [CoinGecko] Invalid token price (not finite or <= 0) for ${tokenAddress.substring(0, 8)}...:`, price);
+        }
       }
     } else {
       console.warn(`💰 [CoinGecko] API error for token ${tokenAddress.substring(0, 8)}...:`, response.status);
@@ -265,7 +275,8 @@ async function fetchTokenPricesWithFallbacks(
   
   // Add Jupiter prices to result map
   for (const [address, price] of jupiterPrices.entries()) {
-    if (price > 0) {
+    // Validate price is finite and positive
+    if (typeof price === 'number' && isFinite(price) && price > 0) {
       resultMap.set(address, {
         price,
         market_cap: 0
@@ -290,7 +301,8 @@ async function fetchTokenPricesWithFallbacks(
     // Add CoinGecko prices to result map
     let coinGeckoFound = 0;
     for (const { address, price } of coinGeckoResults) {
-      if (price !== null && price > 0 && !resultMap.has(address)) {
+      // Validate price is finite and positive
+      if (price !== null && typeof price === 'number' && isFinite(price) && price > 0 && !resultMap.has(address)) {
         resultMap.set(address, {
           price,
           market_cap: 0
@@ -316,7 +328,8 @@ async function fetchTokenPricesWithFallbacks(
       // Merge Birdeye results
       let birdeyeFound = 0;
       for (const [address, data] of birdeyeData.entries()) {
-        if (!resultMap.has(address) && data.price && data.price > 0) {
+        // Validate price is finite and positive
+        if (!resultMap.has(address) && data.price && typeof data.price === 'number' && isFinite(data.price) && data.price > 0) {
           resultMap.set(address, data);
           birdeyeFound++;
         }
@@ -362,7 +375,8 @@ async function fetchMarketDataWithFallbacks(tokenAddresses: string[]): Promise<M
     
     // Copy successful results
     for (const [address, data] of birdeyeData) {
-      if (data.price && data.price > 0) {
+      // Validate price is finite and positive
+      if (data.price && typeof data.price === 'number' && isFinite(data.price) && data.price > 0) {
         resultMap.set(address, data);
       }
     }
@@ -376,7 +390,8 @@ async function fetchMarketDataWithFallbacks(tokenAddresses: string[]): Promise<M
     // For SOL, try fallback sources if not found in Birdeye response
     if (tokenAddresses.includes(solAddress) && !resultMap.has(solAddress)) {
       const solPrice = await fetchSolPriceWithFallbacks();
-      if (solPrice !== null) {
+      // Validate price is finite and positive
+      if (solPrice !== null && typeof solPrice === 'number' && isFinite(solPrice) && solPrice > 0) {
         resultMap.set(solAddress, {
           price: solPrice,
           market_cap: 0
