@@ -18,12 +18,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Deploy to Vercel
-        run: |
-          npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes \
-            --build-env EXPO_PUBLIC_SUPABASE_URL="${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}" \
-            --build-env EXPO_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}" \
-            --build-env EXPO_PUBLIC_BACKEND_API_URL="${{ secrets.EXPO_PUBLIC_BACKEND_API_URL }}" \
-            --build-env EXPO_PUBLIC_GRID_ENV="production"
+        run: npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
       
       - name: Deployment Summary
         run: |
