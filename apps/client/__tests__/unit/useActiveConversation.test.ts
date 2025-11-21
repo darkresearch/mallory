@@ -33,8 +33,23 @@ const mockParams = {
   conversationId: undefined as string | undefined,
 };
 
+const mockRouter = {
+  push: mock(() => {}),
+  replace: mock(() => {}),
+  setParams: mock(() => {}),
+  back: mock(() => {}),
+};
+
 mock.module('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
+  useRouter: () => mockRouter,
+}));
+
+mock.module('react-native', () => ({
+  Platform: {
+    OS: 'web',
+    select: (obj: any) => obj.web || obj.default,
+  },
 }));
 
 mock.module('@/lib', () => ({

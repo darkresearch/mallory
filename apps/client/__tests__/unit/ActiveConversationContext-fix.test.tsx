@@ -22,6 +22,10 @@ const SECURE_STORAGE_KEYS = {
   CURRENT_CONVERSATION_ID: 'mallory_current_conversation_id',
 };
 
+const SESSION_STORAGE_KEYS = {
+  IS_LOGGING_OUT: 'mallory_is_logging_out',
+};
+
 // Mock lib/storage
 mock.module('@/lib/storage', () => ({
   storage: {
@@ -37,6 +41,7 @@ mock.module('@/lib/storage', () => ({
     },
   },
   SECURE_STORAGE_KEYS,
+  SESSION_STORAGE_KEYS,
 }));
 
 // Mock lib index
@@ -49,6 +54,7 @@ mock.module('@/lib', () => ({
     },
   },
   SECURE_STORAGE_KEYS,
+  SESSION_STORAGE_KEYS,
 }));
 
 // Import after mocking
