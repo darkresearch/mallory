@@ -9,8 +9,10 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from .env file if it exists
+// In CI, environment variables come from GitHub Actions secrets via workflow env: block
+// override: false ensures CI env vars take precedence
+dotenv.config({ override: false });
 
 const app = express();
 const PORT = process.env.PORT || 3001;

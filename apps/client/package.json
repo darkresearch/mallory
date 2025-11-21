@@ -1,6 +1,6 @@
 {
   "name": "@darkresearch/mallory-client",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Opinionated react native crypto x AI chat app boilerplate with wallet support, conversational AI, dynamic UI, and x402 support",
   "main": "index.ts",
   "scripts": {

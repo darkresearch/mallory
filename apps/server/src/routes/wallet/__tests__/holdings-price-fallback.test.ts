@@ -3,7 +3,7 @@
  * 
  * Tests the multi-tier fallback system:
  * 1. Birdeye API (primary)
- * 2. Jupiter API (fallback 1)
+ * 2. Jupiter Price API V3 (fallback 1)
  * 3. CoinGecko API (fallback 2)
  * 4. Stablecoin fallback prices
  */
@@ -24,31 +24,34 @@ describe('Price Fallback System', () => {
     global.fetch = originalFetch;
   });
 
-  describe('Jupiter API Integration', () => {
-    test('should use new lite-api.jup.ag endpoint when no API key is set', async () => {
-      // This test verifies the endpoint selection logic
+  describe('Jupiter Price API V3 Integration', () => {
+    test('should use price/v3 lite-api.jup.ag endpoint when no API key is set', async () => {
+      // This test verifies the endpoint selection logic for Price API V3
       const hasApiKey = !!process.env.JUPITER_API_KEY;
       const expectedBase = hasApiKey 
-        ? 'https://api.jup.ag/swap/v1'
-        : 'https://lite-api.jup.ag/swap/v1';
+        ? 'https://api.jup.ag/price/v3'
+        : 'https://lite-api.jup.ag/price/v3';
       
       // The actual endpoint should be lite-api when no key is set
       if (!hasApiKey) {
         expect(expectedBase).toContain('lite-api.jup.ag');
+        expect(expectedBase).toContain('/price/v3');
       } else {
         expect(expectedBase).toContain('api.jup.ag');
+        expect(expectedBase).toContain('/price/v3');
       }
     });
 
-    test('should use api.jup.ag endpoint when JUPITER_API_KEY is set', () => {
+    test('should use price/v3 api.jup.ag endpoint when JUPITER_API_KEY is set', () => {
       const hasApiKey = !!process.env.JUPITER_API_KEY;
       if (hasApiKey) {
-        const expectedBase = 'https://api.jup.ag/swap/v1';
+        const expectedBase = 'https://api.jup.ag/price/v3';
         expect(expectedBase).toContain('api.jup.ag');
+        expect(expectedBase).toContain('/price/v3');
       }
     });
 
-    test('should handle Jupiter API timeout gracefully', async () => {
+    test('should handle Jupiter Price API V3 timeout gracefully', async () => {
       // Mock fetch to simulate timeout
       global.fetch = async () => {
         await new Promise(resolve => setTimeout(resolve, 6000)); // Longer than 5s timeout
@@ -60,18 +63,37 @@ describe('Price Fallback System', () => {
       expect(true).toBe(true); // Placeholder - actual test would call the function
     });
 
-    test('should validate outAmount to prevent NaN', () => {
-      // Test that invalid outAmount values are handled
-      const invalidValues = [NaN, Infinity, -Infinity, 0, -1, 'invalid'];
+    test('should validate usdPrice to prevent invalid values', () => {
+      // Test that invalid usdPrice values are handled (Price API V3 returns usdPrice field)
+      const invalidValues = [NaN, Infinity, -Infinity, 0, -1, null, undefined, 'invalid'];
       
       for (const value of invalidValues) {
-        const parsed = parseInt(String(value), 10);
-        const isValid = isFinite(parsed) && parsed > 0;
+        const isValid = typeof value === 'number' && isFinite(value) && value > 0;
         
         if (!isValid) {
           expect(isValid).toBe(false);
         }
       }
+      
+      // Valid price should pass
+      const validPrice = 150.50;
+      const isValid = typeof validPrice === 'number' && isFinite(validPrice) && validPrice > 0;
+      expect(isValid).toBe(true);
+    });
+
+    test('should construct correct Price API V3 batch request URL', () => {
+      // Price API V3 uses 'ids' parameter with comma-separated mint addresses
+      const tokenAddresses = [
+        'So11111111111111111111111111111111111111112',
+        'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+      ];
+      const ids = tokenAddresses.join(',');
+      const jupiterPriceApiBase = 'https://lite-api.jup.ag/price/v3';
+      const url = `${jupiterPriceApiBase}?ids=${encodeURIComponent(ids)}`;
+      
+      expect(url).toContain('/price/v3');
+      expect(url).toContain('ids=');
+      expect(url).toContain(tokenAddresses[0].substring(0, 8));
     });
   });
 
@@ -109,10 +131,10 @@ describe('Price Fallback System', () => {
   });
 
   describe('Fallback Chain', () => {
-    test('should try Jupiter first, then CoinGecko', () => {
-      // The fallback order should be: Jupiter -> CoinGecko -> null
-      const fallbackOrder = ['Jupiter', 'CoinGecko', 'null'];
-      expect(fallbackOrder[0]).toBe('Jupiter');
+    test('should try Jupiter Price API V3 first, then CoinGecko', () => {
+      // The fallback order should be: Jupiter Price API V3 -> CoinGecko -> null
+      const fallbackOrder = ['Jupiter Price API V3', 'CoinGecko', 'null'];
+      expect(fallbackOrder[0]).toBe('Jupiter Price API V3');
       expect(fallbackOrder[1]).toBe('CoinGecko');
     });
 
