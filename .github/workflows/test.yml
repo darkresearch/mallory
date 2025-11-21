@@ -4,11 +4,11 @@ on:
   # Run on pushes to main branch
   push:
     branches: [main]
-    
+
   # Run on PRs, but only when marked as ready for review
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    
+
   # Allow manual trigger
   workflow_dispatch:
 
@@ -48,28 +48,28 @@ jobs:
     needs: check-pr-state
     if: needs.check-pr-state.outputs.should-run == 'true'
     timeout-minutes: 5
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-          
+
       - name: Install workspace dependencies
         run: bun install
-        
+
       - name: Install client dependencies
         run: cd apps/client && bun install
-        
+
       - name: Type check client
         run: cd apps/client && bun run type-check
-        
+
       - name: Install server dependencies
         run: cd apps/server && bun install
-        
+
       - name: Type check server
         run: cd apps/server && bun run type-check
 
@@ -79,22 +79,22 @@ jobs:
     runs-on: ubuntu-latest
     needs: type-check
     timeout-minutes: 10
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-          
+
       - name: Install workspace dependencies
         run: bun install
-        
+
       - name: Install client dependencies
         run: cd apps/client && bun install
-        
+
       - name: Build client for web
         run: cd apps/client && bun run web:export
         env:
@@ -103,7 +103,7 @@ jobs:
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
           EXPO_PUBLIC_BACKEND_API_URL: https://api.example.com
           EXPO_PUBLIC_GRID_ENV: production
-        
+
       - name: Verify client build output
         run: |
           if [ ! -d "apps/client/dist" ]; then
@@ -115,13 +115,13 @@ jobs:
           echo "✅ Client build successful"
           echo "📊 Build size:"
           du -sh apps/client/dist
-        
+
       - name: Install server dependencies
         run: cd apps/server && bun install
-        
+
       - name: Build server
         run: cd apps/server && bun run build
-        
+
       - name: Verify server build output
         run: |
           if [ ! -d "apps/server/dist" ]; then
@@ -133,7 +133,7 @@ jobs:
           echo "✅ Server build successful"
           echo "📊 Build size:"
           du -sh apps/server/dist
-        
+
       - name: Upload build artifacts
         if: always()
         uses: actions/upload-artifact@v5
@@ -150,19 +150,19 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-check
     timeout-minutes: 5
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-          
+
       - name: Install client dependencies
         run: cd apps/client && bun install
-        
+
       - name: Run client unit tests
         run: cd apps/client && bun run test:unit
         env:
@@ -175,15 +175,15 @@ jobs:
           TEST_BACKEND_URL: http://localhost:3001
           # NOTE: EXPO_PUBLIC_GRID_API_KEY is intentionally NOT set
           # Unit tests verify it's not exposed to client code
-      
+
       - name: Install server dependencies
         run: cd apps/server && bun install
-        
+
       - name: Run server unit tests
         run: cd apps/server && bun run test:unit
         env:
           NODE_ENV: test
-      
+
       - name: Run chat draft messages unit test
         run: cd apps/client && bun test __tests__/unit/draftMessages.test.ts
         continue-on-error: true
@@ -194,7 +194,7 @@ jobs:
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
           EXPO_PUBLIC_GRID_ENV: production
           TEST_BACKEND_URL: http://localhost:3001
-        
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v5
@@ -210,26 +210,26 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: unit-tests  # Run after unit tests pass
-    
+    needs: unit-tests # Run after unit tests pass
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-          
+
       - name: Install workspace dependencies
         run: bun install
-        
+
       - name: Install client dependencies
         run: cd apps/client && bun install
-        
+
       - name: Install server dependencies
         run: cd apps/server && bun install
-      
+
       - name: Debug environment variables
         run: |
           echo "🔍 Checking environment variables..."
@@ -247,20 +247,35 @@ jobs:
           GRID_ENV: production
           SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        
+
       - name: Start backend server
         run: |
           cd apps/server
+          
+          # Verify required environment variables are set
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$GRID_API_KEY" ]; then
+            echo "❌ Missing required environment variables!"
+            [ -z "$SUPABASE_URL" ] && echo "   - SUPABASE_URL is not set"
+            [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && echo "   - SUPABASE_SERVICE_ROLE_KEY is not set"
+            [ -z "$GRID_API_KEY" ] && echo "   - GRID_API_KEY is not set"
+            echo ""
+            echo "💡 Please ensure these GitHub secrets are configured:"
+            echo "   - EXPO_PUBLIC_SUPABASE_URL (mapped to SUPABASE_URL)"
+            echo "   - SUPABASE_SERVICE_ROLE_KEY"
+            echo "   - GRID_API_KEY"
+            exit 1
+          fi
+          
           # Start server in background
           bun run dev > server.log 2>&1 &
           SERVER_PID=$!
           echo $SERVER_PID > server.pid
           echo "🚀 Backend server started with PID: $SERVER_PID"
-          
+
           # Wait for server to be ready
           MAX_ATTEMPTS=30
           ATTEMPT=0
-          
+
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             ATTEMPT=$((ATTEMPT + 1))
             
@@ -304,7 +319,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NODE_ENV: test
           PORT: 3001
-      
+
       - name: Setup test Grid account
         run: cd apps/client && bun run test:setup
         env:
@@ -316,33 +331,33 @@ jobs:
           MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
           MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
           EXPO_PUBLIC_GRID_ENV: production
-          
+
           # Backend URL for Grid account creation (backend has GRID_API_KEY)
           TEST_BACKEND_URL: http://localhost:3001
           EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
-        
+
       - name: Run integration tests
         run: cd apps/client && bun run test:integration
         env:
           # Supabase (client-safe)
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
-          
+
           # Test account credentials
           TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
           TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
-          
+
           # Mailosaur (for OTP retrieval)
           MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
           MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
-          
+
           # Grid environment (not secret)
           EXPO_PUBLIC_GRID_ENV: production
-          
+
           # Backend URL (for Grid operations)
           TEST_BACKEND_URL: http://localhost:3001
           EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
-      
+
       - name: Run chat history integration tests
         run: cd apps/client && bun run test:integration:chat-history
         env:
@@ -355,7 +370,7 @@ jobs:
           EXPO_PUBLIC_GRID_ENV: production
           TEST_BACKEND_URL: http://localhost:3001
           EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
-      
+
       - name: Run chat history navigation integration tests
         run: cd apps/client && bun run test:integration:chat-history-nav
         env:
@@ -368,21 +383,21 @@ jobs:
           EXPO_PUBLIC_GRID_ENV: production
           TEST_BACKEND_URL: http://localhost:3001
           EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
-      
+
       - name: Stop backend server
         if: always()
         run: |
           if [ -f apps/server/server.pid ]; then
             kill $(cat apps/server/server.pid) || true
           fi
-          
+
       - name: Upload server logs
         if: always()
         uses: actions/upload-artifact@v5
         with:
           name: integration-server-logs
           path: apps/server/server.log
-          
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v5
@@ -396,26 +411,26 @@ jobs:
     name: E2E Tests (with Backend)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: integration-tests  # Run after integration tests pass
-    
+    needs: integration-tests # Run after integration tests pass
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-          
+
       - name: Install workspace dependencies
         run: bun install
-        
+
       - name: Install client dependencies
         run: cd apps/client && bun install
-        
+
       - name: Install server dependencies
         run: cd apps/server && bun install
-      
+
       - name: Debug environment variables
         run: |
           echo "🔍 Checking environment variables..."
@@ -433,20 +448,35 @@ jobs:
           GRID_ENV: production
           SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        
+
       - name: Start backend server
         run: |
           cd apps/server
+          
+          # Verify required environment variables are set
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$GRID_API_KEY" ]; then
+            echo "❌ Missing required environment variables!"
+            [ -z "$SUPABASE_URL" ] && echo "   - SUPABASE_URL is not set"
+            [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && echo "   - SUPABASE_SERVICE_ROLE_KEY is not set"
+            [ -z "$GRID_API_KEY" ] && echo "   - GRID_API_KEY is not set"
+            echo ""
+            echo "💡 Please ensure these GitHub secrets are configured:"
+            echo "   - EXPO_PUBLIC_SUPABASE_URL (mapped to SUPABASE_URL)"
+            echo "   - SUPABASE_SERVICE_ROLE_KEY"
+            echo "   - GRID_API_KEY"
+            exit 1
+          fi
+          
           # Start server in background with output redirection
           bun run dev > server.log 2>&1 &
           SERVER_PID=$!
           echo $SERVER_PID > server.pid
           echo "🚀 Backend server started with PID: $SERVER_PID"
-          
+
           # Wait for server to be ready with improved health check
           MAX_ATTEMPTS=30
           ATTEMPT=0
-          
+
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             ATTEMPT=$((ATTEMPT + 1))
             
@@ -489,11 +519,11 @@ jobs:
           # Backend-specific secrets
           GRID_API_KEY: ${{ secrets.GRID_API_KEY }}
           GRID_ENV: production
-          
+
           # Supabase (backend needs full access)
           SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          
+
           # Other backend config
           NODE_ENV: test
           PORT: 3001
@@ -511,7 +541,7 @@ jobs:
           EXPO_PUBLIC_GRID_ENV: production
           TEST_BACKEND_URL: http://localhost:3001
           EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
-          
+
       - name: Run E2E auth flow tests
         run: cd apps/client && bun run test:e2e:auth
         env:
@@ -523,11 +553,11 @@ jobs:
           MAILOSAUR_API_KEY: ${{ secrets.MAILOSAUR_API_KEY }}
           MAILOSAUR_SERVER_ID: ${{ secrets.MAILOSAUR_SERVER_ID }}
           EXPO_PUBLIC_GRID_ENV: production
-          
+
           # Backend URL
           TEST_BACKEND_URL: http://localhost:3001
           EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
-          
+
       - name: Run OTP persistence tests
         run: cd apps/client && bun run test:e2e:persistence
         env:
@@ -536,7 +566,7 @@ jobs:
           TEST_SUPABASE_EMAIL: ${{ secrets.TEST_SUPABASE_EMAIL }}
           TEST_SUPABASE_PASSWORD: ${{ secrets.TEST_SUPABASE_PASSWORD }}
           TEST_BACKEND_URL: http://localhost:3001
-      
+
       - name: Run chat history E2E tests
         run: cd apps/client && bun run test:e2e:chat-history
         env:
@@ -549,21 +579,21 @@ jobs:
           EXPO_PUBLIC_GRID_ENV: production
           TEST_BACKEND_URL: http://localhost:3001
           EXPO_PUBLIC_BACKEND_API_URL: http://localhost:3001
-      
+
       - name: Stop backend server
         if: always()
         run: |
           if [ -f apps/server/server.pid ]; then
             kill $(cat apps/server/server.pid) || true
           fi
-          
+
       - name: Upload server logs
         if: always()
         uses: actions/upload-artifact@v5
         with:
           name: server-logs
           path: apps/server/server.log
-          
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v5
@@ -578,7 +608,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [type-check, build-check, unit-tests, integration-tests, e2e-tests]
     if: always()
-    
+
     steps:
       - name: Check test results
         run: |
@@ -590,40 +620,39 @@ jobs:
           echo "Integration Tests: ${{ needs.integration-tests.result }}"
           echo "E2E Tests: ${{ needs.e2e-tests.result }}"
           echo ""
-          
+
           # Check if any job failed
           FAILED=0
-          
+
           if [ "${{ needs.type-check.result }}" != "success" ]; then
             echo "❌ Type check failed"
             FAILED=1
           fi
-          
+
           if [ "${{ needs.build-check.result }}" != "success" ]; then
             echo "❌ Build check failed"
             FAILED=1
           fi
-          
+
           if [ "${{ needs.unit-tests.result }}" != "success" ]; then
             echo "❌ Unit tests failed"
             FAILED=1
           fi
-          
+
           if [ "${{ needs.integration-tests.result }}" != "success" ]; then
             echo "❌ Integration tests failed"
             FAILED=1
           fi
-          
+
           if [ "${{ needs.e2e-tests.result }}" != "success" ]; then
             echo "❌ E2E tests failed"
             FAILED=1
           fi
-          
+
           if [ $FAILED -eq 1 ]; then
             echo ""
             echo "Some tests failed!"
             exit 1
           fi
-          
-          echo "✅ All tests passed!"
 
+          echo "✅ All tests passed!"
