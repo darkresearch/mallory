@@ -48,26 +48,29 @@ async function fetchSolPriceFromCoinGecko(): Promise<number | null> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch(url, { 
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    
-    if (response.ok) {
-      const data = await response.json() as any;
-      if (data.solana?.usd) {
-        const price = data.solana.usd;
-        // Validate price is finite and positive before returning
-        if (typeof price === 'number' && isFinite(price) && price > 0) {
-          console.log('💰 [CoinGecko] SOL price fetched:', price.toFixed(2));
-          return price;
-        } else {
-          console.warn('💰 [CoinGecko] Invalid SOL price (not finite or <= 0):', price);
+    try {
+      const response = await fetch(url, { 
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal
+      });
+      
+      if (response.ok) {
+        const data = await response.json() as any;
+        if (data.solana?.usd) {
+          const price = data.solana.usd;
+          // Validate price is finite and positive before returning
+          if (typeof price === 'number' && isFinite(price) && price > 0) {
+            console.log('💰 [CoinGecko] SOL price fetched:', price.toFixed(2));
+            return price;
+          } else {
+            console.warn('💰 [CoinGecko] Invalid SOL price (not finite or <= 0):', price);
+          }
         }
+      } else {
+        console.warn('💰 [CoinGecko] API error:', response.status);
       }
-    } else {
-      console.warn('💰 [CoinGecko] API error:', response.status);
+    } finally {
+      clearTimeout(timeoutId);
     }
   } catch (error: any) {
     if (error.name !== 'AbortError') {
@@ -96,28 +99,31 @@ async function fetchTokenPriceFromCoinGecko(tokenAddress: string): Promise<numbe
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch(url, {
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    
-    if (response.ok) {
-      const data = await response.json() as any;
-      // CoinGecko returns data with lowercase address as key
-      const priceData = data[address];
-      if (priceData?.usd) {
-        const price = priceData.usd;
-        // Validate price is finite and positive before returning
-        if (typeof price === 'number' && isFinite(price) && price > 0) {
-          console.log(`💰 [CoinGecko] Token ${tokenAddress.substring(0, 8)}... price fetched:`, price.toFixed(6));
-          return price;
-        } else {
-          console.warn(`💰 [CoinGecko] Invalid token price (not finite or <= 0) for ${tokenAddress.substring(0, 8)}...:`, price);
+    try {
+      const response = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal
+      });
+      
+      if (response.ok) {
+        const data = await response.json() as any;
+        // CoinGecko returns data with lowercase address as key
+        const priceData = data[address];
+        if (priceData?.usd) {
+          const price = priceData.usd;
+          // Validate price is finite and positive before returning
+          if (typeof price === 'number' && isFinite(price) && price > 0) {
+            console.log(`💰 [CoinGecko] Token ${tokenAddress.substring(0, 8)}... price fetched:`, price.toFixed(6));
+            return price;
+          } else {
+            console.warn(`💰 [CoinGecko] Invalid token price (not finite or <= 0) for ${tokenAddress.substring(0, 8)}...:`, price);
+          }
         }
+      } else {
+        console.warn(`💰 [CoinGecko] API error for token ${tokenAddress.substring(0, 8)}...:`, response.status);
       }
-    } else {
-      console.warn(`💰 [CoinGecko] API error for token ${tokenAddress.substring(0, 8)}...:`, response.status);
+    } finally {
+      clearTimeout(timeoutId);
     }
   } catch (error: any) {
     if (error.name !== 'AbortError') {
@@ -174,50 +180,53 @@ async function fetchTokenPricesFromJupiter(tokenAddresses: string[]): Promise<Ma
     console.log(`💰 [Jupiter Price API] Fetching prices for ${tokenAddresses.length} tokens:`, tokenAddresses.map(a => a.substring(0, 8) + '...').join(', '));
     console.log(`💰 [Jupiter Price API] Request URL:`, url);
     
-    const response = await fetch(url, {
-      headers,
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    
-    if (response.ok) {
-      const data = await response.json() as any;
+    try {
+      const response = await fetch(url, {
+        headers,
+        signal: controller.signal
+      });
       
-      console.log(`💰 [Jupiter Price API] Response status: ${response.status}`);
-      console.log(`💰 [Jupiter Price API] Response data keys:`, data ? Object.keys(data) : 'null');
-      
-      // Price API V3 returns data directly as: { [mintAddress]: { usdPrice: number, ... } }
-      // NOT wrapped in a "data" object - the response IS the data object
-      if (data && typeof data === 'object' && !Array.isArray(data)) {
-        const dataKeys = Object.keys(data);
-        console.log(`💰 [Jupiter Price API] Found ${dataKeys.length} tokens in response:`, dataKeys.map((k: string) => k.substring(0, 8) + '...').join(', '));
+      if (response.ok) {
+        const data = await response.json() as any;
         
-        for (const [mintAddress, priceData] of Object.entries(data)) {
-          const tokenData = priceData as any;
-          console.log(`💰 [Jupiter Price API] Processing ${mintAddress.substring(0, 8)}...:`, JSON.stringify(tokenData).substring(0, 200));
+        console.log(`💰 [Jupiter Price API] Response status: ${response.status}`);
+        console.log(`💰 [Jupiter Price API] Response data keys:`, data ? Object.keys(data) : 'null');
+        
+        // Price API V3 returns data directly as: { [mintAddress]: { usdPrice: number, ... } }
+        // NOT wrapped in a "data" object - the response IS the data object
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          const dataKeys = Object.keys(data);
+          console.log(`💰 [Jupiter Price API] Found ${dataKeys.length} tokens in response:`, dataKeys.map((k: string) => k.substring(0, 8) + '...').join(', '));
           
-          // Price field is "usdPrice" (not "price")
-          const price = tokenData.usdPrice || tokenData.price;
-          if (price && typeof price === 'number' && isFinite(price) && price > 0) {
-            resultMap.set(mintAddress, price);
-            console.log(`💰 [Jupiter Price API] ✅ Token ${mintAddress.substring(0, 8)}... price:`, price.toFixed(6));
-          } else {
-            console.log(`💰 [Jupiter Price API] ❌ Token ${mintAddress.substring(0, 8)}... no valid price:`, tokenData);
+          for (const [mintAddress, priceData] of Object.entries(data)) {
+            const tokenData = priceData as any;
+            console.log(`💰 [Jupiter Price API] Processing ${mintAddress.substring(0, 8)}...:`, JSON.stringify(tokenData).substring(0, 200));
+            
+            // Price field is "usdPrice" (not "price")
+            const price = tokenData.usdPrice || tokenData.price;
+            if (price && typeof price === 'number' && isFinite(price) && price > 0) {
+              resultMap.set(mintAddress, price);
+              console.log(`💰 [Jupiter Price API] ✅ Token ${mintAddress.substring(0, 8)}... price:`, price.toFixed(6));
+            } else {
+              console.log(`💰 [Jupiter Price API] ❌ Token ${mintAddress.substring(0, 8)}... no valid price:`, tokenData);
+            }
           }
+        } else {
+          console.warn(`💰 [Jupiter Price API] Unexpected response format:`, JSON.stringify(data).substring(0, 500));
+        }
+        
+        // Log which tokens were NOT found in Jupiter response
+        const foundAddresses = new Set(resultMap.keys());
+        const missingAddresses = tokenAddresses.filter(addr => !foundAddresses.has(addr));
+        if (missingAddresses.length > 0) {
+          console.log(`💰 [Jupiter Price API] ⚠️  ${missingAddresses.length} tokens not found in response:`, missingAddresses.map(a => a.substring(0, 8) + '...').join(', '));
         }
       } else {
-        console.warn(`💰 [Jupiter Price API] Unexpected response format:`, JSON.stringify(data).substring(0, 500));
+        const errorText = await response.text();
+        console.warn(`💰 [Jupiter Price API] Error:`, response.status, errorText.substring(0, 200));
       }
-      
-      // Log which tokens were NOT found in Jupiter response
-      const foundAddresses = new Set(resultMap.keys());
-      const missingAddresses = tokenAddresses.filter(addr => !foundAddresses.has(addr));
-      if (missingAddresses.length > 0) {
-        console.log(`💰 [Jupiter Price API] ⚠️  ${missingAddresses.length} tokens not found in response:`, missingAddresses.map(a => a.substring(0, 8) + '...').join(', '));
-      }
-    } else {
-      const errorText = await response.text();
-      console.warn(`💰 [Jupiter Price API] Error:`, response.status, errorText.substring(0, 200));
+    } finally {
+      clearTimeout(timeoutId);
     }
   } catch (error: any) {
     if (error.name !== 'AbortError' && error.code !== 'ECONNREFUSED') {
