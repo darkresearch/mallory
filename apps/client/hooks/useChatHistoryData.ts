@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '../lib';
+import { supabase } from '@/lib';
 
 const GLOBAL_TOKEN_ID = '00000000-0000-0000-0000-000000000000';
 

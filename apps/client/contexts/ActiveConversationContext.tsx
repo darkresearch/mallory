@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { storage, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../lib/storage';
+import { storage, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '@/lib/storage';
 
 interface ActiveConversationContextType {
   conversationId: string | null;

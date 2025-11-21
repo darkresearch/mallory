@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTransactionGuard } from './useTransactionGuard';
-import { getChatCache, subscribeToChatCache, isCacheForConversation } from '../lib/chat-cache';
-import type { StreamState } from '../lib/chat-cache';
+import { getChatCache, subscribeToChatCache, isCacheForConversation } from '@/lib/chat-cache';
+import type { StreamState } from '@/lib/chat-cache';
 
 interface UseChatStateProps {
   currentConversationId: string | null;

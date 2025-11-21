@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Platform } from 'react-native';
 import { router, usePathname } from 'expo-router';
-import { supabase, storage, config, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../lib';
+import { supabase, storage, config, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '@/lib';
 import { configureGoogleSignIn, signInWithGoogle, signOutFromGoogle } from '../features/auth';
 import { walletDataService } from '../features/wallet';
 

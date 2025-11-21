@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { router } from 'expo-router';
-import { supabase, storage, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../lib';
+import { supabase, storage, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '@/lib';
 import { gridClientService } from '../features/grid';
 import { useAuth } from './AuthContext';
 

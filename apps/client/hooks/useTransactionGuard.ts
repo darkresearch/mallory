@@ -1,6 +1,6 @@
 import { useAuth } from '../contexts/AuthContext';
 import { useGrid } from '../contexts/GridContext';
-import { SESSION_STORAGE_KEYS, storage } from '../lib';
+import { SESSION_STORAGE_KEYS, storage } from '@/lib';
 
 /**
  * Transaction Guard Hook

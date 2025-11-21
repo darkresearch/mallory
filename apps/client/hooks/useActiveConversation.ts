@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Platform } from 'react-native';
-import { storage, SECURE_STORAGE_KEYS } from '../lib';
+import { storage, SECURE_STORAGE_KEYS } from '@/lib';
 import { getCurrentOrCreateConversation } from '../features/chat';
 import { useActiveConversationContext } from '../contexts/ActiveConversationContext';
 
