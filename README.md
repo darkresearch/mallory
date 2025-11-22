@@ -210,7 +210,7 @@ bun test __tests__/e2e/long-context.test.ts       # ~10-20 min, ~$2-3
   git commit -m "fix: improve streaming [run-ai-tests]"
   ```
 
-See [apps/client/**tests**/CHAT_STATE_TESTS.md](./apps/client/__tests__/CHAT_STATE_TESTS.md) for full testing documentation.
+See [apps/client/__tests__/CHAT_STATE_TESTS.md](./apps/client/__tests__/CHAT_STATE_TESTS.md) for full testing documentation.
 
 ## 🚢 Deployment
 

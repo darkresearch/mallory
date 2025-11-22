@@ -157,7 +157,7 @@ async function checkOpenMemory() {
     console.log(`❌ OpenMemory: Connection failed (${openMemoryUrl})`);
     console.log(`   Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     console.log(`   Run: bash services/openmemory-setup.sh`);
-    console.log(`   Then: cd services/openmemory/backend && npm start`);
+    console.log(`   Then: cd services/openmemory/backend && bun start`);
   }
 }
 

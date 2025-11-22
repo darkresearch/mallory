@@ -6,10 +6,10 @@ set -o pipefail
 
 echo "🚀 Setting up OpenMemory for Mallory..."
 
-# Check if npm is available (OpenMemory backend uses npm, not bun)
-if ! command -v npm &> /dev/null; then
-  echo "❌ Error: npm is required but not installed"
-  echo "   Please install Node.js and npm first: https://nodejs.org"
+# Check if bun is available
+if ! command -v bun &> /dev/null; then
+  echo "❌ Error: bun is required but not installed"
+  echo "   Please install bun first: https://bun.sh"
   exit 1
 fi
 
@@ -58,11 +58,22 @@ else
   echo "✅ .env file already exists"
 fi
 
+# Fix esbuild version conflict for bun compatibility
+echo "🔧 Fixing esbuild version for bun compatibility..."
+cd openmemory/backend
+# Add esbuild 0.25.12 to devDependencies if not already present
+if ! grep -q '"esbuild":' package.json; then
+  # Use bun to add esbuild as devDependency
+  bun add -d esbuild@0.25.12
+  echo "✅ Added esbuild 0.25.12 to devDependencies"
+else
+  echo "✅ esbuild already in package.json"
+fi
+
 # Install dependencies
 echo "📦 Installing OpenMemory dependencies..."
-cd openmemory/backend
 if [ ! -d "node_modules" ]; then
-  npm install
+  bun install
   echo "✅ Dependencies installed"
 else
   echo "✅ Dependencies already installed"
@@ -70,13 +81,13 @@ fi
 
 # Build OpenMemory
 echo "🔨 Building OpenMemory..."
-npm run build
+bun run build
 
 echo ""
 echo "✅ OpenMemory setup complete!"
 echo ""
 echo "To start OpenMemory:"
-echo "  cd services/openmemory/backend && npm start"
+echo "  cd services/openmemory/backend && bun start"
 echo ""
 echo "Or add to your server .env:"
 echo "  OPENMEMORY_URL=http://localhost:8080"
