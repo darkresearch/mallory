@@ -37,6 +37,29 @@ Module.prototype.require = function (id: string) {
     };
   }
   
+  if (id === 'expo-router') {
+    return {
+      useLocalSearchParams: () => ({}),
+      useRouter: () => ({
+        push: () => {},
+        replace: () => {},
+        setParams: () => {},
+        back: () => {},
+      }),
+      usePathname: () => '/chat',
+      useSegments: () => ['chat'],
+      Link: ({ children }: any) => children,
+      Redirect: () => null,
+      Stack: () => null,
+      Tabs: () => null,
+      router: {
+        push: () => {},
+        replace: () => {},
+        back: () => {},
+      },
+    };
+  }
+  
   return originalRequire.apply(this, arguments);
 };
 

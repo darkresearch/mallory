@@ -1,4 +1,7 @@
 {
+  "git": {
+    "deploymentEnabled": false
+  },
   "buildCommand": "bun run generate-version && bun expo export --platform web",
   "outputDirectory": "dist",
   "framework": null,

@@ -106,3 +106,42 @@ if (typeof (globalThis as any).sessionStorage === 'undefined') {
   };
 }
 
+// Global mocks for modules that may be imported by tests
+// These are basic implementations that can be overridden by individual tests if needed
+if (typeof (globalThis as any).Bun !== 'undefined') {
+  const { mock } = require('bun:test');
+  
+  // Mock react-native Platform for tests
+  mock.module('react-native', () => ({
+    Platform: {
+      OS: 'web',
+      select: (obj: any) => obj.web || obj.default,
+    },
+    StyleSheet: {
+      create: (styles: any) => styles,
+    },
+  }));
+  
+  // Mock expo-router with basic implementations
+  mock.module('expo-router', () => ({
+    useLocalSearchParams: () => ({}),
+    useRouter: () => ({
+      push: () => {},
+      replace: () => {},
+      setParams: () => {},
+      back: () => {},
+    }),
+    usePathname: () => '/chat',
+    useSegments: () => ['chat'],
+    Link: ({ children }: any) => children,
+    Redirect: () => null,
+    Stack: () => null,
+    Tabs: () => null,
+    router: {
+      push: () => {},
+      replace: () => {},
+      back: () => {},
+    },
+  }));
+}
+

@@ -1,0 +1,89 @@
+name: Release (Changesets)
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+      
+      - name: Install dependencies
+        run: bun install
+      
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: bun changeset version
+          commit: "chore: version packages"
+          title: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Check if version was bumped
+        id: version_check
+        run: |
+          # Check if this commit includes CHANGELOG updates (indicates a version bump)
+          if git diff-tree --no-commit-id --name-only -r HEAD | grep -q "CHANGELOG.md"; then
+            echo "version_bumped=true" >> $GITHUB_OUTPUT
+            echo "✅ Version bump detected (CHANGELOG.md updated)"
+          else
+            echo "version_bumped=false" >> $GITHUB_OUTPUT
+            echo "ℹ️  No version bump (CHANGELOG.md not updated)"
+          fi
+      
+      - name: Create tag and trigger deployment
+        if: steps.version_check.outputs.version_bumped == 'true'
+        run: |
+          # Get the version from one of the scoped packages in the fixed group
+          # (root package.json is not managed by changesets and stays at 0.1.0)
+          VERSION=$(cat apps/client/package.json | grep '"version"' | head -1 | awk -F: '{ print $2 }' | sed 's/[",]//g' | tr -d '[[:space:]]')
+          TAG="v$VERSION"
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Check if tag already exists
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "⚠️  Tag $TAG already exists, skipping"
+            exit 0
+          fi
+          
+          # Create and push tag
+          git tag $TAG
+          git push origin $TAG
+          
+          echo "✅ Created and pushed tag: $TAG"
+          echo "🚀 This will trigger Vercel production deployment and GitHub release"
+      
+      - name: Summary
+        if: steps.changesets.outputs.hasChangesets == 'true'
+        run: |
+          echo "## 📦 Changesets Detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "A 'Version Packages' PR has been created or updated." >> $GITHUB_STEP_SUMMARY
+          echo "Merge it when ready to release!" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Release Summary
+        if: steps.changesets.outputs.published == 'true'
+        run: |
+          echo "## 🎉 Release Published!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Packages have been versioned and tag created." >> $GITHUB_STEP_SUMMARY
+          echo "Vercel production deployment will trigger shortly." >> $GITHUB_STEP_SUMMARY

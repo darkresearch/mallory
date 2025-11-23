@@ -1,4 +1,0 @@
-# Maestro Web Testing Configuration
-# Web-only testing for Mallory x402 payment flow
-browser: chrome
-

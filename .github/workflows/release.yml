@@ -53,7 +53,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.get_version.outputs.tag }}
-          name: Release ${{ steps.get_version.outputs.version }}
+          name: ${{ steps.get_version.outputs.tag }}
           body_path: release_notes.md
           draft: false
           prerelease: false
