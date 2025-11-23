@@ -153,12 +153,18 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
       console.log('🔍 [Grid Init] createAccount response:', {
         success: response.success,
         hasData: !!response.data,
-        hasError: !!response.error
+        hasError: !!response.error,
+        error: response.error
       });
       
       // Log the FULL response data to see what Grid is actually returning
       if (response.data) {
         console.log('🔍 [Grid Init] createAccount FULL response.data:', JSON.stringify(response.data, null, 2));
+      }
+      
+      // Log error if present
+      if (response.error) {
+        console.log('🔍 [Grid Init] createAccount error message:', response.error);
       }
 
       // If createAccount succeeds, this is a NEW user
@@ -213,30 +219,53 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
     // Handle case where Grid returns success: false instead of throwing
     if (!response.success && response.error) {
       const errorMessage = response.error;
+      console.log('🔍 [Grid Init] createAccount returned error:', errorMessage);
 
       const isExistingAccount =
         errorMessage.includes('grid_account_already_exists_for_user') ||
-        errorMessage.includes('Email associated with grid account already exists');
+        errorMessage.includes('Email associated with grid account already exists') ||
+        errorMessage.includes('already exists') ||
+        errorMessage.includes('account_already_exists');
 
       if (isExistingAccount) {
         console.log('🔄 [Grid Init] Response indicates existing account - falling back to initAuth()');
-        response = await gridClient.initAuth({ email });
-        console.log('🔑 [Grid Init] CHECKPOINT 1: initAuth() returned');
-        isExistingUser = true;
-        console.log('🔑 [Grid Init] CHECKPOINT 2: isExistingUser set to true');
-        console.log('✅ [Grid Init] Existing user authenticated via initAuth()');
-        console.log('🔑 [Grid Init] CHECKPOINT 3: About to log response');
         try {
-          console.log('🔍 [Grid Init] initAuth response:', JSON.stringify({
+          response = await gridClient.initAuth({ email });
+          console.log('🔑 [Grid Init] CHECKPOINT 1: initAuth() returned');
+          isExistingUser = true;
+          console.log('🔑 [Grid Init] CHECKPOINT 2: isExistingUser set to true');
+          
+          // Log full initAuth response for debugging
+          console.log('🔍 [Grid Init] initAuth FULL response:', JSON.stringify({
             success: response?.success,
             hasData: !!response?.data,
             hasError: !!response?.error,
+            error: response?.error,
+            dataKeys: response?.data ? Object.keys(response.data) : [],
             responseType: typeof response
-          }));
-        } catch (e) {
-          console.log('⚠️ [Grid Init] Failed to log initAuth response:', e);
+          }, null, 2));
+          
+          // If initAuth also fails, log detailed error
+          if (!response.success) {
+            console.error('❌ [Grid Init] initAuth() failed:', {
+              error: response.error,
+              fullResponse: JSON.stringify(response, null, 2)
+            });
+          } else {
+            console.log('✅ [Grid Init] Existing user authenticated via initAuth()');
+          }
+        } catch (initAuthError: any) {
+          console.error('❌ [Grid Init] initAuth() threw exception:', {
+            message: initAuthError?.message,
+            stack: initAuthError?.stack,
+            error: initAuthError
+          });
+          // Re-throw to be caught by outer try-catch
+          throw initAuthError;
         }
-        console.log('🔑 [Grid Init] CHECKPOINT 4: Finished logging block');
+      } else {
+        // Not an existing account error - this is a different problem
+        console.error('❌ [Grid Init] createAccount failed with unexpected error:', errorMessage);
       }
     }
 
@@ -244,11 +273,23 @@ router.post('/start-sign-in', authenticateUser, async (req: AuthenticatedRequest
       console.log('❌ [Grid Init] Response validation failed:', {
         success: response.success,
         hasData: !!response.data,
+        hasError: !!response.error,
+        error: response.error,
         isExistingUser
       });
+      
+      // Provide more helpful error message
+      let errorMessage = response.error || 'Failed to initialize Grid account';
+      
+      // If it's an MPC provider error, provide more context
+      if (errorMessage.includes('MPC provider operation failed')) {
+        console.error('❌ [Grid Init] MPC provider error - this may indicate a Grid SDK configuration issue');
+        errorMessage = 'Grid authentication failed. Please try again or contact support if the issue persists.';
+      }
+      
       return res.status(400).json({
         success: false,
-        error: response.error || 'Failed to initialize Grid account'
+        error: errorMessage
       });
     }
 

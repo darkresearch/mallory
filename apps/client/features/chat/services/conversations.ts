@@ -1,6 +1,6 @@
 import { storage, SECURE_STORAGE_KEYS } from '../../../lib/storage';
 import { supabase } from '../../../lib/supabase';
-import { v4 as uuidv4 } from 'uuid';
+import { generateUUID } from '../../../lib/uuid';
 
 const LAST_CONVERSATION_KEY = 'mallory_last_conversation_timestamp';
 const GLOBAL_TOKEN_ID = '00000000-0000-0000-0000-000000000000'; // All zeros UUID for global conversations
@@ -207,7 +207,7 @@ export async function createNewConversation(userId?: string, metadata?: Record<s
     console.log('🆕 [NEW CONVERSATION] Starting new conversation creation flow');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
-    const newConversationId = uuidv4();
+    const newConversationId = generateUUID();
     const now = Date.now();
     
     console.log('📝 Generated conversation ID:', newConversationId);

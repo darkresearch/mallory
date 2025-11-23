@@ -8,17 +8,14 @@ const defaultHeaders = {
 
 /**
  * Generate API URL for different environments
+ * Uses config.backendApiUrl which already handles Android localhost -> 10.0.2.2 conversion
  */
 export const generateAPIUrl = (relativePath: string) => {
   const path = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
 
-  if (__DEV__) {
-    // In development, point to our api-server
-    return `http://localhost:3001${path}`;
-  }
-
+  // In dev mode, use localhost (config will convert to 10.0.2.2 on Android)
   // In production, use environment variable
-  const apiBaseUrl = config.backendApiUrl;
+  const apiBaseUrl = config.backendApiUrl || (__DEV__ ? 'http://localhost:3001' : '');
   if (!apiBaseUrl) {
     throw new Error('EXPO_PUBLIC_BACKEND_API_URL configuration is not defined');
   }

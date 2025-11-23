@@ -8,7 +8,7 @@ import Animated, {
   withDelay,
   Easing 
 } from 'react-native-reanimated';
-import { LAYOUT, storage, SECURE_STORAGE_KEYS } from '@/lib';
+import { LAYOUT, storage, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '@/lib';
 import { PressableButton } from '@/components/ui/PressableButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGrid } from '@/contexts/GridContext';
@@ -39,8 +39,8 @@ export default function VerifyOtpScreen() {
     returnPath?: string;
   }>();
   const { width } = useWindowDimensions();
-  const { logout } = useAuth();
-  const { completeGridSignIn } = useGrid();  // Only need the action, not the data
+  const { logout, user } = useAuth();
+  const { completeGridSignIn, initiateGridSignIn, isSigningInToGrid } = useGrid();
   
   // Mobile detection
   const isMobile = Platform.OS === 'ios' || Platform.OS === 'android' || width < 768;
@@ -54,6 +54,7 @@ export default function VerifyOtpScreen() {
   const [otp, setOtp] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState('');
+  const [isInitializing, setIsInitializing] = useState(false);
   
   // Local OTP session state - this screen owns this data
   // Loaded from secure storage on mount, updated on resend
@@ -127,8 +128,12 @@ export default function VerifyOtpScreen() {
   }, [bgColor]);
 
   // Load OTP session from secure storage on mount
-  // This is workflow state that belongs to this screen - not app state
+  // If no session exists but Grid sign-in is in progress, wait for session
+  // This handles the case where user is redirected to OTP screen immediately after Google sign-in
   useEffect(() => {
+    let checkInterval: ReturnType<typeof setInterval> | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    
     const loadOtpSession = async () => {
       try {
         const stored = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
@@ -137,21 +142,152 @@ export default function VerifyOtpScreen() {
           const parsed = JSON.parse(stored);
           setOtpSession(parsed);
           console.log('✅ [OTP Screen] Loaded OTP session from secure storage');
+          setIsInitializing(false);
+          return;
+        }
+        
+        // No session found - check if Grid sign-in is in progress or about to start
+        // Check multiple indicators:
+        // 1. Auto-initiate flag (might be cleared by GridContext, so check quickly)
+        // 2. isSigningInToGrid state from GridContext
+        // 3. If user is authenticated and has email (user just signed in - Grid sign-in should start)
+        const shouldAutoInitiate = await storage.session.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE) === 'true';
+        const autoInitiateEmail = await storage.session.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL);
+        const hasEmail = autoInitiateEmail || params.email || user?.email;
+        const isAuthenticated = !!user?.email;
+        
+        // If flag exists OR Grid sign-in is in progress OR user is authenticated with email
+        // Wait for session to be created (GridContext might be starting with a delay)
+        if (shouldAutoInitiate || isSigningInToGrid || (hasEmail && isAuthenticated)) {
+          console.log('⏳ [OTP Screen] Grid sign-in in progress or about to start, waiting for OTP session...', {
+            hasFlag: shouldAutoInitiate,
+            isSigningIn: isSigningInToGrid,
+            hasEmail,
+            isAuthenticated
+          });
+          setIsInitializing(true);
+          
+          // Poll for OTP session (GridContext will create it)
+          // Give GridContext time to start (it has a 500ms delay) + network time
+          let pollCount = 0;
+          const maxPolls = 40; // 20 seconds max (40 * 500ms) - enough time for Grid sign-in
+          const minPollsBeforeEarlyStop = 10; // Wait at least 5 seconds before considering early stop
+          
+          checkInterval = setInterval(async () => {
+            pollCount++;
+            const session = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
+            
+            if (session) {
+              const parsed = JSON.parse(session);
+              setOtpSession(parsed);
+              setIsInitializing(false);
+              if (checkInterval) clearInterval(checkInterval);
+              console.log('✅ [OTP Screen] OTP session received from Grid sign-in');
+              return;
+            }
+            
+            // Re-check flag and sign-in state (GridContext might have started by now)
+            const stillShouldInitiate = await storage.session.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE) === 'true';
+            // Re-check authentication state (user might have logged out)
+            const stillAuthenticated = !!user?.email;
+            
+            // Only consider early stop after minimum wait time AND if user is no longer authenticated
+            // If user is still authenticated, keep waiting (GridContext might still be starting)
+            // This gives GridContext time to start (500ms delay) and make the API call
+            if (pollCount >= minPollsBeforeEarlyStop && !isSigningInToGrid && !stillShouldInitiate && !stillAuthenticated) {
+              // User is no longer authenticated - they might have logged out
+              // Check one final time for session
+              const finalCheck = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
+              if (!finalCheck) {
+                if (checkInterval) clearInterval(checkInterval);
+                setIsInitializing(false);
+                setError('Grid sign-in did not complete. Please try signing in again.');
+                console.error('❌ [OTP Screen] Grid sign-in did not create OTP session after waiting');
+                return;
+              }
+            }
+            
+            // If user is still authenticated, keep polling (don't stop early)
+            // GridContext might still be in the process of starting Grid sign-in
+            
+            // Timeout after max polls
+            if (pollCount >= maxPolls) {
+              if (checkInterval) clearInterval(checkInterval);
+              setIsInitializing(false);
+              setError('Grid sign-in is taking longer than expected. Please try again.');
+              console.error('❌ [OTP Screen] Timeout waiting for OTP session');
+            }
+          }, 500);
         } else {
-          // CRITICAL: If no OTP session exists, user shouldn't be on this screen
-          // This indicates a routing error (navigated here without going through sign-in flow)
-          console.error('❌ [OTP Screen] CRITICAL: No OTP session found - invalid navigation');
-          setError('Session error. Please sign in again.');
-          // Could also redirect back to login here
+          // No session, no flag, Grid sign-in not in progress, and user not authenticated
+          // This is likely a navigation error (user shouldn't be on OTP screen)
+          console.log('⏳ [OTP Screen] No session found and no indicators of Grid sign-in, waiting briefly...');
+          setIsInitializing(true);
+          
+          timeoutId = setTimeout(async () => {
+            const session = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
+            const stillShouldInitiate = await storage.session.getItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE) === 'true';
+            const stillAuthenticated = !!user?.email;
+            
+            if (session) {
+              const parsed = JSON.parse(session);
+              setOtpSession(parsed);
+              setIsInitializing(false);
+              console.log('✅ [OTP Screen] OTP session found after brief wait');
+            } else if (stillShouldInitiate || isSigningInToGrid || stillAuthenticated) {
+              // Grid sign-in started or user is authenticated - start polling
+              console.log('⏳ [OTP Screen] Grid sign-in indicators found after wait, starting polling...');
+              
+              // Start polling now (similar to the main polling logic above)
+              let pollCount = 0;
+              const maxPolls = 40;
+              
+              const pollInterval = setInterval(async () => {
+                pollCount++;
+                const polledSession = await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
+                
+                if (polledSession) {
+                  const parsed = JSON.parse(polledSession);
+                  setOtpSession(parsed);
+                  setIsInitializing(false);
+                  clearInterval(pollInterval);
+                  console.log('✅ [OTP Screen] OTP session received from Grid sign-in (after delayed start)');
+                  return;
+                }
+                
+                if (pollCount >= maxPolls) {
+                  clearInterval(pollInterval);
+                  setIsInitializing(false);
+                  setError('Grid sign-in is taking longer than expected. Please try again.');
+                  console.error('❌ [OTP Screen] Timeout waiting for OTP session');
+                }
+              }, 500);
+              
+              // Store interval for cleanup
+              checkInterval = pollInterval;
+            } else {
+              // No indicators - this is likely a navigation error
+              setIsInitializing(false);
+              setError('Session error. Please sign in again.');
+              console.error('❌ [OTP Screen] No OTP session found and no Grid sign-in indicators');
+            }
+          }, 2000); // Wait 2 seconds to give GridContext time to start
         }
       } catch (err) {
         console.error('❌ [OTP Screen] Failed to load OTP session:', err);
         setError('Session error. Please sign in again.');
+        setIsInitializing(false);
       }
     };
     
     loadOtpSession();
-  }, []); // Only run on mount
+    
+    // Cleanup on unmount or dependency change
+    return () => {
+      if (checkInterval) clearInterval(checkInterval);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [params.email, user?.email, isSigningInToGrid]); // Re-run if email or sign-in state changes
 
   // Animated styles
   const textAnimatedStyle = useAnimatedStyle(() => ({
@@ -334,66 +470,79 @@ export default function VerifyOtpScreen() {
       <View style={[styles.content, isMobile && styles.contentMobile]}>
         {/* Top group - OTP + Instruction Text (like lockup + tagline on login) */}
         <Animated.View style={[textAnimatedStyle, isMobile && { width: '100%', flex: 1, justifyContent: 'center' }]}>
-          {/* OTP Input - 6 underscores style */}
-          <Pressable onPress={focusInput}>
-            <View style={[
-              styles.otpContainer,
-              isMobile && { marginBottom: 11 } // Match lockup-to-tagline spacing on mobile
-            ]}>
-              {[0, 1, 2, 3, 4, 5].map((index) => {
-                const isActive = index === otp.length && !isVerifying;
-                return (
-                  <View 
-                    key={index} 
-                    style={[
-                      styles.digitBox,
-                      isMobile && styles.digitBoxMobile
-                    ]}
-                  >
-                    <Text style={[styles.digitText, { color: textColor }]}>
-                      {otp[index] || ''}
-                    </Text>
-                    {/* Show cursor on active position */}
-                    {isActive && (
-                      <Animated.View style={[styles.cursor, { backgroundColor: textColor }, cursorAnimatedStyle]} />
-                    )}
-                    <View style={[
-                      styles.digitUnderline,
-                      { backgroundColor: textColor, opacity: 0.3 }
-                    ]} />
-                  </View>
-                );
-              })}
-            </View>
-          </Pressable>
-          
-          {/* Hidden TextInput for capturing input */}
-          <TextInput
-            ref={inputRef}
-            style={styles.hiddenInput}
-            value={otp}
-            onChangeText={handleOtpChange}
-            keyboardType="number-pad"
-            maxLength={6}
-            autoFocus
-            editable={!isVerifying}
-            onSubmitEditing={() => {
-              // Submit on Enter key
-              if (otp.trim().length === 6 && !isVerifying && !error) {
-                handleVerify();
-              }
-            }}
-            returnKeyType="done"
-            blurOnSubmit={false}
-          />
+          {/* OTP Input - 6 underscores style - hide during initialization */}
+          {!isInitializing && (
+            <>
+              <Pressable onPress={focusInput}>
+                <View style={[
+                  styles.otpContainer,
+                  isMobile && { marginBottom: 11 } // Match lockup-to-tagline spacing on mobile
+                ]}>
+                  {[0, 1, 2, 3, 4, 5].map((index) => {
+                    const isActive = index === otp.length && !isVerifying;
+                    return (
+                      <View 
+                        key={index} 
+                        style={[
+                          styles.digitBox,
+                          isMobile && styles.digitBoxMobile
+                        ]}
+                      >
+                        <Text style={[styles.digitText, { color: textColor }]}>
+                          {otp[index] || ''}
+                        </Text>
+                        {/* Show cursor on active position */}
+                        {isActive && (
+                          <Animated.View style={[styles.cursor, { backgroundColor: textColor }, cursorAnimatedStyle]} />
+                        )}
+                        <View style={[
+                          styles.digitUnderline,
+                          { backgroundColor: textColor, opacity: 0.3 }
+                        ]} />
+                      </View>
+                    );
+                  })}
+                </View>
+              </Pressable>
+              
+              {/* Hidden TextInput for capturing input */}
+              <TextInput
+                ref={inputRef}
+                style={styles.hiddenInput}
+                value={otp}
+                onChangeText={handleOtpChange}
+                keyboardType="number-pad"
+                maxLength={6}
+                autoFocus
+                editable={!isVerifying}
+                onSubmitEditing={() => {
+                  // Submit on Enter key
+                  if (otp.trim().length === 6 && !isVerifying && !error) {
+                    handleVerify();
+                  }
+                }}
+                returnKeyType="done"
+                blurOnSubmit={false}
+              />
+            </>
+          )}
 
           {/* Instruction Text - grouped with OTP like tagline with lockup */}
-          <Text style={[styles.instruction, isMobile && styles.instructionMobile, { color: textColor, opacity: 0.8 }]}>
-            {isVerifying 
-              ? 'Verifying your code...'
-              : `We've sent a 6-digit code to ${params.email}`
-            }
-          </Text>
+          {isInitializing ? (
+            <View style={styles.preloaderContainer}>
+              <ActivityIndicator size="large" color={textColor} />
+              <Text style={[styles.instruction, isMobile && styles.instructionMobile, { color: textColor, opacity: 0.8, marginTop: 16 }]}>
+                Setting up your wallet...
+              </Text>
+            </View>
+          ) : (
+            <Text style={[styles.instruction, isMobile && styles.instructionMobile, { color: textColor, opacity: 0.8 }]}>
+              {isVerifying 
+                ? 'Verifying your code...'
+                : `We've sent a 6-digit code to ${params.email || user?.email || ''}`
+              }
+            </Text>
+          )}
           
           {/* Error only - no hint */}
           {error && (
@@ -619,6 +768,13 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     paddingBottom: 32,
     zIndex: 10,
+  },
+  
+  // Preloader Container
+  preloaderContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
   },
   
   // Loading Overlay

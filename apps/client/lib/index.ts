@@ -8,3 +8,4 @@ export { getToolDisplayName, toolDisplayNames } from './toolDisplayNames';
 export { config } from './config';
 export { LAYOUT, createContentContainerStyle, createPaddedContainerStyle } from './layout';
 export { getAppVersion } from './version';
+export { generateUUID } from './uuid';

@@ -333,8 +333,15 @@ export function GridProvider({ children }: { children: ReactNode }) {
       
       // Clear secure storage (including OTP session if any)
       await storage.persistent.removeItem(SECURE_STORAGE_KEYS.GRID_OTP_SESSION);
+      
+      // Clear all session storage flags to prevent them from persisting across logout/login
       await storage.session.removeItem(SESSION_STORAGE_KEYS.OAUTH_IN_PROGRESS);
       await storage.session.removeItem(SESSION_STORAGE_KEYS.GRID_IS_EXISTING_USER);
+      await storage.session.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE);
+      await storage.session.removeItem(SESSION_STORAGE_KEYS.GRID_AUTO_INITIATE_EMAIL);
+      await storage.session.removeItem(SESSION_STORAGE_KEYS.OTP_RETURN_PATH);
+      
+      console.log('🚪 [GridContext] Cleared all Grid-related session flags');
     } catch (error) {
       console.log('🚪 [GridContext] Error clearing Grid data (non-critical):', error);
     }

@@ -8,7 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
-import { useWindowDimensions } from 'react-native';
+import { useWindowDimensions, Platform } from 'react-native';
 import { generateAPIUrl } from '../../lib';
 import { loadMessagesFromSupabase, convertDatabaseMessageToUIMessage } from '../../features/chat';
 import { storage, SECURE_STORAGE_KEYS } from '../../lib/storage';
@@ -331,7 +331,42 @@ export function ChatManager({}: ChatManagerProps) {
     }
   }, [status, messages, currentConversationId]);
 
-  // Listen for custom events from useChatState
+  // Expose chat functions in cache for React Native (where window events don't work)
+  useEffect(() => {
+    updateChatCache({
+      chatFunctions: {
+        sendMessage: (message: { text: string }) => {
+          if (currentConversationId && currentConversationId !== 'temp-loading') {
+            console.log('📨 [ChatManager] Sending message via cache (React Native):', message.text);
+            updateChatCache({
+              streamState: { status: 'waiting', startTime: Date.now() },
+              liveReasoningText: '',
+            });
+            sendMessage(message);
+          }
+        },
+        stop: () => {
+          if (currentConversationId && currentConversationId !== 'temp-loading') {
+            console.log('🛑 [ChatManager] Stopping via cache (React Native)');
+            stop();
+          }
+        },
+        regenerate: () => {
+          if (currentConversationId && currentConversationId !== 'temp-loading') {
+            console.log('🔄 [ChatManager] Regenerating via cache (React Native)');
+            regenerate();
+          }
+        },
+      },
+    });
+
+    return () => {
+      // Clear functions when conversation changes or component unmounts
+      updateChatCache({ chatFunctions: undefined });
+    };
+  }, [currentConversationId, sendMessage, stop, regenerate]);
+
+  // Listen for custom events from useChatState (web only)
   useEffect(() => {
     const handleSendMessage = (event: Event) => {
       const { conversationId, message } = (event as CustomEvent).detail;
@@ -369,15 +404,21 @@ export function ChatManager({}: ChatManagerProps) {
       }
     };
 
-    window.addEventListener('chat:sendMessage', handleSendMessage);
-    window.addEventListener('chat:stop', handleStop);
-    window.addEventListener('chat:regenerate', handleRegenerate);
+    // Only add event listeners on web (window doesn't exist in React Native)
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.addEventListener('chat:sendMessage', handleSendMessage);
+      window.addEventListener('chat:stop', handleStop);
+      window.addEventListener('chat:regenerate', handleRegenerate);
 
-    return () => {
-      window.removeEventListener('chat:sendMessage', handleSendMessage);
-      window.removeEventListener('chat:stop', handleStop);
-      window.removeEventListener('chat:regenerate', handleRegenerate);
-    };
+      return () => {
+        window.removeEventListener('chat:sendMessage', handleSendMessage);
+        window.removeEventListener('chat:stop', handleStop);
+        window.removeEventListener('chat:regenerate', handleRegenerate);
+      };
+    }
+
+    // Return empty cleanup function for React Native
+    return () => {};
   }, [currentConversationId, sendMessage, stop, regenerate]);
 
   // This component renders nothing - it's just for state management
