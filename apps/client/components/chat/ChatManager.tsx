@@ -20,6 +20,7 @@ import { updateChatCache, clearChatCache, isCacheForConversation } from '../../l
 import { useAuth } from '../../contexts/AuthContext';
 import { useWallet } from '../../contexts/WalletContext';
 import { useActiveConversationContext } from '../../contexts/ActiveConversationContext';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 
 /**
  * ChatManager props
@@ -31,27 +32,27 @@ interface ChatManagerProps {
 /**
  * ChatManager component - manages active chat state globally
  */
-export function ChatManager({}: ChatManagerProps) {
+function ChatManagerInner({ }: ChatManagerProps) {
   const { user } = useAuth();
   const { walletData } = useWallet();
   const { width: viewportWidth } = useWindowDimensions();
-  
+
   // Get conversationId from context instead of internal state
   const { conversationId: currentConversationId } = useActiveConversationContext();
-  
+
   const [initialMessages, setInitialMessages] = useState<any[]>([]);
   const [initialMessagesConversationId, setInitialMessagesConversationId] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const previousStatusRef = useRef<string>('ready');
   const conversationMessagesSetRef = useRef<string | null>(null);
-  
+
   // Extract wallet balance
   const walletBalance = React.useMemo(() => {
     if (!walletData?.holdings) return undefined;
-    
+
     const solHolding = walletData.holdings.find(h => h.tokenSymbol === 'SOL');
     const usdcHolding = walletData.holdings.find(h => h.tokenSymbol === 'USDC');
-    
+
     return {
       sol: solHolding?.holdings,
       usdc: usdcHolding?.holdings,
@@ -65,7 +66,7 @@ export function ChatManager({}: ChatManagerProps) {
     transport: new DefaultChatTransport({
       fetch: async (url, options) => {
         const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
-        
+
         const { gridSessionSecrets, gridSession } = await loadGridContextForX402({
           getGridAccount: async () => {
             const account = await gridClientService.getAccount();
@@ -78,13 +79,13 @@ export function ChatManager({}: ChatManagerProps) {
             return await storage.persistent.getItem(SECURE_STORAGE_KEYS.GRID_SESSION_SECRETS);
           }
         });
-        
+
         const existingBody = JSON.parse(options?.body as string || '{}');
         const enhancedBody = {
           ...existingBody,
           ...(gridSessionSecrets && gridSession ? { gridSessionSecrets, gridSession } : {})
         };
-        
+
         const fetchOptions: any = {
           ...options,
           body: JSON.stringify(enhancedBody),
@@ -112,18 +113,18 @@ export function ChatManager({}: ChatManagerProps) {
 
   // Track previous conversationId to detect changes
   const previousConversationIdRef = useRef<string | null>(null);
-  
+
   // Stop stream and clear cache when conversation changes
   useEffect(() => {
     const previousId = previousConversationIdRef.current;
-    
+
     if (previousId && previousId !== currentConversationId) {
       console.log('🔄 [ChatManager] Conversation changed:', { from: previousId, to: currentConversationId });
       console.log('🛑 [ChatManager] Stopping previous conversation stream');
       stop();
       clearChatCache();
     }
-    
+
     previousConversationIdRef.current = currentConversationId;
   }, [currentConversationId, stop]);
 
@@ -135,14 +136,14 @@ export function ChatManager({}: ChatManagerProps) {
     console.log('   Current messages.length:', messages.length);
     console.log('   Current initialMessages.length:', initialMessages.length);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
+
     if (!currentConversationId || currentConversationId === 'temp-loading') {
       console.log('🔍 [ChatManager] Skipping history load - invalid conversationId:', currentConversationId);
       setIsLoadingHistory(false);
       updateChatCache({ isLoadingHistory: false });
       return;
     }
-    
+
     // Clear messages immediately when conversation changes to prevent showing old messages
     console.log('🧹 [ChatManager] Clearing messages for conversation switch to:', currentConversationId);
     console.log('   Before clear - messages.length:', messages.length);
@@ -153,27 +154,27 @@ export function ChatManager({}: ChatManagerProps) {
     conversationMessagesSetRef.current = null; // Reset ref so new messages can be set
     console.log('✅ [ChatManager] Messages cleared (setMessages([]) and setInitialMessages([]) called)');
     console.log('✅ [ChatManager] Ref and conversationId tracker reset');
-    
+
     let isCancelled = false;
-    
+
     const loadHistory = async () => {
       setIsLoadingHistory(true);
       updateChatCache({ isLoadingHistory: true, conversationId: currentConversationId });
-      
+
       console.log('📖 [ChatManager] Loading historical messages for conversation:', currentConversationId);
-      
+
       try {
         const startTime = Date.now();
-        
+
         // Check cache first
         const cachedMessages = getCachedMessagesForConversation(currentConversationId);
-        
+
         if (cachedMessages !== null) {
           console.log('📦 [ChatManager] Using cached messages:', cachedMessages.length, 'messages');
-          
+
           const convertedMessages = cachedMessages.map(convertDatabaseMessageToUIMessage);
           const loadTime = Date.now() - startTime;
-          
+
           if (!isCancelled) {
             console.log('✅ [ChatManager] Loaded cached messages:', {
               conversationId: currentConversationId,
@@ -188,12 +189,12 @@ export function ChatManager({}: ChatManagerProps) {
           }
           return;
         }
-        
+
         // Cache miss - load from database
         console.log('🔍 [ChatManager] Cache miss, loading from database');
         const historicalMessages = await loadMessagesFromSupabase(currentConversationId);
         const loadTime = Date.now() - startTime;
-        
+
         if (!isCancelled) {
           console.log('✅ [ChatManager] Loaded historical messages:', {
             conversationId: currentConversationId,
@@ -217,7 +218,7 @@ export function ChatManager({}: ChatManagerProps) {
     };
 
     loadHistory();
-    
+
     return () => {
       isCancelled = true;
     };
@@ -233,16 +234,16 @@ export function ChatManager({}: ChatManagerProps) {
     console.log('   messages.length:', messages.length);
     console.log('   conversationId:', currentConversationId);
     console.log('   conversationMessagesSetRef.current:', conversationMessagesSetRef.current);
-    
+
     // Only set messages if:
     // 1. History loading is complete
     // 2. We have initialMessages to set
     // 3. InitialMessages are for the CURRENT conversation (prevents React batching bug!)
     // 4. We haven't already set messages for this conversation
-    if (!isLoadingHistory && 
-        initialMessages.length > 0 &&
-        initialMessagesConversationId === currentConversationId &&
-        conversationMessagesSetRef.current !== currentConversationId) {
+    if (!isLoadingHistory &&
+      initialMessages.length > 0 &&
+      initialMessagesConversationId === currentConversationId &&
+      conversationMessagesSetRef.current !== currentConversationId) {
       console.log('✅ [ChatManager] CALLING setMessages() with', initialMessages.length, 'messages');
       console.log('   First message ID:', initialMessages[0]?.id);
       console.log('   Last message ID:', initialMessages[initialMessages.length - 1]?.id);
@@ -266,10 +267,10 @@ export function ChatManager({}: ChatManagerProps) {
   // Update cache whenever messages or status changes
   useEffect(() => {
     if (!currentConversationId || currentConversationId === 'temp-loading') return;
-    
+
     // Filter out system messages for display
     const displayMessages = messages.filter(msg => msg.role !== 'system');
-    
+
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('📦 [ChatManager] UPDATING CACHE WITH MESSAGES');
     console.log('   conversationId:', currentConversationId);
@@ -280,7 +281,7 @@ export function ChatManager({}: ChatManagerProps) {
       console.log('   Last message:', displayMessages[displayMessages.length - 1]?.id, '-', displayMessages[displayMessages.length - 1]?.role);
     }
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
+
     updateChatCache({
       conversationId: currentConversationId,
       messages: displayMessages,
@@ -292,26 +293,26 @@ export function ChatManager({}: ChatManagerProps) {
   // Update stream state based on status and message content
   useEffect(() => {
     if (!currentConversationId || currentConversationId === 'temp-loading') return;
-    
+
     const displayMessages = messages.filter(msg => msg.role !== 'system');
-    
+
     if (status === 'streaming' && displayMessages.length > 0) {
       const lastMessage = displayMessages[displayMessages.length - 1];
-      
+
       if (lastMessage.role === 'assistant') {
         const hasReasoningParts = lastMessage.parts?.some((p: any) => p.type === 'reasoning');
         const messageContent = (lastMessage as any).content;
         const hasTextContent = messageContent && typeof messageContent === 'string' && messageContent.trim().length > 0;
-        
+
         // Extract reasoning text
         const reasoningParts = lastMessage.parts?.filter((p: any) => p.type === 'reasoning') || [];
         const liveReasoningText = reasoningParts.map((p: any) => p.text || '').join('\n\n');
-        
+
         // Update cache with reasoning text
         updateChatCache({
           liveReasoningText,
         });
-        
+
         // Determine stream state
         if (hasReasoningParts && !hasTextContent) {
           updateChatCache({
@@ -335,17 +336,17 @@ export function ChatManager({}: ChatManagerProps) {
   useEffect(() => {
     const handleSendMessage = (event: Event) => {
       const { conversationId, message } = (event as CustomEvent).detail;
-      
+
       // Only handle if it's for our current conversation
       if (conversationId === currentConversationId) {
         console.log('📨 [ChatManager] Received sendMessage event:', message);
-        
+
         // Update cache to waiting state
         updateChatCache({
           streamState: { status: 'waiting', startTime: Date.now() },
           liveReasoningText: '',
         });
-        
+
         // Send message via useChat
         sendMessage({ text: message });
       }
@@ -353,7 +354,7 @@ export function ChatManager({}: ChatManagerProps) {
 
     const handleStop = (event: Event) => {
       const { conversationId } = (event as CustomEvent).detail;
-      
+
       if (conversationId === currentConversationId) {
         console.log('🛑 [ChatManager] Received stop event');
         stop();
@@ -362,7 +363,7 @@ export function ChatManager({}: ChatManagerProps) {
 
     const handleRegenerate = (event: Event) => {
       const { conversationId } = (event as CustomEvent).detail;
-      
+
       if (conversationId === currentConversationId) {
         console.log('🔄 [ChatManager] Received regenerate event');
         regenerate();
@@ -382,5 +383,16 @@ export function ChatManager({}: ChatManagerProps) {
 
   // This component renders nothing - it's just for state management
   return null;
+}
+
+/**
+ * ChatManager with Error Boundary
+ */
+export function ChatManager(props: ChatManagerProps) {
+  return (
+    <ErrorBoundary level="feature" name="ChatManager">
+      <ChatManagerInner {...props} />
+    </ErrorBoundary>
+  );
 }
 

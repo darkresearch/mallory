@@ -13,9 +13,9 @@ import { ActiveConversationProvider } from '../contexts/ActiveConversationContex
 import { initializeComponentRegistry } from '../components/registry';
 import { DataPreloader } from '../components/DataPreloader';
 import { ChatManager } from '../components/chat/ChatManager';
-import 'react-native-url-polyfill/auto';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
+import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -39,7 +39,7 @@ export default function RootLayout() {
     // Initialize component registry for dynamic UI
     console.log('🔧 Initializing component registry...');
     initializeComponentRegistry();
-    
+
     // Set up status bar for light theme
     StatusBar.setBarStyle('dark-content');
     if (Platform.OS === 'android') {
@@ -59,34 +59,36 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
-      <SafeAreaProvider style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
-        <AuthProvider>
-          <GridProvider>
-            <WalletProvider>
-              <ActiveConversationProvider>
-                <DataPreloader />
-                <ChatManager />
-                <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any, overflow: 'hidden' }}>
-                  <Stack
-                    screenOptions={{
-                      headerShown: false,
-                      contentStyle: { backgroundColor: '#FFEFE3' },
-                      animation: 'fade',
-                    }}
-                  />
-                  {Platform.OS === 'web' && (
-                    <>
-                      <Analytics />
-                      <SpeedInsights />
-                    </>
-                  )}
-                </View>
-              </ActiveConversationProvider>
-            </WalletProvider>
-          </GridProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary level="root" name="RootLayout">
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
+        <SafeAreaProvider style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
+          <AuthProvider>
+            <GridProvider>
+              <WalletProvider>
+                <ActiveConversationProvider>
+                  <DataPreloader />
+                  <ChatManager />
+                  <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any, overflow: 'hidden' }}>
+                    <Stack
+                      screenOptions={{
+                        headerShown: false,
+                        contentStyle: { backgroundColor: '#FFEFE3' },
+                        animation: 'fade',
+                      }}
+                    />
+                    {Platform.OS === 'web' && (
+                      <>
+                        <Analytics />
+                        <SpeedInsights />
+                      </>
+                    )}
+                  </View>
+                </ActiveConversationProvider>
+              </WalletProvider>
+            </GridProvider>
+          </AuthProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
