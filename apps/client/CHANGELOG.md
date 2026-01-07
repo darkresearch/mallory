@@ -1,5 +1,12 @@
 # @darkresearch/mallory-client
 
+## 0.1.2
+
+### Patch Changes
+
+- f532bd4: Add standard HTTP security headers to client and server responses
+  - @darkresearch/mallory-shared@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes
