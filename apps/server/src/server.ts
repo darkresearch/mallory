@@ -24,12 +24,12 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-    
+
     // In development, allow all origins
     if (process.env.NODE_ENV === 'development') {
       return callback(null, true);
     }
-    
+
     // In production, check against whitelist
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -39,6 +39,17 @@ app.use(cors({
   },
   credentials: true
 }));
+
+// Security headers middleware - prevents clickjacking and other attacks
+app.use((req, res, next) => {
+  // Prevent clickjacking by disallowing framing
+  res.setHeader('X-Frame-Options', 'DENY');
+  // Modern CSP frame-ancestors directive (more flexible than X-Frame-Options)
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+  // Prevent MIME type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  next();
+});
 
 /**
  * TODO: LONG-TERM ARCHITECTURE IMPROVEMENT
