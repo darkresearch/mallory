@@ -1,6 +1,6 @@
 {
   "name": "@darkresearch/mallory-server",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Backend API server for Mallory - AI chat and wallet data enrichment",
   "main": "src/server.ts",
   "type": "module",
