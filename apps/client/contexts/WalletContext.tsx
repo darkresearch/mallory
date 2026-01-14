@@ -52,29 +52,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         fallbackAddress
       });
       
-      // If no wallet address is available, trigger Grid sign-in
-      if (!fallbackAddress && user?.email && !hasTriggeredGridSignIn) {
-        console.log('💰 [Context] No wallet address available, triggering Grid OTP sign-in');
-        setHasTriggeredGridSignIn(true);
-        try {
-          await initiateGridSignIn(user.email, {
-            backgroundColor: '#FFEFE3',
-            textColor: '#000000',
-            returnPath: '/(main)/chat'
-          });
-          // Don't set error here - Grid sign-in will navigate to OTP screen
-          // Wallet data will load after OTP completion via the useEffect below
-          return;
-        } catch (signInError) {
-          console.error('💰 [Context] Failed to initiate Grid sign-in:', signInError);
-          setHasTriggeredGridSignIn(false); // Reset to allow retry
-          throw new Error('No wallet address available. Please complete Grid wallet setup.');
-        }
-      }
-      
-      // If we still don't have an address after attempting sign-in, throw error
+      // If no wallet address is available, don't trigger Grid sign-in automatically
+      // Grid sign-in should only be triggered when user explicitly accesses wallet features
+      // This prevents interrupting the user flow immediately after Google sign-in
       if (!fallbackAddress) {
-        throw new Error('No wallet found. Please complete Grid wallet setup.');
+        console.log('💰 [Context] No wallet address available (Grid sign-in will be triggered on-demand when wallet features are accessed)');
+        // Don't throw error - just return empty wallet data
+        // Grid sign-in will be triggered when user navigates to wallet screen or uses wallet features
+        setWalletData({
+          totalBalance: 0,
+          holdings: [],
+          smartAccountAddress: undefined,
+          lastUpdated: new Date().toISOString(),
+        });
+        setError(null); // Don't show error - wallet setup is optional
+        return;
       }
       
       const data = forceRefresh 
@@ -142,12 +134,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   // Load wallet data when user is available (background loading on app start)
+  // Only load if Grid account exists - don't trigger Grid sign-in automatically
+  // Check secure storage directly to avoid race condition with GridContext loading
   useEffect(() => {
     if (user?.id && !isInitialized) {
-      console.log('💰 [Context] Loading wallet data in background for user:', user.id);
-      loadWalletData();
+      const checkAndLoadWallet = async () => {
+        // Check secure storage directly (same source GridContext uses)
+        // This avoids race condition where GridContext hasn't finished loading yet
+        const account = await gridClientService.getAccount();
+        const hasGridAccount = account?.address || gridAccount?.address || solanaAddress;
+        
+        if (hasGridAccount) {
+          const walletAddress = account?.address || gridAccount?.address || solanaAddress;
+          console.log('💰 [Context] Grid account found, loading wallet data in background for user:', user.id, 'address:', walletAddress);
+          loadWalletData();
+        } else {
+          console.log('💰 [Context] No Grid account yet - wallet will load when user accesses wallet features or completes Grid sign-in');
+          setIsInitialized(true); // Mark as initialized even without wallet data
+        }
+      };
+      
+      checkAndLoadWallet();
     }
-  }, [user?.id, isInitialized, loadWalletData]);
+  }, [user?.id, isInitialized, loadWalletData, gridAccount?.address, solanaAddress]);
 
   // When Grid account becomes available (after OTP completion), load wallet data
   useEffect(() => {

@@ -156,41 +156,61 @@ async function checkOpenMemory() {
   }
 }
 
+// Handle unhandled promise rejections to prevent crashes
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit - let the server continue running
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  // Exit on uncaught exceptions to prevent undefined behavior
+  process.exit(1);
+});
+
 // Start server
 app.listen(PORT, async () => {
-  console.log('');
-  console.log('🚀 Mallory Server Started');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`📍 Port: ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔐 CORS: ${process.env.NODE_ENV === 'development' ? 'All origins (dev mode)' : allowedOrigins.join(', ')}`);
-  console.log('');
-  console.log('📡 Available endpoints:');
-  console.log(`   GET  /health - Health check`);
-  console.log(`   POST /api/chat - AI chat streaming`);
-  console.log(`   GET  /api/wallet/holdings - Wallet holdings`);
-  console.log(`   POST /api/grid/init-account - Grid init (CORS proxy)`);
-  console.log(`   POST /api/grid/verify-otp - Grid OTP verify (CORS proxy)`);
-  console.log(`   POST /api/grid/send-tokens - Grid token transfer (CORS proxy)`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('');
-  
-  // Log infinite-memory version
   try {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    const infiniteMemoryPkgPath = join(__dirname, '../node_modules/infinite-memory/package.json');
-    const infiniteMemoryPkg = JSON.parse(readFileSync(infiniteMemoryPkgPath, 'utf-8'));
-    console.log(`📦 infinite-memory version: ${infiniteMemoryPkg.version}`);
+    console.log('');
+    console.log('🚀 Mallory Server Started');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`📍 Port: ${PORT}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔐 CORS: ${process.env.NODE_ENV === 'development' ? 'All origins (dev mode)' : allowedOrigins.join(', ')}`);
+    console.log('');
+    console.log('📡 Available endpoints:');
+    console.log(`   GET  /health - Health check`);
+    console.log(`   POST /api/chat - AI chat streaming`);
+    console.log(`   GET  /api/wallet/holdings - Wallet holdings`);
+    console.log(`   POST /api/grid/init-account - Grid init (CORS proxy)`);
+    console.log(`   POST /api/grid/verify-otp - Grid OTP verify (CORS proxy)`);
+    console.log(`   POST /api/grid/send-tokens - Grid token transfer (CORS proxy)`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('');
+    
+    // Log infinite-memory version
+    try {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      const infiniteMemoryPkgPath = join(__dirname, '../node_modules/infinite-memory/package.json');
+      const infiniteMemoryPkg = JSON.parse(readFileSync(infiniteMemoryPkgPath, 'utf-8'));
+      console.log(`📦 infinite-memory version: ${infiniteMemoryPkg.version}`);
+      console.log('');
+    } catch (error) {
+      console.log('⚠️  Could not read infinite-memory version');
+      console.log('');
+    }
+    
+    // Check OpenMemory connection (non-blocking)
+    checkOpenMemory().catch((error) => {
+      console.error('⚠️  Error checking OpenMemory:', error);
+    });
     console.log('');
   } catch (error) {
-    console.log('⚠️  Could not read infinite-memory version');
-    console.log('');
+    console.error('❌ Error during server startup:', error);
+    // Don't exit - server is already listening, just log the error
   }
-  
-  // Check OpenMemory connection
-  await checkOpenMemory();
-  console.log('');
 });
 
 // Graceful shutdown

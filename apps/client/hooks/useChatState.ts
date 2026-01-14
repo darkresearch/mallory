@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { useTransactionGuard } from './useTransactionGuard';
 import { getChatCache, subscribeToChatCache, isCacheForConversation } from '../lib/chat-cache';
 import type { StreamState } from '../lib/chat-cache';
@@ -130,11 +131,24 @@ export function useChatState({ currentConversationId, isLoadingConversation = fa
       return;
     }
     
-    // Trigger message send via custom event (ChatManager listens)
-    const event = new CustomEvent('chat:sendMessage', { 
-      detail: { conversationId: currentConversationId, message } 
-    });
-    window.dispatchEvent(event);
+    // Trigger message send
+    // On web: use window events (ChatManager listens)
+    // On React Native: call sendMessage directly from cache
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+      const event = new CustomEvent('chat:sendMessage', { 
+        detail: { conversationId: currentConversationId, message } 
+      });
+      window.dispatchEvent(event);
+    } else {
+      // React Native: use cache functions
+      const cache = getChatCache();
+      if (cache.chatFunctions?.sendMessage) {
+        console.log('📨 [useChatState] Sending message via cache (React Native):', message);
+        cache.chatFunctions.sendMessage({ text: message });
+      } else {
+        console.warn('⚠️ [useChatState] ChatManager sendMessage not available in cache');
+      }
+    }
     
     // Optimistically set waiting state
     setStreamState({ status: 'waiting', startTime: Date.now() });
@@ -146,10 +160,18 @@ export function useChatState({ currentConversationId, isLoadingConversation = fa
     if (!currentConversationId || currentConversationId === 'temp-loading') return;
     
     console.log('🛑 [useChatState] Stopping stream');
-    const event = new CustomEvent('chat:stop', { 
-      detail: { conversationId: currentConversationId } 
-    });
-    window.dispatchEvent(event);
+    // On web: use window events, on React Native: use cache functions
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+      const event = new CustomEvent('chat:stop', { 
+        detail: { conversationId: currentConversationId } 
+      });
+      window.dispatchEvent(event);
+    } else {
+      const cache = getChatCache();
+      if (cache.chatFunctions?.stop) {
+        cache.chatFunctions.stop();
+      }
+    }
   };
 
   // Handle regenerate
@@ -157,10 +179,18 @@ export function useChatState({ currentConversationId, isLoadingConversation = fa
     if (!currentConversationId || currentConversationId === 'temp-loading') return;
     
     console.log('🔄 [useChatState] Regenerating message');
-    const event = new CustomEvent('chat:regenerate', { 
-      detail: { conversationId: currentConversationId } 
-    });
-    window.dispatchEvent(event);
+    // On web: use window events, on React Native: use cache functions
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+      const event = new CustomEvent('chat:regenerate', { 
+        detail: { conversationId: currentConversationId } 
+      });
+      window.dispatchEvent(event);
+    } else {
+      const cache = getChatCache();
+      if (cache.chatFunctions?.regenerate) {
+        cache.chatFunctions.regenerate();
+      }
+    }
   };
 
   return {

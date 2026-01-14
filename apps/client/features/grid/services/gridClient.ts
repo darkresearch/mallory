@@ -1,4 +1,4 @@
-import { storage, config, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '@/lib';
+import { storage, config, SECURE_STORAGE_KEYS, SESSION_STORAGE_KEYS, generateAPIUrl } from '@/lib';
 import { GridClient } from '@sqds/grid';
 
 /**
@@ -110,10 +110,11 @@ class GridClientService {
       console.log('🔐 [Grid Client] Starting sign-in for:', email);
 
       // Call backend proxy (backend uses stateless detection)
-      const backendUrl = config.backendApiUrl || 'http://localhost:3001';
+      // Use generateAPIUrl() for platform-aware URL conversion (Android localhost -> 10.0.2.2)
+      const backendUrl = generateAPIUrl('/api/grid/start-sign-in');
       const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
 
-      const response = await fetch(`${backendUrl}/api/grid/start-sign-in`, {
+      const response = await fetch(backendUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -224,10 +225,11 @@ class GridClientService {
       console.log('✅ [Grid Client] Session secrets generated');
 
       // Call backend proxy to complete auth (passes flow hint for optimal routing)
-      const backendUrl = config.backendApiUrl || 'http://localhost:3001';
+      // Use generateAPIUrl() for platform-aware URL conversion (Android localhost -> 10.0.2.2)
+      const backendUrl = generateAPIUrl('/api/grid/complete-sign-in');
       const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
 
-      const response = await fetch(`${backendUrl}/api/grid/complete-sign-in`, {
+      const response = await fetch(backendUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -318,10 +320,11 @@ class GridClientService {
       const account = JSON.parse(accountJson);
 
       // Call backend proxy
-      const backendUrl = config.backendApiUrl || 'http://localhost:3001';
+      // Use generateAPIUrl() for platform-aware URL conversion (Android localhost -> 10.0.2.2)
+      const backendUrl = generateAPIUrl('/api/grid/send-tokens');
       const token = await storage.persistent.getItem(SECURE_STORAGE_KEYS.AUTH_TOKEN);
       
-      const response = await fetch(`${backendUrl}/api/grid/send-tokens`, {
+      const response = await fetch(backendUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

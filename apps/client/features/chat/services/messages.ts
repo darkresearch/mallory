@@ -1,6 +1,6 @@
 import { UIMessage } from 'ai';
 import { supabase } from '../../../lib/supabase';
-import { v4 as uuidv4 } from 'uuid';
+import { generateUUID } from '../../../lib/uuid';
 
 
 /**
@@ -8,7 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
  */
 function ensureUUID(existingId?: string): string {
   if (!existingId) {
-    const newId = uuidv4();
+    const newId = generateUUID();
     console.log('🆔 Generated UUID for message without ID:', newId);
     return newId;
   }
@@ -21,7 +21,7 @@ function ensureUUID(existingId?: string): string {
   }
   
   // Not a UUID - generate new one  
-  const newId = uuidv4();
+  const newId = generateUUID();
   console.log('🆔 Converting non-UUID to UUID:', existingId, '→', newId);
   return newId;
 }
