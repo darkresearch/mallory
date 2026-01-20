@@ -117,14 +117,22 @@ export function ChatManager({}: ChatManagerProps) {
   useEffect(() => {
     const previousId = previousConversationIdRef.current;
     
-    if (previousId && previousId !== currentConversationId) {
+    // Only treat as actual change if both IDs are valid and different
+    const previousWasValid = previousId && previousId !== 'temp-loading';
+    const currentIsValid = currentConversationId && currentConversationId !== 'temp-loading';
+    const isActualChange = previousWasValid && currentIsValid && previousId !== currentConversationId;
+    
+    if (isActualChange) {
       console.log('🔄 [ChatManager] Conversation changed:', { from: previousId, to: currentConversationId });
       console.log('🛑 [ChatManager] Stopping previous conversation stream');
       stop();
       clearChatCache();
     }
     
-    previousConversationIdRef.current = currentConversationId;
+    // Only update ref with valid IDs (preserve previous during loading)
+    if (currentConversationId && currentConversationId !== 'temp-loading') {
+      previousConversationIdRef.current = currentConversationId;
+    }
   }, [currentConversationId, stop]);
 
   // Load historical messages when conversation ID changes
@@ -143,16 +151,40 @@ export function ChatManager({}: ChatManagerProps) {
       return;
     }
     
-    // Clear messages immediately when conversation changes to prevent showing old messages
-    console.log('🧹 [ChatManager] Clearing messages for conversation switch to:', currentConversationId);
-    console.log('   Before clear - messages.length:', messages.length);
-    console.log('   Before clear - initialMessages.length:', initialMessages.length);
-    setMessages([]);
-    setInitialMessages([]);
-    setInitialMessagesConversationId(null); // Track what conversation initialMessages belong to
-    conversationMessagesSetRef.current = null; // Reset ref so new messages can be set
-    console.log('✅ [ChatManager] Messages cleared (setMessages([]) and setInitialMessages([]) called)');
-    console.log('✅ [ChatManager] Ref and conversationId tracker reset');
+    const previousId = previousConversationIdRef.current;
+    const previousWasValid = previousId && previousId !== 'temp-loading';
+    const currentIsValid = currentConversationId && currentConversationId !== 'temp-loading';
+    const isActualChange = previousWasValid && currentIsValid && previousId !== currentConversationId;
+    const isSameConversation = previousId === currentConversationId;
+    
+    // Check if we already loaded messages for this conversation
+    const alreadyLoaded = conversationMessagesSetRef.current === currentConversationId;
+    const hasMessages = messages.length > 0 || initialMessages.length > 0;
+    
+    // Only clear messages if this is an ACTUAL conversation change (not loading state)
+    if (isActualChange) {
+      console.log('🧹 [ChatManager] Clearing messages for actual conversation change to:', currentConversationId);
+      console.log('   Before clear - messages.length:', messages.length);
+      console.log('   Before clear - initialMessages.length:', initialMessages.length);
+      setMessages([]);
+      setInitialMessages([]);
+      setInitialMessagesConversationId(null);
+      conversationMessagesSetRef.current = null;
+      console.log('✅ [ChatManager] Messages cleared for actual conversation change');
+    } else if (isSameConversation && alreadyLoaded && !hasMessages) {
+      // Same conversation but no messages (they were cleared) - reset to allow reload
+      console.log('⚠️  [ChatManager] Same conversation but no messages - resetting to allow reload');
+      conversationMessagesSetRef.current = null;
+      setInitialMessagesConversationId(null);
+    } else if (isSameConversation && alreadyLoaded && hasMessages) {
+      // Same conversation with messages already loaded - skip reload
+      console.log('⏭️  [ChatManager] Same conversation with messages - preserving (skipping reload)');
+      setIsLoadingHistory(false);
+      updateChatCache({ isLoadingHistory: false });
+      return; // Exit early, don't reload
+    } else {
+      console.log('⏭️  [ChatManager] Loading state or initial load - will load messages');
+    }
     
     let isCancelled = false;
     
