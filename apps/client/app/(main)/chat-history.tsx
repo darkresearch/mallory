@@ -467,17 +467,34 @@ export default function ChatHistoryScreen() {
     
     setIsCreatingChat(true);
     
+    // Add a timeout guard to ensure loading state is reset even if operation hangs
+    const timeoutId = setTimeout(() => {
+      console.warn('⚠️ Chat creation taking too long, resetting loading state');
+      setIsCreatingChat(false);
+    }, 15000); // 15 second timeout
+    
     try {
-      const conversationData = await createNewConversation(user?.id);
+      // Add timeout wrapper around createNewConversation
+      const conversationData = await Promise.race([
+        createNewConversation(user?.id),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Chat creation timeout')), 10000)
+        )
+      ]);
+      
+      clearTimeout(timeoutId);
       setCurrentConversationId(conversationData.conversationId);
       router.push(`/(main)/chat?conversationId=${conversationData.conversationId}`);
       
+      // Reset loading state after navigation
       setTimeout(() => {
         setIsCreatingChat(false);
       }, 100);
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error('Error creating new chat:', error);
       setIsCreatingChat(false);
+      // Optionally show an error message to the user
     }
   };
 
