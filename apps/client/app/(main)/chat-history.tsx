@@ -483,6 +483,22 @@ export default function ChatHistoryScreen() {
       ]);
       
       clearTimeout(timeoutId);
+      
+      // Manually add conversation to list immediately (real-time subscriptions are failing)
+      // This ensures it appears instantly even if real-time subscriptions are broken
+      const now = new Date().toISOString();
+      const newConversation = {
+        id: conversationData.conversationId,
+        title: 'mallory-global',
+        token_ca: GLOBAL_TOKEN_ID,
+        created_at: now,
+        updated_at: now,
+        metadata: {}
+      };
+      
+      console.log('✅ [handleNewChat] Manually adding conversation to list:', newConversation.id);
+      handleConversationInsert(newConversation);
+      
       setCurrentConversationId(conversationData.conversationId);
       router.push(`/(main)/chat?conversationId=${conversationData.conversationId}`);
       

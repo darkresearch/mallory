@@ -17,7 +17,7 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
   const hasUpdatedUrlRef = useRef(false);
   const isLoadingRef = useRef(false); // Prevent concurrent loads
   
-  const { setConversationId: setGlobalConversationId } = useActiveConversationContext();
+  const { conversationId: contextConversationId, setConversationId: setGlobalConversationId } = useActiveConversationContext();
 
   useEffect(() => {
     const loadActiveConversation = async () => {
@@ -52,7 +52,25 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
           return;
         }
 
-        // Priority 2: Storage (wait for it properly)
+        // Priority 2: Context (already loaded, fastest)
+        if (contextConversationId) {
+          console.log('✅ [useActiveConversation] Found conversationId in context:', contextConversationId);
+          console.log('📍 [useActiveConversation] Using context - NOT creating new conversation');
+          // Update URL for web to preserve it
+          if (Platform.OS === 'web' && !params.conversationId && !hasUpdatedUrlRef.current) {
+            hasUpdatedUrlRef.current = true;
+            router.replace(`/(main)/chat?conversationId=${contextConversationId}`);
+          }
+          setConversationId(contextConversationId);
+          setGlobalConversationId(contextConversationId);
+          setIsLoading(false);
+          isLoadingRef.current = false;
+          return;
+        } else {
+          console.log('⚠️ [useActiveConversation] Context conversationId is null/undefined');
+        }
+
+        // Priority 3: Storage (wait for it properly)
         let activeConversationId: string | null = null;
         try {
           activeConversationId = await storage.persistent.getItem(SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID);
@@ -62,6 +80,7 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
         
         if (activeConversationId) {
           console.log('✅ [useActiveConversation] Found conversationId in storage:', activeConversationId);
+          console.log('📍 [useActiveConversation] Using storage - NOT creating new conversation');
           // Update URL for web to preserve it
           if (Platform.OS === 'web' && !params.conversationId && !hasUpdatedUrlRef.current) {
             hasUpdatedUrlRef.current = true;
@@ -72,9 +91,11 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
           setIsLoading(false);
           isLoadingRef.current = false;
           return;
+        } else {
+          console.log('⚠️ [useActiveConversation] Storage conversationId is null/undefined');
         }
 
-        // Priority 3: Only create new if we truly don't have one
+        // Priority 4: Only create new if we truly don't have one
         // Add a small delay to allow any pending storage writes to complete
         console.log('⚠️ [useActiveConversation] No conversationId found, waiting before creating new...');
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -95,8 +116,16 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
         }
 
         // Only now create new conversation if we really don't have one
-        console.log('🆕 [useActiveConversation] Creating new conversation...');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('🆕 [useActiveConversation] ⚠️ CREATING NEW CONVERSATION ⚠️');
+        console.log('   Reason: No conversationId found in URL, context, or storage');
+        console.log('   URL param:', params.conversationId || 'none');
+        console.log('   Context:', contextConversationId || 'none');
+        console.log('   Storage:', activeConversationId || 'none');
+        console.log('   Retry storage:', retryConversationId || 'none');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         const conversationData = await getCurrentOrCreateConversation(userId);
+        console.log('✅ [useActiveConversation] New conversation created:', conversationData.conversationId);
         setConversationId(conversationData.conversationId);
         setGlobalConversationId(conversationData.conversationId);
         setIsLoading(false);
