@@ -54,7 +54,9 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
           <TouchableOpacity
             key={tab.name}
             style={styles.tab}
-            onPress={() => handlePress(tab.route)}
+            onPress={() => handlePress(tab.route).catch((error) => {
+              console.error('Navigation error:', error);
+            })}
           >
             <Ionicons
               name={tab.icon as any}
