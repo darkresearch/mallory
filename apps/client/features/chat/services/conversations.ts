@@ -166,7 +166,7 @@ async function createConversationDirectly(conversationId: string, userId?: strin
       result = await Promise.race([insertWithLogging, insertTimeout]);
     } catch (raceError) {
       // If it's our timeout error, try to get the actual error from the original promise
-      if (raceError instanceof Error && raceError.message === 'INSERT timeout after 8 seconds') {
+      if (raceError instanceof Error && raceError.message === 'INSERT timeout after 15 seconds') {
         console.error('[createConversation] Timeout occurred. Checking if original promise has error...');
         // Wait a bit more to see if we get an actual error
         try {

@@ -141,7 +141,7 @@ export function useActiveConversation({ userId }: UseActiveConversationProps) {
     };
 
     loadActiveConversation();
-  }, [userId, params.conversationId]);
+  }, [userId, params.conversationId, contextConversationId]);
 
   return {
     conversationId,
