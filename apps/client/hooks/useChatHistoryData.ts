@@ -196,7 +196,8 @@ export function useChatHistoryData(userId?: string) {
     
     setConversations(prev => {
       console.log('📝 [HANDLE INSERT] Previous conversations count:', prev.length);
-      const updated = [newConversation, ...prev];
+      const updated = [newConversation, ...prev]
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()); // Sort after adding
       console.log('📝 [HANDLE INSERT] Updated conversations count:', updated.length);
       cache.conversations = updated; // Update cache
       console.log('📝 [HANDLE INSERT] Cache updated');

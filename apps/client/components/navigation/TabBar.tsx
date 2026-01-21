@@ -2,6 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePathname, useRouter } from 'expo-router';
+import { storage, SECURE_STORAGE_KEYS } from '../../lib/storage';
 
 type TabBarProps = {
   state?: any;
@@ -20,8 +21,24 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
     { name: 'account', icon: 'person', route: '/(main)/account' },
   ];
 
-  const handlePress = (route: string) => {
+  const handlePress = async (route: string) => {
     if (Platform.OS === 'web') {
+      // Preserve conversationId when navigating to chat tab
+      if (route === '/(main)/chat') {
+        try {
+          const currentConversationId = await storage.persistent.getItem(
+            SECURE_STORAGE_KEYS.CURRENT_CONVERSATION_ID
+          );
+          const url = currentConversationId 
+            ? `/(main)/chat?conversationId=${currentConversationId}`
+            : '/(main)/chat';
+          router.push(url as any);
+          return;
+        } catch (error) {
+          console.warn('Could not read conversation ID from storage:', error);
+          // Fallback to regular route if storage read fails
+        }
+      }
       router.push(route as any);
     } else if (navigation) {
       navigation.navigate(route);
@@ -37,7 +54,9 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
           <TouchableOpacity
             key={tab.name}
             style={styles.tab}
-            onPress={() => handlePress(tab.route)}
+            onPress={() => handlePress(tab.route).catch((error) => {
+              console.error('Navigation error:', error);
+            })}
           >
             <Ionicons
               name={tab.icon as any}

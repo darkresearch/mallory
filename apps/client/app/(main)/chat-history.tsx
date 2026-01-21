@@ -467,17 +467,50 @@ export default function ChatHistoryScreen() {
     
     setIsCreatingChat(true);
     
+    // Add a timeout guard to ensure loading state is reset even if operation hangs
+    const timeoutId = setTimeout(() => {
+      console.warn('⚠️ Chat creation taking too long, resetting loading state');
+      setIsCreatingChat(false);
+    }, 15000); // 15 second timeout
+    
     try {
-      const conversationData = await createNewConversation(user?.id);
+      // Add timeout wrapper around createNewConversation
+      const conversationData = await Promise.race([
+        createNewConversation(user?.id),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Chat creation timeout')), 10000)
+        )
+      ]);
+      
+      clearTimeout(timeoutId);
+      
+      // Manually add conversation to list immediately (real-time subscriptions are failing)
+      // This ensures it appears instantly even if real-time subscriptions are broken
+      const now = new Date().toISOString();
+      const newConversation = {
+        id: conversationData.conversationId,
+        title: 'mallory-global',
+        token_ca: GLOBAL_TOKEN_ID,
+        created_at: now,
+        updated_at: now,
+        metadata: {}
+      };
+      
+      console.log('✅ [handleNewChat] Manually adding conversation to list:', newConversation.id);
+      handleConversationInsert(newConversation);
+      
       setCurrentConversationId(conversationData.conversationId);
       router.push(`/(main)/chat?conversationId=${conversationData.conversationId}`);
       
+      // Reset loading state after navigation
       setTimeout(() => {
         setIsCreatingChat(false);
       }, 100);
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error('Error creating new chat:', error);
       setIsCreatingChat(false);
+      // Optionally show an error message to the user
     }
   };
 

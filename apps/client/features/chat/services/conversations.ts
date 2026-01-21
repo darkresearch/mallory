@@ -19,34 +19,7 @@ async function createConversationDirectly(conversationId: string, userId?: strin
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('[createConversation] Starting with conversationId:', conversationId);
     
-    // First, let's check the current auth state
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    console.log('[createConversation] Current session state:', {
-      hasSession: !!session,
-      hasUser: !!session?.user,
-      userId: session?.user?.id,
-      isExpired: session && session.expires_at ? new Date() > new Date(session.expires_at * 1000) : 'no session',
-      sessionError
-    });
-    
-    // Test if we can read from conversations table (to verify RLS is working)
-    if (session?.user?.id) {
-      console.log('[createConversation] Testing SELECT permission on conversations table...');
-      const { data: testData, error: testError } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('user_id', session.user.id)
-        .limit(1);
-      
-      console.log('[createConversation] SELECT test result:', {
-        canRead: !testError,
-        testError: testError?.message,
-        testErrorCode: testError?.code,
-        foundConversations: testData?.length || 0
-      });
-    }
-    
-    // Use provided userId if available, otherwise get from Supabase auth
+    // Use provided userId if available FIRST (skip unnecessary auth calls)
     let authUser;
     if (userId) {
       console.log('[createConversation] Using provided userId:', userId);
@@ -54,28 +27,68 @@ async function createConversationDirectly(conversationId: string, userId?: strin
     } else {
       console.log('[createConversation] Getting authenticated user from Supabase...');
       
-      // Try with a timeout to avoid hanging
-      const authPromise = supabase.auth.getUser();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Auth timeout')), 5000)
+      // Add timeout to getSession call
+      const sessionPromise = supabase.auth.getSession();
+      const sessionTimeout = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('getSession timeout after 5 seconds')), 5000)
       );
       
+      let session;
       try {
-        const { data: { user } } = await Promise.race([authPromise, timeoutPromise]) as any;
-        authUser = user;
-        console.log('[createConversation] Auth user result:', authUser ? 'found' : 'not found');
+        const result = await Promise.race([sessionPromise, sessionTimeout]);
+        session = result.data?.session;
+        console.log('[createConversation] Current session state:', {
+          hasSession: !!session,
+          hasUser: !!session?.user,
+          userId: session?.user?.id,
+          isExpired: session && session.expires_at ? new Date() > new Date(session.expires_at * 1000) : 'no session',
+        });
       } catch (error) {
-        console.error('[createConversation] Auth error or timeout:', error);
+        console.error('[createConversation] getSession error or timeout:', error);
+        // Try getUser as fallback with timeout
+        const authPromise = supabase.auth.getUser();
+        const timeoutPromise = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Auth timeout')), 5000)
+        );
         
-        // Try alternative: get session instead
-        console.log('[createConversation] Trying getSession as fallback...');
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          authUser = session?.user;
-          console.log('[createConversation] Session user result:', authUser ? 'found' : 'not found');
-        } catch (sessionError) {
-          console.error('[createConversation] Session error:', sessionError);
+          const { data: { user } } = await Promise.race([authPromise, timeoutPromise]) as any;
+          authUser = user;
+          console.log('[createConversation] Auth user result:', authUser ? 'found' : 'not found');
+        } catch (authError) {
+          console.error('[createConversation] Auth error or timeout:', authError);
           return false;
+        }
+      }
+      
+      if (!authUser && session?.user) {
+        authUser = session.user;
+      }
+      
+      // Test if we can read from conversations table (to verify RLS is working)
+      if (authUser?.id) {
+        console.log('[createConversation] Testing SELECT permission on conversations table...');
+        const selectPromise = supabase
+          .from('conversations')
+          .select('id')
+          .eq('user_id', authUser.id)
+          .limit(1);
+        
+        const selectTimeout = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('SELECT test timeout')), 3000)
+        );
+        
+        try {
+          const { data: testData, error: testError } = await Promise.race([selectPromise, selectTimeout]);
+          console.log('[createConversation] SELECT test result:', {
+            canRead: !testError,
+            testError: testError?.message,
+            testErrorCode: testError?.code,
+            foundConversations: testData?.length || 0
+          });
+        } catch (error) {
+          console.warn('[createConversation] SELECT test timed out or failed:', error);
+          // Continue anyway - this is just a test
         }
       }
     }
@@ -100,7 +113,8 @@ async function createConversationDirectly(conversationId: string, userId?: strin
     console.log('[createConversation] Calling Supabase INSERT...');
     const insertStartTime = Date.now();
     
-    const { data, error } = await supabase
+    // Wrap the INSERT to capture any errors before timeout
+    const insertPromise = supabase
       .from('conversations')
       .insert({
         id: conversationId,
@@ -112,6 +126,67 @@ async function createConversationDirectly(conversationId: string, userId?: strin
         metadata: {}
       })
       .select(); // Add select to get the inserted data back
+    
+    // Add error logging wrapper
+    const insertWithLogging = insertPromise.then(
+      (result) => {
+        console.log('[createConversation] INSERT promise resolved');
+        return result;
+      },
+      (error) => {
+        console.error('[createConversation] INSERT promise rejected with error:', {
+          error,
+          message: error?.message,
+          code: error?.code,
+          details: error?.details,
+          hint: error?.hint,
+          status: error?.status,
+          statusText: error?.statusText
+        });
+        throw error;
+      }
+    );
+    
+    const insertTimeout = new Promise<never>((_, reject) => 
+      setTimeout(() => {
+        console.error('[createConversation] INSERT operation timed out after 15 seconds');
+        console.error('[createConversation] This usually indicates:');
+        console.error('  1. RLS policy blocking the INSERT');
+        console.error('  2. Network connectivity issue');
+        console.error('  3. Database trigger hanging');
+        console.error('  4. Supabase service issue');
+        console.error('  5. CORS issue (if on web)');
+        console.error('[createConversation] Check browser Network tab to see if request is being sent');
+        reject(new Error('INSERT timeout after 15 seconds'));
+      }, 15000)
+    );
+    
+    let result;
+    try {
+      result = await Promise.race([insertWithLogging, insertTimeout]);
+    } catch (raceError) {
+      // If it's our timeout error, try to get the actual error from the original promise
+      if (raceError instanceof Error && raceError.message === 'INSERT timeout after 15 seconds') {
+        console.error('[createConversation] Timeout occurred. Checking if original promise has error...');
+        // Wait a bit more to see if we get an actual error
+        try {
+          const actualResult = await Promise.race([
+            insertPromise,
+            new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error('Second timeout')), 2000)
+            )
+          ]);
+          result = actualResult;
+        } catch (actualError) {
+          console.error('[createConversation] Actual error from Supabase:', actualError);
+          throw raceError; // Still throw timeout error but we've logged the real one
+        }
+      } else {
+        throw raceError;
+      }
+    }
+    
+    const { data, error } = result;
     
     const insertDuration = Date.now() - insertStartTime;
     console.log(`[createConversation] INSERT completed in ${insertDuration}ms`);
@@ -134,11 +209,19 @@ async function createConversationDirectly(conversationId: string, userId?: strin
       return false;
     }
     
-    console.log('✅ [createConversation] Successfully created conversation in database!');
-    console.log('[createConversation] Inserted data:', {
-      conversationId,
-      insertedData: data
-    });
+    // Check if data is empty (can happen with RLS filtering)
+    if (!data || (Array.isArray(data) && data.length === 0)) {
+      console.log('⚠️ [createConversation] INSERT succeeded but response data is empty (likely RLS filtering)');
+      console.log('[createConversation] This is OK - conversation was created (status 201), just not returned in response');
+      console.log('✅ [createConversation] Successfully created conversation in database!');
+      console.log('[createConversation] Conversation ID:', conversationId);
+    } else {
+      console.log('✅ [createConversation] Successfully created conversation in database!');
+      console.log('[createConversation] Inserted data:', {
+        conversationId,
+        insertedData: data
+      });
+    }
     
     // NOTE: Broadcast is now handled by database trigger (migration 089)
     // No need for manual broadcast anymore
@@ -164,7 +247,8 @@ async function createConversationWithMetadata(conversationId: string, userId: st
       metadata
     });
 
-    const { data, error } = await supabase
+    // Add timeout to INSERT operation
+    const insertPromise = supabase
       .from('conversations')
       .insert({
         id: conversationId,
@@ -176,6 +260,12 @@ async function createConversationWithMetadata(conversationId: string, userId: st
         metadata: metadata
       })
       .select();
+    
+    const insertTimeout = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('INSERT timeout after 8 seconds')), 8000)
+    );
+    
+    const { data, error } = await Promise.race([insertPromise, insertTimeout]);
     
     if (error) {
       if (error.code === '23505') {
@@ -216,9 +306,20 @@ export async function createNewConversation(userId?: string, metadata?: Record<s
     let authUserId = userId;
     if (!authUserId) {
       console.log('🔍 Getting userId from Supabase auth...');
-      const { data: { user } } = await supabase.auth.getUser();
-      authUserId = user?.id;
-      console.log('✅ Got userId:', authUserId);
+      // Add timeout to getUser call
+      const getUserPromise = supabase.auth.getUser();
+      const getUserTimeout = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('getUser timeout after 5 seconds')), 5000)
+      );
+      
+      try {
+        const { data: { user } } = await Promise.race([getUserPromise, getUserTimeout]);
+        authUserId = user?.id;
+        console.log('✅ Got userId:', authUserId);
+      } catch (error) {
+        console.error('❌ Error getting userId:', error);
+        throw new Error('Failed to get user ID from authentication');
+      }
     }
 
     if (!authUserId) {
