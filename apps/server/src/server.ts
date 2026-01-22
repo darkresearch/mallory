@@ -136,15 +136,30 @@ async function checkOpenMemory() {
   }
 
   try {
-    // Try to ping OpenMemory health endpoint
-    const response = await fetch(`${openMemoryUrl}/health`, {
+    // Test with cavira.app OpenMemory - try root endpoint or a simple query
+    // cavira.app OpenMemory may not have /health, so we test basic connectivity
+    const testUrl = `${openMemoryUrl}/`;
+    const response = await fetch(testUrl, {
       method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${openMemoryApiKey}`,
+        'Content-Type': 'application/json',
+      },
       signal: AbortSignal.timeout(2000), // 2 second timeout
     });
 
-    if (response.ok) {
+    // Only HTTP 200 indicates successful connection
+    if (response.status === 200) {
       console.log(`✅ OpenMemory: Connected (${openMemoryUrl})`);
       console.log(`   Infinite memory enabled with semantic retrieval`);
+    } else if (response.status === 401) {
+      console.log(`❌ OpenMemory: Authentication failed (${openMemoryUrl})`);
+      console.log(`   Invalid API key. Check OPENMEMORY_API_KEY in .env`);
+      console.log(`   Infinite memory will be disabled until this is fixed.`);
+    } else if (response.status === 404) {
+      console.log(`⚠️  OpenMemory: Endpoint not found (HTTP 404)`);
+      console.log(`   OpenMemory server is reachable but endpoint may be incorrect`);
+      console.log(`   Check OPENMEMORY_URL in .env`);
     } else {
       console.log(`⚠️  OpenMemory: Unreachable (HTTP ${response.status})`);
       console.log(`   Check that OpenMemory is running on ${openMemoryUrl}`);
@@ -152,7 +167,8 @@ async function checkOpenMemory() {
   } catch (error) {
     console.log(`❌ OpenMemory: Connection failed (${openMemoryUrl})`);
     console.log(`   Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    console.log(`   Run: cd services/openmemory/backend && bun start`);
+    console.log(`   Run: bash services/openmemory-setup.sh`);
+    console.log(`   Then: cd services/openmemory/backend && bun start`);
   }
 }
 
