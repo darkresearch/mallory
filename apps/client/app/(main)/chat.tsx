@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { ErrorBoundary } from 'react-error-boundary';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { ChatInput } from '../../components/chat/ChatInput';
@@ -12,8 +13,10 @@ import { MessageList } from '../../components/chat/MessageList';
 import { useChatState } from '../../hooks/useChatState';
 import { useActiveConversation } from '../../hooks/useActiveConversation';
 import { OnboardingConversationHandler } from '../../components/chat/OnboardingConversationHandler';
+import { ErrorFallback } from '../../components/ErrorFallback';
 
 export default function ChatScreen() {
+  const [errorBoundaryKey, setErrorBoundaryKey] = React.useState(0);
   const router = useRouter();
   const auth = useAuth(); // Must call hooks unconditionally
   const { user, isLoading } = auth;
@@ -86,73 +89,99 @@ export default function ChatScreen() {
         }
       ]}
     >
-      <SafeAreaView style={styles.wideContainer} edges={['top', 'bottom']}>
-        {/* Onboarding Conversation Handler - manages onboarding in background */}
-        <OnboardingConversationHandler
-          user={user}
-          currentConversationId={currentConversationId}
-        />
-
-        {/* Header with navigation */}
-        <ChatHeader user={user} styles={styles} />
-
-        {/* Main chat content - uses wide container for more space */}
-        <KeyboardAvoidingView 
-          style={styles.wideContentContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'web' ? undefined : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-          enabled={Platform.OS !== 'web'}
+      <ErrorBoundary
+        resetKeys={[errorBoundaryKey]}
+        fallbackRender={({ error, resetErrorBoundary }) => (
+          <ErrorFallback 
+            error={error as Error} 
+            resetErrorBoundary={() => {
+              setErrorBoundaryKey(prev => prev + 1);
+              setTimeout(() => {
+                resetErrorBoundary();
+              }, 0);
+            }} 
+          />
+        )}
+        onReset={() => {
+          console.log('Chat screen error boundary reset');
+        }}
+        onError={(error, info) => {
+          console.error('Error caught in ChatScreen:', error);
+          console.error('Error info:', info);
+        }}
+      >
+        <SafeAreaView 
+          key={errorBoundaryKey}
+          style={styles.wideContainer} 
+          edges={['top', 'bottom']}
         >
-          {/* Messages Area */}
-          <MessageList
-            aiMessages={aiMessages}
-            aiStatus={aiStatus}
-            aiError={aiError}
-            streamState={streamState}
-            liveReasoningText={liveReasoningText}
-            isLoadingHistory={isLoadingHistory}
-            regenerateMessage={regenerateMessage}
-            scrollViewRef={scrollViewRef}
-            onScroll={handleScroll}
-            onContentSizeChange={handleContentSizeChange}
+          {/* Onboarding Conversation Handler - manages onboarding in background */}
+          <OnboardingConversationHandler
+            user={user}
             currentConversationId={currentConversationId}
-            conversationParam={conversationParam}
-            styles={styles}
           />
 
-          {/* Scroll to bottom button - appears when not at bottom */}
-          {showScrollButton && (
-            <TouchableOpacity 
-              style={styles.scrollToBottomButton}
-              onPress={scrollToBottom}
-            >
-              <Ionicons name="arrow-down" size={16} color="#fff" />
-            </TouchableOpacity>
-          )}
+          {/* Header with navigation */}
+          <ChatHeader user={user} styles={styles} />
 
-          {/* Chat Input - Simplified: just send to AI, server handles storage */}
-          {currentConversationId && (
-            <ChatInput
-              onSend={handleSendMessage}
-              onStop={stopStreaming}
-              onVoiceStart={() => {
-                console.log('🎤 Voice recording started');
-                // TODO: Implement voice recording
-              }}
-              onAttachmentPress={() => {
-                console.log('📎 Attachment pressed');
-                // TODO: Implement attachment handling
-              }}
-              disabled={false} // No loading state needed - useChat handles it
-              hasMessages={aiMessages.length > 0}
-              isStreaming={aiStatus === 'streaming'}
-              pendingMessage={pendingMessage}
-              onPendingMessageCleared={clearPendingMessage}
-              conversationId={currentConversationId}
+          {/* Main chat content - uses wide container for more space */}
+          <KeyboardAvoidingView 
+            style={styles.wideContentContainer}
+            behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'web' ? undefined : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            enabled={Platform.OS !== 'web'}
+          >
+            {/* Messages Area */}
+            <MessageList
+              aiMessages={aiMessages}
+              aiStatus={aiStatus}
+              aiError={aiError}
+              streamState={streamState}
+              liveReasoningText={liveReasoningText}
+              isLoadingHistory={isLoadingHistory}
+              regenerateMessage={regenerateMessage}
+              scrollViewRef={scrollViewRef}
+              onScroll={handleScroll}
+              onContentSizeChange={handleContentSizeChange}
+              currentConversationId={currentConversationId}
+              conversationParam={conversationParam}
+              styles={styles}
             />
-          )}
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+
+            {/* Scroll to bottom button - appears when not at bottom */}
+            {showScrollButton && (
+              <TouchableOpacity 
+                style={styles.scrollToBottomButton}
+                onPress={scrollToBottom}
+              >
+                <Ionicons name="arrow-down" size={16} color="#fff" />
+              </TouchableOpacity>
+            )}
+
+            {/* Chat Input - Simplified: just send to AI, server handles storage */}
+            {currentConversationId && (
+              <ChatInput
+                onSend={handleSendMessage}
+                onStop={stopStreaming}
+                onVoiceStart={() => {
+                  console.log('🎤 Voice recording started');
+                  // TODO: Implement voice recording
+                }}
+                onAttachmentPress={() => {
+                  console.log('📎 Attachment pressed');
+                  // TODO: Implement attachment handling
+                }}
+                disabled={false} // No loading state needed - useChat handles it
+                hasMessages={aiMessages.length > 0}
+                isStreaming={aiStatus === 'streaming'}
+                pendingMessage={pendingMessage}
+                onPendingMessageCleared={clearPendingMessage}
+                conversationId={currentConversationId}
+              />
+            )}
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </ErrorBoundary>
     </View>
   );
 }
