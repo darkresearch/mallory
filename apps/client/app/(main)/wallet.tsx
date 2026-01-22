@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, RefreshCon
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { ErrorBoundary } from 'react-error-boundary';
+import { ErrorFallback } from '../../components/ErrorFallback';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -26,6 +28,7 @@ import { SESSION_STORAGE_KEYS, storage, getAppVersion } from '../../lib';
 
 
 export default function WalletScreen() {
+  const [errorBoundaryKey, setErrorBoundaryKey] = React.useState(0);
   const router = useRouter();
   const { user, logout, triggerReauth } = useAuth();
   const { gridAccount, solanaAddress } = useGrid();
@@ -220,7 +223,32 @@ export default function WalletScreen() {
 
   return (
     <Animated.View style={[styles.outerContainer, animatedStyle]}>
-      <SafeAreaView style={styles.wideContainer} edges={['top']}>
+      <ErrorBoundary
+        resetKeys={[errorBoundaryKey]}
+        fallbackRender={({ error, resetErrorBoundary }) => (
+          <ErrorFallback 
+            error={error as Error} 
+            resetErrorBoundary={() => {
+              setErrorBoundaryKey(prev => prev + 1);
+              setTimeout(() => {
+                resetErrorBoundary();
+              }, 0);
+            }} 
+          />
+        )}
+        onReset={() => {
+          console.log('Wallet screen error boundary reset');
+        }}
+        onError={(error, info) => {
+          console.error('Error caught in WalletScreen:', error);
+          console.error('Error info:', info);
+        }}
+      >
+        <SafeAreaView 
+          key={errorBoundaryKey}
+          style={styles.wideContainer} 
+          edges={['top']}
+        >
         {/* Header with back navigation - uses wide container like other screens */}
         <View style={styles.header}>
           {/* Back arrow positioned on the left for intuitive navigation back to main */}
@@ -417,7 +445,8 @@ export default function WalletScreen() {
           holdings={walletData?.holdings || []}
         />
 
-      </SafeAreaView>
+        </SafeAreaView>
+      </ErrorBoundary>
     </Animated.View>
   );
 }

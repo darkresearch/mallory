@@ -1,11 +1,12 @@
 import '@/polyfills';
 import { Stack } from 'expo-router';
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { View, StatusBar, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import { ErrorBoundary } from 'react-error-boundary';
 import { AuthProvider } from '../contexts/AuthContext';
 import { GridProvider } from '../contexts/GridContext';
 import { WalletProvider } from '../contexts/WalletContext';
@@ -13,6 +14,7 @@ import { ActiveConversationProvider } from '../contexts/ActiveConversationContex
 import { initializeComponentRegistry } from '../components/registry';
 import { DataPreloader } from '../components/DataPreloader';
 import { ChatManager } from '../components/chat/ChatManager';
+import { ErrorFallback } from '../components/ErrorFallback';
 import 'react-native-url-polyfill/auto';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -25,6 +27,7 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
+  const [errorBoundaryKey, setErrorBoundaryKey] = React.useState(0);
   const [fontsLoaded] = useFonts({
     'Satoshi-Regular': require('../assets/fonts/Satoshi-Regular.ttf'),
     'Satoshi-Medium': require('../assets/fonts/Satoshi-Medium.ttf'),
@@ -60,33 +63,64 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
-      <SafeAreaProvider style={{ flex: 1, backgroundColor: '#FFEFE3' }}>
-        <AuthProvider>
-          <GridProvider>
-            <WalletProvider>
-              <ActiveConversationProvider>
-                <DataPreloader />
-                <ChatManager />
-                <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any, overflow: 'hidden' }}>
-                  <Stack
-                    screenOptions={{
-                      headerShown: false,
-                      contentStyle: { backgroundColor: '#FFEFE3' },
-                      animation: 'fade',
-                    }}
-                  />
-                  {Platform.OS === 'web' && (
-                    <>
-                      <Analytics />
-                      <SpeedInsights />
-                    </>
-                  )}
-                </View>
-              </ActiveConversationProvider>
-            </WalletProvider>
-          </GridProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
+      <ErrorBoundary
+        resetKeys={[errorBoundaryKey]}
+        fallbackRender={({ error, resetErrorBoundary }) => (
+          <ErrorFallback 
+            error={error as Error} 
+            resetErrorBoundary={() => {
+              // Update key first - this triggers auto-reset via resetKeys
+              setErrorBoundaryKey(prev => prev + 1);
+              // Also call resetErrorBoundary for immediate effect
+              // Use setTimeout to ensure state update propagates (especially on mobile web)
+              setTimeout(() => {
+                resetErrorBoundary();
+              }, 0);
+            }} 
+          />
+        )}
+        onReset={() => {
+          // Cleanup callback - called when boundary resets
+          console.log('Error boundary reset');
+        }}
+        onError={(error, info) => {
+          console.error('Error caught by root boundary:', error);
+          console.error('Error info:', info);
+          // Future: send to error reporting service (e.g., Sentry)
+          // Note: error is typed as unknown, but react-error-boundary ensures it's an Error
+        }}
+      >
+        <SafeAreaProvider 
+          key={errorBoundaryKey}
+          style={{ flex: 1, backgroundColor: '#FFEFE3' }}
+        >
+          <AuthProvider>
+            <GridProvider>
+              <WalletProvider>
+                <ActiveConversationProvider>
+                  <DataPreloader />
+                  <ChatManager />
+                  <View style={{ flex: 1, backgroundColor: '#FFEFE3', minHeight: '100vh' as any, overflow: 'hidden' }}>
+                    <Stack
+                      screenOptions={{
+                        headerShown: false,
+                        contentStyle: { backgroundColor: '#FFEFE3' },
+                        animation: 'fade',
+                      }}
+                    />
+                    {Platform.OS === 'web' && (
+                      <>
+                        <Analytics />
+                        <SpeedInsights />
+                      </>
+                    )}
+                  </View>
+                </ActiveConversationProvider>
+              </WalletProvider>
+            </GridProvider>
+          </AuthProvider>
+        </SafeAreaProvider>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }

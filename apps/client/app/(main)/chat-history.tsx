@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Activi
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { ErrorBoundary } from 'react-error-boundary';
+import { ErrorFallback } from '../../components/ErrorFallback';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -45,6 +47,7 @@ interface AllMessagesCache {
 }
 
 export default function ChatHistoryScreen() {
+  const [errorBoundaryKey, setErrorBoundaryKey] = React.useState(0);
   const router = useRouter();
   const { user } = useAuth();
   
@@ -508,7 +511,32 @@ export default function ChatHistoryScreen() {
 
   return (
     <Animated.View style={[styles.outerContainer, animatedStyle]}>
-      <SafeAreaView style={styles.wideContainer} edges={['top']}>
+      <ErrorBoundary
+        resetKeys={[errorBoundaryKey]}
+        fallbackRender={({ error, resetErrorBoundary }) => (
+          <ErrorFallback 
+            error={error as Error} 
+            resetErrorBoundary={() => {
+              setErrorBoundaryKey(prev => prev + 1);
+              setTimeout(() => {
+                resetErrorBoundary();
+              }, 0);
+            }} 
+          />
+        )}
+        onReset={() => {
+          console.log('Chat history screen error boundary reset');
+        }}
+        onError={(error, info) => {
+          console.error('Error caught in ChatHistoryScreen:', error);
+          console.error('Error info:', info);
+        }}
+      >
+        <SafeAreaView 
+          key={errorBoundaryKey}
+          style={styles.wideContainer} 
+          edges={['top']}
+        >
         {isMobile ? (
           /* Mobile layout: search bar and back arrow on same row */
           <View style={styles.mobileHeader}>
@@ -643,7 +671,8 @@ export default function ChatHistoryScreen() {
           )}
         </View>
         </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </ErrorBoundary>
     </Animated.View>
   );
 }
