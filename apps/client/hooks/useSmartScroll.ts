@@ -36,6 +36,9 @@ export const useSmartScroll = (): UseSmartScrollReturn => {
   // Track last known position to detect content growth
   const lastContentHeightRef = useRef<number>(0);
   
+  // Track last scroll position to detect scroll direction (for canceling auto-scroll)
+  const lastScrollYRef = useRef<number>(0);
+  
   // Single debounce timeout for scroll detection
   const scrollDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
@@ -98,12 +101,28 @@ export const useSmartScroll = (): UseSmartScrollReturn => {
       contentOffset.y
     );
 
-    // If we're auto-scrolling, only update state when we reach bottom
-    // This prevents flickering of the scroll button during auto-scroll
+    // Detect scroll direction: decreasing scrollY = scrolling up (away from bottom)
+    const currentScrollY = contentOffset.y;
+    const scrollingAway = currentScrollY < lastScrollYRef.current;
+    lastScrollYRef.current = currentScrollY;
+
+    // If we're auto-scrolling, check if user scrolled away
     if (isAutoScrollingRef.current) {
       if (atBottom) {
+        // Reached bottom - auto-scroll complete
         setIsAtBottom(true);
+      } else if (scrollingAway) {
+        // User is manually scrolling UP - cancel auto-scroll immediately
+        isAutoScrollingRef.current = false;
+        setIsAtBottom(false);
+        
+        // Clear any pending auto-scroll timeout
+        if (autoScrollTimeoutRef.current) {
+          clearTimeout(autoScrollTimeoutRef.current);
+          autoScrollTimeoutRef.current = null;
+        }
       }
+      // If scrolling toward bottom (scrollY increasing), let it continue
       return;
     }
 
