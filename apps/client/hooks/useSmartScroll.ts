@@ -19,6 +19,8 @@ interface UseSmartScrollReturn {
 }
 
 const BOTTOM_THRESHOLD = 50;
+// Minimum scroll distance to detect direction change (prevents false positives)
+const SCROLL_DIRECTION_THRESHOLD = 2;
 
 /**
  * Check if scroll position is at bottom
@@ -112,8 +114,10 @@ export const useSmartScroll = (): UseSmartScrollReturn => {
     );
 
     // Detect scroll direction: decreasing scrollY = scrolling up (away from bottom)
+    // Use threshold to prevent false positives during rapid content updates
     const currentScrollY = contentOffset.y;
-    const scrollingAway = currentScrollY < lastScrollYRef.current;
+    const scrollDelta = lastScrollYRef.current - currentScrollY;
+    const scrollingAway = scrollDelta > SCROLL_DIRECTION_THRESHOLD;
     lastScrollYRef.current = currentScrollY;
 
     // If we're auto-scrolling, check if user scrolled away
