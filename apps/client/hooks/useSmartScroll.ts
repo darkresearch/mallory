@@ -71,11 +71,23 @@ export const useSmartScroll = (): UseSmartScrollReturn => {
   
   // Single timeout for auto-scroll completion
   const autoScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Track untracked timeout from handleContentSizeChange
+  const contentSizeChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep ref in sync with state
   useEffect(() => {
     isAtBottomRef.current = isAtBottom;
   }, [isAtBottom]);
+
+  // Cleanup timeouts on unmount to prevent memory leaks and React warnings
+  useEffect(() => {
+    return () => {
+      clearTimeoutSafe(scrollDebounceRef);
+      clearTimeoutSafe(autoScrollTimeoutRef);
+      clearTimeoutSafe(contentSizeChangeTimeoutRef);
+    };
+  }, []);
 
   /**
    * Scroll to bottom - simple, no promises needed
@@ -175,10 +187,12 @@ export const useSmartScroll = (): UseSmartScrollReturn => {
     // Use ref to avoid stale closure issues
     if (contentGrew && isAtBottomRef.current) {
       // Small delay to ensure layout is complete
-      setTimeout(() => {
+      clearTimeoutSafe(contentSizeChangeTimeoutRef);
+      contentSizeChangeTimeoutRef.current = setTimeout(() => {
         if (isAtBottomRef.current && !isAutoScrollingRef.current) {
           scrollToBottom(false); // No animation for auto-scroll during streaming
         }
+        contentSizeChangeTimeoutRef.current = null;
       }, 10);
     }
   }, [scrollToBottom]);
