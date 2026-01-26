@@ -6,7 +6,7 @@
  * to avoid race conditions and state synchronization issues.
  */
 
-import { useRef, useState, useCallback, useMemo } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { ScrollView, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 interface UseSmartScrollReturn {
@@ -18,8 +18,30 @@ interface UseSmartScrollReturn {
   handleContentSizeChange: (contentWidth: number, contentHeight: number) => void;
 }
 
-// Single source of truth: threshold for "close enough to bottom"
 const BOTTOM_THRESHOLD = 50;
+
+/**
+ * Check if scroll position is at bottom
+ * Pure function - moved outside component for better performance
+ */
+const checkIfAtBottom = (
+  layoutHeight: number,
+  contentHeight: number,
+  scrollY: number
+): boolean => {
+  if (contentHeight <= layoutHeight) return true;
+  return (contentHeight - (layoutHeight + scrollY)) <= BOTTOM_THRESHOLD;
+};
+
+/**
+ * Helper to safely clear timeout refs
+ */
+const clearTimeoutSafe = (ref: React.MutableRefObject<ReturnType<typeof setTimeout> | null>) => {
+  if (ref.current) {
+    clearTimeout(ref.current);
+    ref.current = null;
+  }
+};
 
 export const useSmartScroll = (): UseSmartScrollReturn => {
   const scrollViewRef = useRef<ScrollView>(null);
@@ -33,6 +55,9 @@ export const useSmartScroll = (): UseSmartScrollReturn => {
   // Track if we're in auto-scroll mode (prevents showing button during auto-scroll)
   const isAutoScrollingRef = useRef(false);
   
+  // Ref to track isAtBottom for use in callbacks (avoids stale closures)
+  const isAtBottomRef = useRef(true);
+  
   // Track last known position to detect content growth
   const lastContentHeightRef = useRef<number>(0);
   
@@ -45,22 +70,10 @@ export const useSmartScroll = (): UseSmartScrollReturn => {
   // Single timeout for auto-scroll completion
   const autoScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /**
-   * Check if scroll position is at bottom
-   */
-  const checkIfAtBottom = useCallback((
-    layoutHeight: number,
-    contentHeight: number,
-    scrollY: number
-  ): boolean => {
-    // Content smaller than viewport = always at bottom
-    if (contentHeight <= layoutHeight) {
-      return true;
-    }
-    
-    const distanceFromBottom = contentHeight - (layoutHeight + scrollY);
-    return distanceFromBottom <= BOTTOM_THRESHOLD;
-  }, []);
+  // Keep ref in sync with state
+  useEffect(() => {
+    isAtBottomRef.current = isAtBottom;
+  }, [isAtBottom]);
 
   /**
    * Scroll to bottom - simple, no promises needed
@@ -70,10 +83,7 @@ export const useSmartScroll = (): UseSmartScrollReturn => {
     if (!scrollViewRef.current) return;
 
     // Clear any pending auto-scroll timeout
-    if (autoScrollTimeoutRef.current) {
-      clearTimeout(autoScrollTimeoutRef.current);
-      autoScrollTimeoutRef.current = null;
-    }
+    clearTimeoutSafe(autoScrollTimeoutRef);
 
     // Mark as auto-scrolling
     isAutoScrollingRef.current = true;
@@ -117,31 +127,26 @@ export const useSmartScroll = (): UseSmartScrollReturn => {
         setIsAtBottom(false);
         
         // Clear any pending auto-scroll timeout
-        if (autoScrollTimeoutRef.current) {
-          clearTimeout(autoScrollTimeoutRef.current);
-          autoScrollTimeoutRef.current = null;
-        }
+        clearTimeoutSafe(autoScrollTimeoutRef);
       }
       // If scrolling toward bottom (scrollY increasing), let it continue
       return;
     }
 
     // User is manually scrolling - debounce state updates to avoid jank
-    if (scrollDebounceRef.current) {
-      clearTimeout(scrollDebounceRef.current);
-    }
+    clearTimeoutSafe(scrollDebounceRef);
 
     scrollDebounceRef.current = setTimeout(() => {
       setIsAtBottom(atBottom);
       scrollDebounceRef.current = null;
     }, 50); // Short debounce for responsive UI
-  }, [checkIfAtBottom]);
+  }, []);
 
   /**
    * Handle content size changes - trigger auto-scroll if needed
    * This is the main trigger for auto-scrolling during streaming
    */
-  const handleContentSizeChange = useCallback((contentWidth: number, contentHeight: number) => {
+  const handleContentSizeChange = useCallback((_contentWidth: number, contentHeight: number) => {
     const contentGrew = contentHeight > lastContentHeightRef.current;
     lastContentHeightRef.current = contentHeight;
 
@@ -152,9 +157,7 @@ export const useSmartScroll = (): UseSmartScrollReturn => {
         scrollViewRef.current.scrollToEnd({ animated: false });
         
         // Extend the auto-scroll timeout since new content arrived
-        if (autoScrollTimeoutRef.current) {
-          clearTimeout(autoScrollTimeoutRef.current);
-        }
+        clearTimeoutSafe(autoScrollTimeoutRef);
         autoScrollTimeoutRef.current = setTimeout(() => {
           isAutoScrollingRef.current = false;
           setIsAtBottom(true);
@@ -165,24 +168,25 @@ export const useSmartScroll = (): UseSmartScrollReturn => {
     }
 
     // If content grew and user was at bottom, auto-scroll (without animation for smooth streaming)
-    if (contentGrew && isAtBottom) {
+    // Use ref to avoid stale closure issues
+    if (contentGrew && isAtBottomRef.current) {
       // Small delay to ensure layout is complete
       setTimeout(() => {
-        if (isAtBottom && !isAutoScrollingRef.current) {
+        if (isAtBottomRef.current && !isAutoScrollingRef.current) {
           scrollToBottom(false); // No animation for auto-scroll during streaming
         }
       }, 10);
     }
-  }, [isAtBottom, scrollToBottom]);
+  }, [scrollToBottom]);
 
-  return useMemo(() => ({
+  return {
     scrollViewRef: scrollViewRef as React.RefObject<ScrollView>,
     isAtBottom,
     showScrollButton,
     scrollToBottom,
     handleScroll,
     handleContentSizeChange,
-  }), [isAtBottom, showScrollButton, scrollToBottom, handleScroll, handleContentSizeChange]);
+  };
 };
 
 export default useSmartScroll;
